@@ -198,7 +198,8 @@ void Solver<Dtype>::Step(int iters) {
     }
 
     const bool display = param_.display() && iter_ % param_.display() == 0;
-    net_->set_debug_info(display && param_.debug_info());
+	const bool train_debug = param_.debug_info() && iter_ % param_.debug_train_iters() == 0;
+    net_->set_debug_info(train_debug);
     // accumulate the loss and gradient
     Dtype loss = 0;
     for (int i = 0; i < param_.iter_size(); ++i) {
@@ -310,6 +311,7 @@ void Solver<Dtype>::Test(const int test_net_id) {
   Dtype loss = 0;
   for (int i = 0; i < param_.test_iter(test_net_id); ++i) {
     Dtype iter_loss;
+    test_net->set_debug_info(param_.debug_info() && (i < param_.debug_test_iters()));
     const vector<Blob<Dtype>*>& result =
         test_net->Forward(bottom_vec, &iter_loss);
     if (param_.test_compute_loss()) {

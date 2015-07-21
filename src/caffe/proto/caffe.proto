@@ -188,7 +188,7 @@ message NetParameter {
 // NOTE
 // Update the next available ID when you add a new SolverParameter field.
 //
-// SolverParameter next available ID: 102 (last added: clip_gradients_global)
+// SolverParameter next available ID: 104 (last added: debug_train_iters)
 // SolverParameter next available ID: 38 (last added: clip_gradients)
 message SolverParameter {
   //////////////////////////////////////////////////////////////////////////////
@@ -261,6 +261,9 @@ message SolverParameter {
   // whenever their actual L2 norm is larger.
   optional float clip_gradients = 35 [default = -1];
 
+  // if true, the L2 norm of all parameters is clipped to $clip_gradients.
+  // if false, the L2 of each individual paremter blob is clipped to 
+  //  $clip_gradients
   optional bool clip_gradients_global = 101 [default = true];
 
   optional int32 snapshot = 14 [default = 0]; // The snapshot interval
@@ -294,6 +297,12 @@ message SolverParameter {
   // If true, print information about the state of the net that may help with
   // debugging learning problems.
   optional bool debug_info = 23 [default = false];
+
+  // only print debug info for the first $debug_test_iters iterations during 
+  //  each testing phase
+  optional int32 debug_test_iters = 102 [default = 20];
+  // print debug info every $debug_train_iters iterations for train
+  optional int32 debug_train_iters = 103 [default = 20];
 
   // If false, don't save a snapshot after training finishes.
   optional bool snapshot_after_train = 28 [default = true];
