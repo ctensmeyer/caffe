@@ -10,20 +10,66 @@ from PIL import Image
 
 #np.set_printoptions(precision=8, linewidth=200, edgeitems=50)
 
-def init_network(args):
-	net = caffe.Net(args.net_file, args.weights_file, caffe.TEST)
-	for name in net.blobs:
-		net.blobs[name].reshape(1, *(net.blobs[name].data.shape[1:]))
-	transformer = caffe.io.Transformer({'data': net.blobs['data'].data.shape})
-	print "HERE: ",net.blobs['data'].data.shape
-	transformer.set_transpose('data', (2,0,1))
-	#transformer.set_mean('data', np.load('python/caffe/imagenet/ilsvrc_2012_mean.npy').mean(1).mean(1))
-	transformer.set_raw_scale('data', 0.00390625)
-	#transformer.set_channel_swap('data', (2,1,0))
-	net.transformer = transformer
-	caffe.set_mode_cpu()
-	return net
+def get_size(size, args):
+	longer = max(size)
+	shorter = min(size)
+	if 'x' in args.size_str:
+		out_size = tuple(map(int, args.size_str.split('x')))
+	elif args.size_str.endswith('l'):
+		s = int(args.size_str[:-1])
+		scale = float(s) / longer
+		new_shorter = int(max(shorter * scale, s / args.truncate))
+		mod = (new_shorter - s) % args.aspect_ratio_bin
+		if mod >= args.aspect_ratio_bin / 2:
+			new_shorter += (args.aspect_ratio_bin - mod)
+		else:
+			new_shorter -= mod
+		if longer == size[0]:
+			out_size = (s, new_shorter)
+		else:
+			out_size = (new_shorter, s)
+	elif args.size_str.endswith('s'):
+		s = int(args.size_str[:-1])
+		scale = float(s) / shorter
+		new_longer = int(min(longer * scale, s * args.truncate))
+		mod = (new_longer - s) % args.aspect_ratio_bin
+		if mod >= args.aspect_ratio_bin / 2:
+			new_longer += (args.aspect_ratio_bin - mod)
+		else:
+			new_longer -= mod
+		if shorter == size[0]:
+			out_size = (s, new_longer)
+		else:
+			out_size = (new_longer, s)
+	else:
+		out_size = (int(args.size_str), int(args.size_str))
+	return out_size
 
+def resize(im, args):
+	new_size = get_size(im.size, args)
+	return im.resize(new_size)
+
+def init_caffe(args):
+	if args.gpu >= 0:
+		caffe.set_mode_gpu()
+		caffe.set_device(args.gpu)
+	else:
+		caffe.set_mode_cpu()
+
+	caffenet = caffe.Net(args.caffe_model, args.caffe_weights, caffe.TEST)
+	transformer = caffe.io.Transformer({args.input: caffenet.blobs[args.input].data.shape}, resize=False)
+	transformer.set_transpose(args.input, (2,0,1))
+	if args.mean_file:
+		transformer.set_mean(args.input, np.load(args.mean_file).mean(1).mean(1))
+	else:
+		transformer.set_mean(args.input, np.asarray([-1 * args.shift] * (1 if args.gray else 3)))
+	transformer.set_raw_scale(args.input, args.scale)
+
+	if not args.gray:
+		transformer.set_channel_swap(args.input, (2,1,0))
+	caffenet.transformer = transformer
+
+	return caffenet
 
 def print_arch(net):
 	def prod(l):
@@ -131,8 +177,19 @@ def save_activations(net, args):
 		print im_f
 		outdir = os.path.join(args.output_dir, os.path.splitext(os.path.basename(im_f))[0])
 		os.mkdir(outdir)
-		im = caffe.io.load_image(im_f, color=False)
-		net.blobs['data'].data[...] = net.transformer.preprocess('data', im)
+		im = Image.open(im_f)
+		im = resize(im, args)
+
+		if args.gray:
+			im = im.convert("L")
+		else:
+			im = im.convert(mode='RGB')
+
+		arr = np.array(im.getdata()).reshape(im.size[1], im.size[0], 1 if args.gray else 3)
+
+		net.blobs[args.input].reshape(1, 1 if args.gray else 3, im.size[1], im.size[0])
+		tmp = net.transformer.preprocess(args.input, arr)
+		net.blobs[args.input].data[...] = tmp
 		net.forward()
 		for name, data in net.blobs.items():
 			try:
@@ -145,7 +202,7 @@ def save_activations(net, args):
 
 def main(args):
 	print "Initializing Network"
-	net = init_network(args)
+	net = init_caffe(args)
 	print "Architecture"
 	print_arch(net)
 	if os.path.exists(args.output_dir):
@@ -160,12 +217,29 @@ def main(args):
 
 def get_args():
 	parser = argparse.ArgumentParser(description="Output network activations and filters")
-	parser.add_argument('net_file', 
+	parser.add_argument('caffe_model', 
 		help="prototxt file containing the network definition")
-	parser.add_argument('weights_file', 
+	parser.add_argument('caffe_weights', 
 		help="prototxt file containing the network weights for the given definition")
 	parser.add_argument('output_dir', 
 		help="path to the output directory where images are written")
+
+	parser.add_argument("-m", "--mean-file", type=str, default="",
+				help="Optional mean file for input normalization")
+	parser.add_argument("-s", "--size-str", type=str, default="227",
+				help="Resize images to this size before processing")
+	parser.add_argument("--gpu", type=int, default=-1,
+				help="GPU to use for running the network")
+	parser.add_argument('-g', '--gray', default=False, action="store_true",
+						help='Force images to be grayscale.  Force color if ommited')
+	parser.add_argument("-a", "--scale", type=float, default=1.0,
+				help="Optional scale factor")
+	parser.add_argument("-b", "--shift", type=float, default=0.0,
+				help="Optional shift factor")
+	parser.add_argument("-i", "--input", type=str, default="data",
+				help="Name of input blob")
+
+
 	parser.add_argument('test_images', nargs=argparse.REMAINDER,
 		help="images to run through the network")
 	args = parser.parse_args()
