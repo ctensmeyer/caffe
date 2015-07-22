@@ -70,32 +70,82 @@ class ArgMaxLayer : public Layer<Dtype> {
   size_t top_k_;
 };
 
+
 /**
- * @brief Takes at least two Blob%s and concatenates them along either the num
- *        or channel dimension, outputting the result.
- */
+* @brief Batch Normalization per-channel with scale & shift linear transform.
+*
+*/
+template <typename Dtype>
+class BNLayer : public Layer<Dtype> {
+ public:
+  explicit BNLayer(const LayerParameter& param)
+  : Layer<Dtype>(param) {}
+  virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
+  const vector<Blob<Dtype>*>& top);
+  
+  virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
+  const vector<Blob<Dtype>*>& top);
+  
+  virtual inline const char* type() const { return "BN"; }
+  virtual inline int ExactNumBottomBlobs() const { return 1; }
+  virtual inline int ExactNumTopBlobs() const { return 1; }
+  
+ protected:
+  virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
+  const vector<Blob<Dtype>*>& top);
+  virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
+  const vector<Blob<Dtype>*>& top);
+  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
+  const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
+  const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  
+  // spatial mean & variance
+  Blob<Dtype> spatial_mean_, spatial_variance_;
+  // batch mean & variance
+  Blob<Dtype> batch_mean_, batch_variance_;
+  // buffer blob
+  Blob<Dtype> buffer_blob_;
+  
+  Blob<Dtype> x_norm_;
+  // x_sum_multiplier is used to carry out sum using BLAS
+  Blob<Dtype> spatial_sum_multiplier_, batch_sum_multiplier_;
+  
+  // dimension
+  int N_;
+  int C_;
+  int H_;
+  int W_;
+  // eps
+  Dtype var_eps_;
+};
+
+/**
+* @brief Takes at least two Blob%s and concatenates them along either the num
+*        or channel dimension, outputting the result.
+*/
 template <typename Dtype>
 class ConcatLayer : public Layer<Dtype> {
- public:
-  explicit ConcatLayer(const LayerParameter& param)
-      : Layer<Dtype>(param) {}
-  virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top);
-  virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top);
+public:
+explicit ConcatLayer(const LayerParameter& param)
+: Layer<Dtype>(param) {}
+virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
+const vector<Blob<Dtype>*>& top);
+virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
+const vector<Blob<Dtype>*>& top);
 
-  virtual inline const char* type() const { return "Concat"; }
-  virtual inline int MinBottomBlobs() const { return 2; }
-  virtual inline int ExactNumTopBlobs() const { return 1; }
+virtual inline const char* type() const { return "Concat"; }
+virtual inline int MinBottomBlobs() const { return 2; }
+virtual inline int ExactNumTopBlobs() const { return 1; }
 
- protected:
-  /**
-   * @param bottom input Blob vector (length 2+)
-   *   -# @f$ (N \times C \times H \times W) @f$
-   *      the inputs @f$ x_1 @f$
-   *   -# @f$ (N \times C \times H \times W) @f$
-   *      the inputs @f$ x_2 @f$
-   *   -# ...
+protected:
+/**
+* @param bottom input Blob vector (length 2+)
+*   -# @f$ (N \times C \times H \times W) @f$
+*      the inputs @f$ x_1 @f$
+*   -# @f$ (N \times C \times H \times W) @f$
+*      the inputs @f$ x_2 @f$
+*   -# ...
    *   - K @f$ (N \times C \times H \times W) @f$
    *      the inputs @f$ x_K @f$
    * @param top output Blob vector (length 1)
@@ -605,6 +655,7 @@ class SliceLayer : public Layer<Dtype> {
   int slice_axis_;
   vector<int> slice_point_;
 };
+
 
 }  // namespace caffe
 

@@ -67,6 +67,8 @@ Dtype DocDataLayer<Dtype>::GetLabelValue(DocumentDatum& doc, const std::string& 
     return doc.has_is_textual_document() ? doc.is_textual_document() : missing_value_;
   } else if (label_name == "collection") {
     return doc.has_collection() ? doc.collection() : missing_value_;
+  } else if (label_name == "original_aspect_ratio") {
+    return doc.has_original_aspect_ratio() ? doc.original_aspect_ratio() : missing_value_;
   } else {
     CHECK(0) << "Unrecognized label_name: " << label_name;
   }
@@ -191,6 +193,7 @@ void DocDataLayer<Dtype>::InternalThreadEntry() {
   double decode_time = 0;
   double trans_time = 0;
   double label_time = 0;
+  double seek_time = 0;
   CPUTimer timer;
   CHECK(this->prefetch_data_.count());
   CHECK(this->transformed_data_.count());
@@ -250,12 +253,23 @@ void DocDataLayer<Dtype>::InternalThreadEntry() {
 	}
 	label_time += timer.MicroSeconds();
 	timer.Start();
-    // go to the next item.
-    cursors_[cur_index_]->Next();
-    if (!cursors_[cur_index_]->valid()) {
-      DLOG(INFO) << "Restarting data prefetching from start on db: " << cur_index_;
-      cursors_[cur_index_]->SeekToFirst();
-    }
+
+	int num_to_advance = 1;
+	if (this->layer_param_.doc_data_param().rand_advance_skip() > 0) {
+	  num_to_advance += caffe_rng_rand() %
+				(this->layer_param_.doc_data_param().rand_advance_skip() + 1);
+	}
+	for (int i = 0; i < num_to_advance; i++) {
+      // go to the next item.
+      cursors_[cur_index_]->Next();
+      if (!cursors_[cur_index_]->valid()) {
+        DLOG(INFO) << "Restarting data prefetching from start on db: " << cur_index_;
+        cursors_[cur_index_]->SeekToFirst();
+      }
+	}
+
+	seek_time += timer.MicroSeconds();
+	timer.Start();
   }
   timer.Stop();
   batch_timer.Stop();
@@ -264,6 +278,7 @@ void DocDataLayer<Dtype>::InternalThreadEntry() {
   DLOG(INFO) << "   Decode time: " << decode_time / 1000 << " ms.";
   DLOG(INFO) << "Transform time: " << trans_time / 1000 << " ms.";
   DLOG(INFO) << "    Label time: " << label_time / 1000 << " ms.";
+  DLOG(INFO) << "     Seek time: " << seek_time / 1000 << " ms.";
 
   // Choose a db at random to pull from on the next batch
   SampleDB();
