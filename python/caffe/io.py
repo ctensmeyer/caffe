@@ -109,7 +109,7 @@ class Transformer:
         self.raw_scale = {}
         self.mean = {}
         self.input_scale = {}
-		self.do_resize = resize
+        self.do_resize = resize
 
     def __check_input(self, in_):
         if in_ not in self.inputs:
