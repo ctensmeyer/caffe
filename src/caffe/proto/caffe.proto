@@ -743,6 +743,8 @@ message DocDataParameter {
   repeated string label_names = 6;
 
   optional int32 missing_value = 7 [default = -1];
+
+  optional uint32 rand_advance_skip = 8 [default = 0];
 }
 
 message DropoutParameter {
