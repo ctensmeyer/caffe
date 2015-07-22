@@ -90,13 +90,14 @@ def get_size(size, args):
 
 def process_im(im_file, args):
 	im = Image.open(im_file)
+	original_ar = im.size[0] / float(im.size[1])
 	size = get_size(im.size, args)
 	im = im.resize(size)
 	if args.gray:
 		im = im.convert('L')
 	else:
 		im = im.convert('RGB')
-	return im
+	return im, original_ar
 
 
 def process_labels(label_file, args):
@@ -225,6 +226,10 @@ def package(im, label_info, args):
 		pred = label_info.get('IsTextual')
 		doc_datum.is_textual_document_str = pred
 		doc_datum.is_textual_document = binary(pred)
+	if label_info.get('orig_ar'):
+		ar = label_info.get('orig_ar')
+		doc_datum.original_aspect_ratio_str = str(ar)
+		doc_datum.original_aspect_ratio = ar
 
 	return doc_datum
 
@@ -358,12 +363,13 @@ def main(args):
 			line = line.rstrip()
 			tokens = line.split()
 			im_file = os.path.join(args.imroot, tokens[0])
-			im = process_im(im_file, args)
+			im, orig_ar = process_im(im_file, args)
 			if len(tokens) > 1:
 				label_file = tokens[1]
 				label_info = process_labels(label_file, args)
 			else:
 				label_info = {}
+			label_info['orig_ar'] = orig_ar
 			if args.collection_folder and "TrainingSetName" not in label_info:
 				label_info["TrainingSetName"] = os.path.basename(os.path.dirname(im_file))
 			doc_datum = package(im, label_info, args)

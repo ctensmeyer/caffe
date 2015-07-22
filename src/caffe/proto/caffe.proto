@@ -128,6 +128,9 @@ message DocumentDatum {
 
   optional string collection_str = 48;
   optional int32 collection = 49;
+
+  optional float original_aspect_ratio_str = 50;
+  optional float original_aspect_ratio = 50;
 }
 
 message FillerParameter {
