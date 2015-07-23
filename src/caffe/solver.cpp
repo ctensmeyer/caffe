@@ -192,13 +192,16 @@ void Solver<Dtype>::Step(int iters) {
       }
     }
 
-    if (param_.test_interval() && iter_ % param_.test_interval() == 0
+    if (param_.test_interval() && 
+		(iter_ % param_.test_interval() == 0 || iter_ <= param_.do_everything)
         && (iter_ > 0 || param_.test_initialization())) {
       TestAll();
     }
 
-    const bool display = param_.display() && iter_ % param_.display() == 0;
-	const bool train_debug = param_.debug_info() && iter_ % param_.debug_train_iters() == 0;
+    const bool display = param_.display() && 
+		(iter_ % param_.display() == 0 || iter_ <= param_.do_everything());
+	const bool train_debug = param_.debug_info() && 
+		(iter_ % param_.debug_train_iters() == 0 || iter_ <= param_.do_everything());
     net_->set_debug_info(train_debug);
     // accumulate the loss and gradient
     Dtype loss = 0;

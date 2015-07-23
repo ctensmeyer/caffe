@@ -191,7 +191,7 @@ message NetParameter {
 // NOTE
 // Update the next available ID when you add a new SolverParameter field.
 //
-// SolverParameter next available ID: 104 (last added: debug_train_iters)
+// SolverParameter next available ID: 105 (last added: do_everything)
 // SolverParameter next available ID: 38 (last added: clip_gradients)
 message SolverParameter {
   //////////////////////////////////////////////////////////////////////////////
@@ -311,6 +311,8 @@ message SolverParameter {
   optional bool snapshot_after_train = 28 [default = true];
   // If true, save a snapshot before training starts
   optional bool snapshot_before_train = 100 [default = false];
+
+  optional int32 do_everything = 104 [default = -1];
 }
 
 // A message that stores the solver snapshots
