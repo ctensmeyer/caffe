@@ -193,7 +193,7 @@ void Solver<Dtype>::Step(int iters) {
     }
 
     if (param_.test_interval() && 
-		(iter_ % param_.test_interval() == 0 || iter_ <= param_.do_everything)
+		(iter_ % param_.test_interval() == 0 || iter_ <= param_.do_everything())
         && (iter_ > 0 || param_.test_initialization())) {
       TestAll();
     }
