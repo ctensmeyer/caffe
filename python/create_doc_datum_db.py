@@ -10,6 +10,7 @@ import json
 import traceback
 import collections
 import pickle
+import numpy as np
 from PIL import Image
 
 LABEL_DELIM = '|'
