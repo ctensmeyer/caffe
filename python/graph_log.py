@@ -128,8 +128,11 @@ def plot(lists, out_file, title="", xlabel="", ylabel=""):
 		if len(lists) > 1:
 			plt.legend()
 
-		if _min and abs(_max / _min) > 80:
+		if _min and abs(_max / _min) > 50:
 			plt.yscale("symlog", basey=10, linthreshy=_min*3)
+			base = out_file[:-4]
+			plt.savefig(base + "_logscale.png")
+			plt.yscale("linear")
 
 		plt.savefig(out_file)
 	plt.clf()
