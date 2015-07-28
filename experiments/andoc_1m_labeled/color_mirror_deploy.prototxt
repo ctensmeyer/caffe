@@ -1,34 +1,9 @@
 name: "CaffeNet"
-layer {
-  name: "data"
-  type: "DocData"
-  top: "data"
-  top: "label"
-  include {
-    phase: TRAIN
-  }
-  doc_data_param {
-    sources: "/data/lmdb/doc_datum/andoc-1m/gray_collection/256x256_train_lmdb"
-    batch_size: 256
-    backend: LMDB
-	label_names: "collection"
-  }
-}
-layer {
-  name: "data"
-  type: "DocData"
-  top: "data"
-  top: "label"
-  include {
-    phase: TEST
-  }
-  doc_data_param {
-    sources: "/data/lmdb/doc_datum/andoc-1m/gray_collection/256x256_val_lmdb"
-    batch_size: 50
-    backend: LMDB
-	label_names: "collection"
-  }
-}
+input: "data"
+input_dim: 1
+input_dim: 3
+input_dim: 256
+input_dim: 256
 layer {
   name: "conv1"
   type: "Convolution"
@@ -358,32 +333,8 @@ layer {
   }
 }
 layer {
-  name: "accuracy"
-  type: "Accuracy"
-  bottom: "fc8"
-  bottom: "label"
-  top: "accuracy"
-  include {
-    phase: TEST
-  }
-}
-layer {
-  name: "accuracy-5"
-  type: "Accuracy"
-  bottom: "fc8"
-  bottom: "label"
-  top: "accuracy-5"
-  include {
-    phase: TEST
-  }
-  accuracy_param {
-    top_k: 5
-  }
-}
-layer {
   name: "loss"
-  type: "SoftmaxWithLoss"
+  type: "Softmax"
   bottom: "fc8"
-  bottom: "label"
-  top: "loss"
+  top: "prob"
 }

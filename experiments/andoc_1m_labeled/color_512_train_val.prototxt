@@ -8,7 +8,7 @@ layer {
     phase: TRAIN
   }
   doc_data_param {
-    sources: "/data/lmdb/doc_datum/andoc-1m/gray_collection/256x256_train_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512x512_train_lmdb"
     batch_size: 256
     backend: LMDB
 	label_names: "collection"
@@ -23,7 +23,7 @@ layer {
     phase: TEST
   }
   doc_data_param {
-    sources: "/data/lmdb/doc_datum/andoc-1m/gray_collection/256x256_val_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512x512_val_lmdb"
     batch_size: 50
     backend: LMDB
 	label_names: "collection"
@@ -44,7 +44,7 @@ layer {
   }
   convolution_param {
     num_output: 96
-    kernel_size: 11
+    kernel_size: 15
     stride: 4
     weight_filler {
       type: "gaussian"
@@ -99,9 +99,9 @@ layer {
   }
   convolution_param {
     num_output: 256
-    pad: 2
-    kernel_size: 5
-    group: 2
+    pad: 4
+    kernel_size: 9
+	stride: 2
     weight_filler {
       type: "gaussian"
       std: 0.01
