@@ -122,13 +122,18 @@ class DocDataLayer : public BasePrefetchingDataLayer<Dtype> {
  protected:
   virtual void InternalThreadEntry();
   virtual void CreateImageTransformer(ImageTransformationParameter param);
-  virtual void SampleDB();
+  virtual void NextIndex();
+  virtual void NextInOrderIndex();
+  virtual int SampleCat(const vector<float>& probs);
   virtual Dtype GetLabelValue(DocumentDatum& doc, const std::string& label_name);
 
   vector<shared_ptr<db::DB> > dbs_;
   vector<shared_ptr<db::Cursor> > cursors_;
   vector<float> probs_;
+  vector<int> db_sizes_;
+  vector<int> db_epochs_;
   int cur_index_;
+  bool no_wrap_, in_order_, enforce_epochs_;
 
   int num_labels_;
   vector<Blob<Dtype>*> prefetch_labels_;

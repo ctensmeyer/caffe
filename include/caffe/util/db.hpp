@@ -41,6 +41,7 @@ class DB {
   virtual void Close() = 0;
   virtual Cursor* NewCursor() = 0;
   virtual Transaction* NewTransaction() = 0;
+  virtual size_t NumEntries() = 0;
 
   DISABLE_COPY_AND_ASSIGN(DB);
 };

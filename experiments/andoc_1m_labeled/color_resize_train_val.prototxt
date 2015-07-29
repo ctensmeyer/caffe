@@ -8,10 +8,17 @@ layer {
     phase: TRAIN
   }
   doc_data_param {
-    sources: "/data/lmdb/doc_datum/andoc-1m/gray_collection/256x256_train_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/256x256_train_lmdb"
     batch_size: 256
     backend: LMDB
 	label_names: "collection"
+  }
+  image_transform_param {
+    params {
+      resize_params {
+	    size: 230
+	  }
+	}
   }
 }
 layer {
@@ -23,10 +30,17 @@ layer {
     phase: TEST
   }
   doc_data_param {
-    sources: "/data/lmdb/doc_datum/andoc-1m/gray_collection/256x256_val_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/256x256_val_lmdb"
     batch_size: 50
     backend: LMDB
 	label_names: "collection"
+  }
+  image_transform_param {
+    params {
+      resize_params {
+	    size: 230
+	  }
+	}
   }
 }
 layer {

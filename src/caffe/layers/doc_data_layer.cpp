@@ -76,20 +76,76 @@ Dtype DocDataLayer<Dtype>::GetLabelValue(DocumentDatum& doc, const std::string& 
 }
 
 template <typename Dtype>
-void DocDataLayer<Dtype>::SampleDB() {
+int DocDataLayer<Dtype>::SampleCat(const vector<float>& probs) {
   float rand = image_transformer_->RandFloat(0,1);
   float cum_prob = 0;
   int i;
-  for (i = 0; i < probs_.size(); i++) {
-    cum_prob += probs_[i];
+  for (i = 0; i < probs.size(); i++) {
+    cum_prob += probs[i];
 	if (cum_prob >= rand) {
 	  break;
     }
   }
-  if (i == probs_.size()) {
+  if (i == probs.size()) {
     i--;
   }
-  cur_index_ = i;
+  return i;
+}
+
+template <typename Dtype>
+void DocDataLayer<Dtype>::NextInOrderIndex() {
+  if (dbs_.size() == 1) {
+    cur_index_ = 0; 
+  } else if (cur_index_ == dbs_.size() - 1) {
+    if (db_epochs_[cur_index_] == db_epochs_[cur_index_ - 1]) {
+      // wrap around to 0th db
+      cur_index_ = 0;
+    }
+  } else if (db_epochs_[cur_index_] > db_epochs_[ cur_index_ + 1 ]) {
+    // The current DB has had one more epoch than the next
+    cur_index_++;
+  }
+}
+
+template <typename Dtype>
+void DocDataLayer<Dtype>::NextIndex() {
+  if (in_order_) {
+    NextInOrderIndex();
+  } else if (enforce_epochs_) {
+	DLOG(INFO) << "Enforce Epochs:";
+    vector<int> eligible_indices;
+	vector<float> eligible_probs;
+	int min_epochs = 999999999;
+
+	// find the least number of epochs taken by any DB
+	for (int i = 0; i < db_epochs_.size(); i++) {
+	  if (db_epochs_[i] < min_epochs) {
+	    min_epochs = db_epochs_[i];
+	  }
+	}
+
+	// get the probs and indices of all dbs with this size
+	for (int i = 0; i < db_epochs_.size(); i++) {
+	  if (db_epochs_[i] == min_epochs) {
+	    eligible_indices.push_back(i);
+		eligible_probs.push_back(probs_[i]);
+	    DLOG(INFO) << "Enforce Epochs pushing db: " << i << " with " << db_epochs_[i] << " epochs";
+	  }
+	}
+
+	// normalize eligile_probs
+	float sum = 0;
+	for (int i = 0; i < eligible_probs.size(); i++) {
+	  sum += eligible_probs[i];
+	}
+	for (int i = 0; i < eligible_probs.size(); i++) {
+	  eligible_probs[i] /= sum;
+	}
+
+    cur_index_ = eligible_indices[SampleCat(eligible_probs)];
+  } else {
+    cur_index_ = SampleCat(probs_);
+  }
 }
 
 template <typename Dtype>
@@ -99,6 +155,9 @@ void DocDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
   DocDataParameter doc_param = this->layer_param_.doc_data_param();
   num_labels_ = doc_param.label_names_size();
   missing_value_ = doc_param.missing_value();
+  no_wrap_ = doc_param.no_wrap();
+  enforce_epochs_ = doc_param.enforce_epochs();
+  in_order_ = doc_param.in_order();
  
   CHECK(doc_param.sources_size()) << "No source DBs specified";
   CHECK_EQ(top.size(), num_labels_ + 1) << "Must have a top blob for each type of label";
@@ -111,6 +170,7 @@ void DocDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
 	shared_ptr<db::Cursor> cursor;
     db.reset(db::GetDB(doc_param.backend()));
     db->Open(doc_param.sources(i), db::READ);
+	db_epochs_.push_back(0);
 
 	cursor.reset(db->NewCursor());
     // Check if we should randomly skip a few data points
@@ -123,19 +183,28 @@ void DocDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
         if (!cursor->valid()) {
           DLOG(INFO) << "Restarting data prefetching from start.";
           cursor->SeekToFirst();
+		  db_epochs_[i] = db_epochs_[i] + 1;
         }
       }
     }
 	// Push the db handle, cursor, and weight of the ith db
 	dbs_.push_back(db);
 	cursors_.push_back(cursor);
-	if (i < doc_param.weights_size()) {
+
+	// WARNING: LEVELD doesn't implement NumEntries() because you have to
+	//  iterate over the entire DB and count yourself.
+	size_t num_entries = db->NumEntries();
+	db_sizes_.push_back(num_entries);
+
+    if (doc_param.weights_by_size() && num_entries) {
+	  probs_.push_back((float)num_entries);
+	} else if (i < doc_param.weights_size()) {
 	  probs_.push_back(doc_param.weights(i));
 	} else {
       probs_.push_back(1.0f);
 	}
   }
-  SampleDB();
+  cur_index_ = 0;
 
   // normalize probability weights
   float sum = 0;
@@ -219,6 +288,12 @@ void DocDataLayer<Dtype>::InternalThreadEntry() {
   top_shape[0] = batch_size;
   this->prefetch_data_.Reshape(top_shape);
 
+  // reshape the labels
+  vector<int> label_shape(1, batch_size);
+  for (int i = 0; i < num_labels_; i++) {
+	prefetch_labels_[i]->Reshape(label_shape);
+  }
+
   Dtype* top_data = this->prefetch_data_.mutable_cpu_data();
   Dtype* top_label = NULL;  // suppress warnings about uninitialized variables
 
@@ -259,15 +334,33 @@ void DocDataLayer<Dtype>::InternalThreadEntry() {
 	  num_to_advance += caffe_rng_rand() %
 				(this->layer_param_.doc_data_param().rand_advance_skip() + 1);
 	}
+	bool do_break = false;
 	for (int i = 0; i < num_to_advance; i++) {
       // go to the next item.
       cursors_[cur_index_]->Next();
       if (!cursors_[cur_index_]->valid()) {
+		db_epochs_[cur_index_] = db_epochs_[cur_index_] + 1;
+		cursors_[cur_index_]->SeekToFirst();
         DLOG(INFO) << "Restarting data prefetching from start on db: " << cur_index_;
-        cursors_[cur_index_]->SeekToFirst();
+	    if (no_wrap_) {
+          DLOG(INFO) << "Truncating batch to size: " << item_id;
+		  do_break = true;
+
+		  // truncate the batch size
+          top_shape[0] = item_id + 1;
+          this->prefetch_data_.Reshape(top_shape);
+
+          label_shape[0] = item_id + 1;
+	      for (int i = 0; i < num_labels_; i++) {
+            prefetch_labels_[i]->Reshape(label_shape);
+		  }
+		  break;
+		}
       }
 	}
-
+	if (do_break) {
+	  break;
+	}
 	seek_time += timer.MicroSeconds();
 	timer.Start();
   }
@@ -281,7 +374,7 @@ void DocDataLayer<Dtype>::InternalThreadEntry() {
   DLOG(INFO) << "     Seek time: " << seek_time / 1000 << " ms.";
 
   // Choose a db at random to pull from on the next batch
-  SampleDB();
+  NextIndex();
 }
 
 template <typename Dtype>
@@ -356,6 +449,7 @@ void DocDataLayer<Dtype>::Forward_cpu(
   // First, join the thread
   this->JoinPrefetchThread();
   DLOG(INFO) << "Thread joined";
+  DLOG(INFO) << "Prefetch Shape: " << this->prefetch_data_.shape_string();
   // Reshape to loaded data.
   top[0]->ReshapeLike(this->prefetch_data_);
   // Copy the data

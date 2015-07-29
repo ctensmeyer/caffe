@@ -5,14 +5,14 @@ import shutil
 import subprocess
 
 INV_DURATION = 1
-FPS = 10
+FPS = 2
 
 def create_movie(input_dir, output_file):
 	cmd_str = "ffmpeg -framerate %s -i %s/%%03d.png -c:v libx264 -r %s -pix_fmt yuv420p %s" % (INV_DURATION, input_dir, FPS, output_file)
 	print cmd_str
 	subprocess.call(cmd_str, shell=True)
 
-def run_snapshots(model_file, snapshot_dir, out_dir, images):
+def run_snapshots(model_file, snapshot_dir, out_dir, flags, images):
 	tmp_out = os.path.join(out_dir, "snapshots")
 	iter_nums = list()
 	for f in os.listdir(snapshot_dir):
@@ -22,7 +22,7 @@ def run_snapshots(model_file, snapshot_dir, out_dir, images):
 		iter_num = int(f[f.rfind('_') + 1:-1 * len(".caffemodel")])
 		iter_nums.append(iter_num)
 		snapshot_out = os.path.join(tmp_out, str(iter_num))
-		cmd_str = "python python/visualize_net.py %s %s %s %s" % (model_file, r, snapshot_out, " ".join(images))
+		cmd_str = "python python/visualize_net.py %s %s %s %s %s" % (flags, model_file, r, snapshot_out, " ".join(images))
 		print cmd_str
 		subprocess.call(cmd_str, shell=True)
 	return iter_nums
@@ -86,13 +86,13 @@ def create_image_movies(out_dir, image_basenames, activation_names):
 			out_file = os.path.join(movies_dir, "%s.mp4" % activation)
 			create_movie(in_dir, out_file)
 
-def main(model_file, snapshot_dir, out_dir, images):
+def main(model_file, snapshot_dir, out_dir, flags, images):
 	# set up output file
 	if os.path.exists(out_dir):
 		shutil.rmtree(out_dir)
 	os.makedirs(out_dir)
 	
-	iter_nums = run_snapshots(model_file, snapshot_dir, out_dir, images)
+	iter_nums = run_snapshots(model_file, snapshot_dir, out_dir, flags, images)
 	iter_nums.sort()
 
 	image_basenames = map(lambda f: os.path.basename(os.path.splitext(f)[0]), images)
@@ -112,6 +112,7 @@ if __name__ == "__main__":
 	model_file = sys.argv[1]
 	snapshot_dir = sys.argv[2]
 	out_dir = sys.argv[3]
-	images = sys.argv[4:]
-	main(model_file, snapshot_dir, out_dir, images)
+	flags = sys.argv[4]
+	images = sys.argv[5:]
+	main(model_file, snapshot_dir, out_dir, flags, images)
 	

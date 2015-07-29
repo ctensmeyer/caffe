@@ -104,9 +104,14 @@ def print_arch(net):
 
 # take an array of shape (n, height, width) or (n, height, width, channels)
 # and visualize each (height, width) thing in a grid of size approx. sqrt(n) by sqrt(n)
-def format_data(data, padsize=1, padval=0):
-	data -= data.min()
-	data /= data.max()
+def format_data(data, padsize=1, padval=0, local_norm=False):
+	if local_norm:
+		data -= data.min(axis=0, keepdims=True)
+		data /= data.max(axis=0, keepdims=True)
+	else:
+		data -= data.min()
+		data /= data.max()
+
 	# force the number of filters to be square
 	n = int(np.ceil(np.sqrt(data.shape[0])))
 	padding = ((0, n ** 2 - data.shape[0]), (0, padsize), (0, padsize)) + ((0, 0),) * (data.ndim - 3)
@@ -117,14 +122,19 @@ def format_data(data, padsize=1, padval=0):
 	return data
 
 _original = False
-def format_general_filters(data, padsize=1, padval=0):
+def format_general_filters(data, padsize=1, padval=0, local_norm=False):
 	num_filters = data.shape[0]
 	num_channels = data.shape[1]
 	if _original:
-		return format_data(data[:num_channels].reshape( (num_channels ** 2,) + data.shape[2:]))
+		return format_data(data[:num_channels].reshape( (num_channels ** 2,) + data.shape[2:]), 
+				local_norm=local_norm)
 	
-	data -= data.min()
-	data /= data.max()
+	if local_norm:
+		data -= data.min(axis=0, keepdims=True)
+		data /= data.max(axis=0, keepdims=True)
+	else:
+		data -= data.min()
+		data /= data.max()
 	padding = ( (0, 0), (0, 0), (0, padsize), (0, padsize) )
 	data = np.pad(data, padding, mode='constant', constant_values=padval)
 	
@@ -144,17 +154,17 @@ def save_blob(blob, out_file, args):
 
 		if num_channels == 3:
 			# RGB
-			np_im = format_data(blob.transpose(0, 2, 3, 1))
+			np_im = format_data(blob.transpose(0, 2, 3, 1), local_norm=args.local_norm)
 		else:
 			# this works if the number of channels is <= number of filters
-			np_im = format_general_filters(blob)
+			np_im = format_general_filters(blob, local_norm=args.local_norm)
 	elif len(blob.shape) == 3:
 		num_channels = blob.shape[0]
 		if num_channels == 3:
 			blob = np.reshape(blob, (1,) + blob.shape)
-			np_im = format_data(blob.transpose(0, 2, 3, 1))
+			np_im = format_data(blob.transpose(0, 2, 3, 1), local_norm=args.local_norm)
 		else:
-			np_im = format_data(blob, padval=1)
+			np_im = format_data(blob, padval=1, local_norm=args.local_norm)
 	else:
 		np_im = blob - blob.min()
 		np_im /= np_im.max()
@@ -237,6 +247,8 @@ def get_args():
 	parser.add_argument("-b", "--shift", type=float, default=0.0,
 				help="Optional shift factor")
 	parser.add_argument("-i", "--input", type=str, default="data",
+				help="Name of input blob")
+	parser.add_argument("-l", "--local_norm", default=False, action="store_true",
 				help="Name of input blob")
 
 

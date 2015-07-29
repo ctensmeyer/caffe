@@ -79,6 +79,11 @@ class LMDB : public DB {
   }
   virtual LMDBCursor* NewCursor();
   virtual LMDBTransaction* NewTransaction();
+  virtual size_t NumEntries() {
+    MDB_stat mdb_stat;
+	MDB_CHECK(mdb_env_stat(mdb_env_, &mdb_stat));
+	return mdb_stat.ms_entries;
+  }
 
  private:
   MDB_env* mdb_env_;

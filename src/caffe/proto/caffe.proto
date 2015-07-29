@@ -129,7 +129,7 @@ message DocumentDatum {
   optional string collection_str = 48;
   optional int32 collection = 49;
 
-  optional float original_aspect_ratio_str = 50;
+  optional string original_aspect_ratio_str = 50;
   optional float original_aspect_ratio = 51;
 }
 
@@ -759,6 +759,17 @@ message DocDataParameter {
   optional int32 missing_value = 7 [default = -1];
 
   optional uint32 rand_advance_skip = 8 [default = 0];
+
+  // done
+  optional bool weights_by_size = 9 [default = false];
+
+  optional bool no_wrap = 10 [default = false];
+
+  // done
+  optional bool enforce_epochs = 11 [default = false];
+
+  // done
+  optional bool in_order = 12 [default = false];
 }
 
 message DropoutParameter {

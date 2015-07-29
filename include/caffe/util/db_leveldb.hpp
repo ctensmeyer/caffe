@@ -61,6 +61,10 @@ class LevelDB : public DB {
   virtual LevelDBTransaction* NewTransaction() {
     return new LevelDBTransaction(db_);
   }
+  virtual size_t NumEntries() {
+    // no good way to get the DB size in levelDB
+    return 0;
+  }
 
  private:
   leveldb::DB* db_;
