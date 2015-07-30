@@ -804,6 +804,58 @@ class PReLULayer : public NeuronLayer<Dtype> {
   Blob<Dtype> bottom_memory_;  // memory for in-place computation
 };
 
+/////////////////////////
+/**
+* @brief Retains top K maximum values, sets others to 0.
+*
+* @param bottom input Blob vector (length 1)
+*   -# @f$ (N \times C \times H \times W) @f$
+*      the inputs @f$ x @f$
+* @param top output Blob vector (length 1)
+*   -# @f$ (N \times C \times H \times W) @f$
+*      the computed outputs @f$ y = |x| @f$
+*/
+template <typename Dtype>
+class TopKLayer : public NeuronLayer<Dtype> {
+ public:
+  /**
+  * @param param provides TopKParameter topk_param,
+  *     with TopKLayer options:
+  *   - k.
+  *     Sets the number of top k non-zero outputs.
+  */
+  explicit TopKLayer(const LayerParameter& param)
+      : NeuronLayer<Dtype>(param) {}
+  virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
+    const vector<Blob<Dtype>*>& top);
+  virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
+    const vector<Blob<Dtype>*>& top);
+
+  virtual inline const char* type() const { return "TopK"; }
+  virtual inline int ExactNumBottomBlobs() const { return 1; }
+  virtual inline int ExactNumTopBlobs() const { return 1; }
+  
+  Blob<uint> mask_;
+
+ protected:
+  /**
+  * @param bottom input Blob vector (length 1)
+  *   -# @f$ (N \times C \times H \times W) @f$
+  *      the inputs @f$ x @f$
+  * @param top output Blob vector (length 1)
+  *   -# @f$ (N \times C \times H \times W) @f$
+  *      the computed outputs.    */
+  virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
+    const vector<Blob<Dtype>*>& top);
+  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
+    const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  
+//  Blob<uint> idxs_;
+  
+  uint uint_k_;
+  uint channels4norm;
+};
+
 }  // namespace caffe
 
 #endif  // CAFFE_NEURON_LAYERS_HPP_
