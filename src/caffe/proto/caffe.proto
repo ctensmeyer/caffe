@@ -380,7 +380,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 203 (last added: crop_param)
+// LayerParameter next available layer-specific ID: 205 (last added: crop_param)
 // LayerParameter next available layer-specific ID: 137 (last added: reduction_param)
 // The 2xx numbers are reservered for additional layers added by Chris, while 1xx are
 //   used by the official caffe release.
@@ -470,6 +470,7 @@ message LayerParameter {
   optional SliceParameter slice_param = 126;
   optional TanHParameter tanh_param = 127;
   optional ThresholdParameter threshold_param = 128;
+  optional TopKParameter topk_param = 204;
   optional WindowDataParameter window_data_param = 129;
 }
 
@@ -1400,3 +1401,10 @@ message CropParameter {
   optional string blob_name = 1;
 
 }
+
+message TopKParameter {
+  optional uint32 k = 1; // number of non-zero outputs in train time = k.
+  optional float a = 2; // number of non-zero outputs in test time = a*k.
+  optional bool across_channels = 3 [default = false]; // top K are selected across channels.
+}
+
