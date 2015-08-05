@@ -20,6 +20,7 @@ void AccuracyLayer<Dtype>::LayerSetUp(
   if (has_ignore_label_) {
     ignore_label_ = this->layer_param_.accuracy_param().ignore_label();
   }
+  log_output_ = this->layer_param_.accuracy_param().log_output();
 }
 
 template <typename Dtype>
@@ -76,6 +77,13 @@ void AccuracyLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
           break;
         }
       }
+	  if (log_output_) {
+        ostringstream stream;
+		for (int k = 0; k < top_k_; k++) {
+		  stream << bottom_data_vector[k].second << " ";
+		}
+	    LOG(INFO) << "Actual Label: " << label_value << " Predicted Labels: " << stream.str();
+	  }
       ++count;
     }
   }
