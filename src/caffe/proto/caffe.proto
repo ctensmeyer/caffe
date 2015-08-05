@@ -1403,8 +1403,36 @@ message CropParameter {
 }
 
 message TopKParameter {
-  optional uint32 k = 1; // number of non-zero outputs in train time = k.
-  optional float a = 2; // number of non-zero outputs in test time = a*k.
-  optional bool across_channels = 3 [default = false]; // top K are selected across channels.
+  optional uint32 k_num = 1; // number of non-zero outputs in train time = k.
+  optional float k_perc = 2; // perc of non-zero outputs in train time = k.
+  optional float a = 3; // number of non-zero outputs in test time = a*k.
+
+  enum Grouping {
+    // top-k activations are kept for each instance
+	// This is similar to probout
+    LATERAL = 0;
+
+    // top-k instances within mini-batch keep activations for each neuron
+	// Instances compete with each other on a neuron by neuron basis
+    LIFETIME = 1;
+
+    // top-k activations for each filter map are kept
+	// Each feature map of each instance will have k non-zero values
+	// That is, spatial locations compete with each other within a filter map
+    CONV_SPATIAL = 2;
+
+    // top-k filter values are kept for a particular spatial location
+	// Thus the filters compete with each other for each spatial location
+    CONV_CROSS_CHANNEL = 3;
+	
+	// Similar to FC_LIFETIME if you flatten channel, height, width
+	// Neurons from different instances compete in the same spatial location and filter
+    CONV_LIFETIME_SPATIAL = 4;
+
+	// All spatial locations within each channel, across instances, compete
+    CONV_LIFETIME_CHANNEL = 5;
+  }
+
+  optional Grouping grouping = 4 [default = LATERAL];
 }
 
