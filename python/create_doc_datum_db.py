@@ -116,7 +116,7 @@ def process_labels(label_file, args):
 
 
 def open_db(db_file):
-	env = lmdb.open(db_file, readonly=False, map_size=int(2 ** 38), writemap=True)
+	env = lmdb.open(db_file, readonly=False, map_size=int(2 ** 42), writemap=True)
 	txn = env.begin(write=True)
 	return env, txn
 	
@@ -158,7 +158,10 @@ def package(im, label_info, args):
 	if label_info.get('Decade'):
 		decade = label_info.get('Decade')
 		doc_datum.decade_str = decade
-		doc_datum.decade = regression(float(decade), _decade_scale, _decade_shift)
+		try:
+			doc_datum.decade = regression(float(decade), _decade_scale, _decade_shift)
+		except:
+			pass
 	if label_info.get('TrainingSetName'):
 		name = label_info.get('TrainingSetName')
 		doc_datum.collection_str = name
@@ -166,23 +169,38 @@ def package(im, label_info, args):
 	if label_info.get('ColumnCount'):
 		col_count = label_info.get('ColumnCount')
 		doc_datum.column_count_str = col_count
-		doc_datum.column_count = regression(float(col_count), _col_count_scale, _col_count_shift)
+		try:
+			doc_datum.column_count = regression(float(col_count), _col_count_scale, _col_count_shift)
+		except:
+			pass
 	if label_info.get('PossibleRecords'):
 		poss_records = label_info.get('PossibleRecords')
 		doc_datum.possible_records_str = poss_records
-		doc_datum.possible_records = regression(float(poss_records), _record_scale, _record_shift)
+		try:
+			doc_datum.possible_records = regression(float(poss_records), _record_scale, _record_shift)
+		except:
+			pass
 	if label_info.get('ActualRecords'):
 		actual_records = label_info.get('ActualRecords')
 		doc_datum.actual_records_str = actual_records
-		doc_datum.actual_records = regression(float(actual_records), _record_scale, _record_shift)
+		try:
+			doc_datum.actual_records = regression(float(actual_records), _record_scale, _record_shift)
+		except:
+			pass
 	if label_info.get('PagesPerImage'):
 		pages = label_info.get('PagesPerImage')
 		doc_datum.pages_per_image_str = pages
-		doc_datum.pages_per_image = regression(float(pages), _per_image_scale, _per_image_shift)
+		try:
+			doc_datum.pages_per_image = regression(float(pages), _per_image_scale, _per_image_shift)
+		except:
+			pass
 	if label_info.get('DocsPerImage'):
 		docs = label_info.get('DocsPerImage')
 		doc_datum.docs_per_image_str = docs
-		doc_datum.docs_per_image = regression(float(docs), _per_image_scale, _per_image_shift)
+		try:
+			doc_datum.docs_per_image = regression(float(docs), _per_image_scale, _per_image_shift)
+		except:
+			pass
 	if label_info.get('MachineText'):
 		mt = label_info.get('MachineText')
 		doc_datum.machine_text_str = mt
@@ -310,8 +328,8 @@ def load_encoding(args):
 		_hand_text = d["HWText"]
 		_layout_categories = d["LayoutCategory"]
 		_layout_types = d["layout_type"]
-		_record_type_broad = d["RecordTypeBroad"]
-		_record_type_fine = d["RecordTypeFine"]
+		_record_type_broads = d["RecordTypeBroad"]
+		_record_type_fines = d["RecordTypeFine"]
 		_media_types = d["MediaType"]
 
 
