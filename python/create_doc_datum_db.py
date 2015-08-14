@@ -18,6 +18,20 @@ LABEL_DELIM = '|'
 GL_TYPE_MAP = {
 	"1940USFedCen" : {}
 }
+METADATA_TYPE_MAP = {
+	"1911EnglandAddr" : {
+	    # differences in ink color / printed number
+		"4" : "Instructions",
+		"5" : "Instructions",
+		"96" : "Instructions",
+		"15" : "Instructions",
+		"16" : "Instructions",
+		
+		"29" : "Cover",
+		"34" : "Cover",
+		"31" : "Cover" # this one is a little messed up
+	}
+}
 
 _countries = list()
 _languages = list()
@@ -49,7 +63,12 @@ def choose_layout_type(d):
 			if gl_type in mapping:
 				return mapping[gl_type]
 	if d.get('LayoutTypeDerivedFromMetadata'):
-		return "%s_%s" % (training_name, d.get('LayoutTypeDerivedFromMetadata'))
+		meta_type = d['LayoutTypeDerivedFromMetadata']
+		if training_name in METADATA_TYPE_MAP:
+			mapping = METADATA_TYPE_MAP[training_name]
+			if meta_type in mapping:
+				meta_type = mapping[meta_type]
+		return "%s_%s" % (training_name, meta_type)
 	return ""
 			
 
@@ -226,7 +245,7 @@ def package(im, label_info, args):
 		doc_datum.record_type_fine_str = rtype
 		doc_datum.record_type_fine = one_of_k(rtype, _record_type_fines)
 	if label_info.get('MediaType'):
-		mtype = label_info.get('MediaType')
+		mtype = label_info.get('MediaType').lower()
 		doc_datum.media_type_str = mtype
 		doc_datum.media_type = one_of_k(mtype, _media_types)
 	if label_info.get('IsDocument'):
