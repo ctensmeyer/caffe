@@ -210,18 +210,35 @@ cv::Mat UnencodedImageToCVMat(const Image& img) {
   const string& data = img.data();
 
   cv::Mat cv_img;
-  int sizes[] = {img_channels, img_height, img_width};
-  cv_img.create(3, sizes, CV_8U);
-  for (int c = 0; c < img_channels; ++c) {
-    for (int h = 0; h < img_height; ++h) {
-	  for (int w = 0; w < img_width; ++w) {
-        int img_index = (c * img_height + h) * img_width + w;
-		int cv_index = (c * cv_img.step[0] + h * cv_img.step[1] + w * cv_img.step[2]);
-		*(cv_img.data + cv_index) = data[img_index];
+  switch (img_channels) {
+    case 1:
+      cv_img.create(img_height, img_width, CV_8UC1);
+	  break;
+	case 2:
+      cv_img.create(img_height, img_width, CV_8UC2);
+	  break;
+	case 3:
+      cv_img.create(img_height, img_width, CV_8UC3);
+	  break;
+	case 4:
+      cv_img.create(img_height, img_width, CV_8UC4);
+	  break;
+	default:
+	  LOG(FATAL) << "Only 1-4 channels supported";
+	  break;
+  }
+  for (int h = 0; h < img_height; ++h) {
+    uchar* ptr = cv_img.ptr<uchar>(h);
+    int img_index = 0;
+    for (int w = 0; w < img_width; ++w) {
+      for (int c = 0; c < img_channels; ++c) {
+        int out_index = (c * img_height + h) * img_width + w;
+    	ptr[img_index] = data[out_index];
+        //LOG(INFO) << "c: " << c << " h: " << h << " w: " << w << " out_index: " << out_index << " value: " << ((float)ptr[img_index]);
+		img_index++;
       }
     }
   }
-
   return cv_img;
 }
 
