@@ -139,6 +139,7 @@ def open_db(db_file):
 	txn = env.begin(write=True)
 	return env, txn
 	
+_collection_counter = collections.Counter()
 def package(im, label_info, args):
 	doc_datum = caffe.proto.caffe_pb2.DocumentDatum()
 	datum_im = doc_datum.image
@@ -181,10 +182,16 @@ def package(im, label_info, args):
 			doc_datum.decade = regression(float(decade), _decade_scale, _decade_shift)
 		except:
 			pass
-	if label_info.get('TrainingSetName'):
+
+	if label_info.get('DBID') and args.use_dbid:
+		name = label_info.get('DBID')
+		doc_datum.collection_str = name
+		doc_datum.collection = one_of_k(name, _collections)
+	elif label_info.get('TrainingSetName'):
 		name = label_info.get('TrainingSetName')
 		doc_datum.collection_str = name
 		doc_datum.collection = one_of_k(name, _collections)
+
 	if label_info.get('ColumnCount'):
 		col_count = label_info.get('ColumnCount')
 		doc_datum.column_count_str = col_count
@@ -268,6 +275,12 @@ def package(im, label_info, args):
 		ar = label_info.get('orig_ar')
 		doc_datum.original_aspect_ratio_str = str(ar)
 		doc_datum.original_aspect_ratio = ar
+
+	if args.number > 0 and doc_datum.collection_str:
+		num = _collection_counter[doc_datum.collection_str] / args.number
+		doc_datum.num_str = str(num)
+		doc_datum.num = num
+		_collection_counter[doc_datum.collection_str] += 1
 
 	return doc_datum
 
@@ -377,6 +390,9 @@ def print_encoding(args):
 
 	print "Is* : Y=1, N=0\n"
 
+	if _collection_counter.values():
+		print "Largest num: ", max(_collection_counter.values())
+
 def main(args):
 	dbs = {}
 	if args.multiple_db:
@@ -430,6 +446,7 @@ def main(args):
 				print env.info()
 				txn = env.begin(write=True)
 				dbs[db_file] = (env, txn)
+				serialize_encoding(args)
 		except Exception as e:
 			print e
 			print traceback.print_exc(file=sys.stdout)
@@ -437,8 +454,8 @@ def main(args):
 
 	print "Done Processing Images"
 
-	print_encoding(args)
 	serialize_encoding(args)
+	print_encoding(args)
 
 	for key, val in dbs.items():
 		print "Closing DB: ", key
@@ -469,12 +486,16 @@ def get_args():
 						help='How to store the image in the DocumentDatum')
 	parser.add_argument('-t', '--truncate', type=float, default='2',
 						help='Upper/Lower bound on the image AR')
-	parser.add_argument('-c', '--collection-folder', default=False, action="store_true",
-						help='If the collection or metadata file is missing, use the directory containing the image as the collection')
+	parser.add_argument('-d', '--use-dbid', default=False, action="store_true",
+						help='For instances with metadata, use the DBID field for the collection attribute instead of TrainingSetName')
 	parser.add_argument('-i', '--initial-encoding', default="", type=str,
 						help='Use the specified encoding of metadata to labels (pickle)')
 	parser.add_argument('--no-shuffle', dest="shuffle", default=True, action="store_false",
 						help='How to store the image in the DocumentDatum')
+	parser.add_argument('-c', '--collection-folder', default=False, action="store_true",
+						help='If the collection or metadata file is missing, use the directory containing the image as the collection')
+	parser.add_argument('-n', '--number', default=0, type=int,
+						help='Partition collections into groups of n for the num attribute')
 	args = parser.parse_args()
 	return args
 

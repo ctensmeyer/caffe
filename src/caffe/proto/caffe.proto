@@ -131,6 +131,9 @@ message DocumentDatum {
 
   optional string original_aspect_ratio_str = 50;
   optional float original_aspect_ratio = 51;
+
+  optional string num_str = 52;
+  optional int32 num = 53;
 }
 
 message FillerParameter {
@@ -380,7 +383,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 205 (last added: crop_param)
+// LayerParameter next available layer-specific ID: 206 (last added: binary_encode)
 // LayerParameter next available layer-specific ID: 137 (last added: reduction_param)
 // The 2xx numbers are reservered for additional layers added by Chris, while 1xx are
 //   used by the official caffe release.
@@ -435,6 +438,7 @@ message LayerParameter {
   // The default for the engine is set by the ENGINE switch at compile-time.
   optional AccuracyParameter accuracy_param = 102;
   optional ArgMaxParameter argmax_param = 103;
+  optional BinaryEncodeParameter binary_param = 205;
   optional BNParameter bn_param = 203;
   optional ConcatParameter concat_param = 104;
   optional ContrastiveLossParameter contrastive_loss_param = 105;
@@ -632,6 +636,8 @@ message LossParameter {
   // If true, normalize each batch across all instances (including spatial
   // dimesions, but not ignored instances); else, divide by batch size only.
   optional bool normalize = 2 [default = true];
+
+  optional bool log_output = 10 [default = false];
 }
 
 // Messages that store parameters used by individual layer types follow, in
@@ -1434,5 +1440,9 @@ message TopKParameter {
   }
 
   optional Grouping grouping = 4 [default = LATERAL];
+}
+
+message BinaryEncodeParameter {
+  optional uint32 num_bits = 1 [default = 32];
 }
 
