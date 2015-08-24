@@ -82,7 +82,7 @@ void AccuracyLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 		for (int k = 0; k < top_k_; k++) {
 		  stream << bottom_data_vector[k].second << " ";
 		}
-	    LOG(INFO) << "Actual Label: " << label_value << " Predicted Labels: " << stream.str();
+	    LOG(INFO) << "[" << this->layer_param().name() << "] Actual: " << label_value << " Predicted: " << stream.str();
 	  }
       ++count;
     }
