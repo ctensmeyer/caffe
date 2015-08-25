@@ -3,7 +3,7 @@ import os
 import traceback
 import argparse
 import matplotlib
-matplotlib.use("cairo")
+matplotlib.use("AGG")
 import matplotlib.pyplot as plt
 plt.ioff()
 import numpy as np
@@ -39,11 +39,15 @@ def parse_log_file(args):
 				cur_iter = int(tokens[pos+1].rstrip(','))
 				if tokens[pos+2] == "Testing":
 					debug_state = "Test"
+				if tokens[pos+2] == "loss":
+					sequences["Train_Losses"]["overall"].append( (cur_iter, float(tokens[pos+4])) )
 			if cur_iter < 0:
 				continue
+			if tokens[4] == "Test" and tokens[5] == "loss:":
+				sequences["Test_Losses"]["overall"].append( (cur_iter, float(tokens[6])) )
 			if (len(tokens) > 10 and tokens[4] in ["Train", "Test"] and 
 					tokens[5] == "net" and tokens[6] == "output"):
-				loss_name = tokens[8]
+				loss_name = tokens[8].replace('/', '-')
 				assert tokens[9] == '='
 				raw_loss_val = float(tokens[10])
 				sequences["%s_Losses" % tokens[4]]["%s_raw" % loss_name].append( (cur_iter, raw_loss_val) )
@@ -56,16 +60,16 @@ def parse_log_file(args):
 				sequences['LR'].append( (cur_iter, lr) )
 
 			if len(tokens) > 11 and tokens[4] == "[Forward]":
-				layer_name = tokens[6].rstrip(",")
+				layer_name = tokens[6].rstrip(",").replace('/', '-')
 				if tokens[7] == "top":
-					blob_name = tokens[9]
+					blob_name = tokens[9].replace('/', '-')
 					aabs = float(tokens[11])
 					if debug_state == "Test":
 						sequences['Test_Layer_Activations'][layer_name][blob_name][cur_iter].append(aabs)
 					else:
 						sequences['Train_Layer_Activations'][layer_name][blob_name].append( (cur_iter, aabs) )
 				elif tokens[7] == "param" and debug_state == "Train":
-					param_num = tokens[9]
+					param_num = tokens[9].replace('/', '-')
 					aabs = float(tokens[11])
 					sequences['Network_Parameters'][layer_name][param_num].append( (cur_iter, aabs) )
 
@@ -83,17 +87,17 @@ def parse_log_file(args):
 				else:
 					layer_name = tokens[6].rstrip(",")
 					if tokens[7] == "bottom":
-						blob_name = tokens[9]
+						blob_name = tokens[9].replace('/', '-')
 						aabs = float(tokens[11])
 						sequences['Train_Layer_Gradients'][layer_name][param_num].append( (cur_iter, aabs) )
 					else:
-						param_num = tokens[9]
+						param_num = tokens[9].replace('/', '-')
 						aabs = float(tokens[11])
 						sequences['Network_Parameter_Gradients'][layer_name][param_num].append( (cur_iter, aabs) )
 					
 			if len(tokens) > 12 and tokens[4] == "[Update]":
-				layer_name = tokens[6].rstrip(",")
-				param_num = tokens[8]
+				layer_name = tokens[6].rstrip(",").replace('/', '-')
+				param_num = tokens[8].replace('/', '-')
 				aabs = float(tokens[12])
 				sequences['Network_Parameter_Updates'][layer_name][param_num].append( (cur_iter, aabs) )
 		except Exception as e:

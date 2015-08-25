@@ -42,6 +42,9 @@ layer {
     sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_train/512x464_lmdb"
     sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_train/512x512_lmdb"
 
+	enforce_epochs: true
+	weights_by_size: true
+
     batch_size: 256
     backend: LMDB
 	label_names: "collection"
@@ -56,8 +59,44 @@ layer {
     phase: TEST
   }
   doc_data_param {
-    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512x512_val_lmdb"
-    batch_size: 50
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/256x512_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/304x512_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/352x512_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/400x512_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/448x512_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/496x512_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/512x288_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/512x336_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/512x384_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/512x432_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/512x480_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/272x512_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/320x512_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/368x512_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/416x512_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/464x512_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/512x256_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/512x304_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/512x352_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/512x400_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/512x448_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/512x496_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/288x512_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/336x512_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/384x512_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/432x512_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/480x512_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/512x272_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/512x320_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/512x368_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/512x416_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/512x464_lmdb"
+    sources: "/data/lmdb/doc_datum/andoc-1m/color_collection/512l_val/512x512_lmdb"
+
+    # needs 405 iterations with batch_size = 128 and  in_order and no_wrap
+    batch_size: 128
+	in_order: true
+	no_wrap: true
     backend: LMDB
 	label_names: "collection"
   }
@@ -78,6 +117,7 @@ layer {
   convolution_param {
     num_output: 96
     kernel_size: 15
+	pad: 7
     stride: 4
     weight_filler {
       type: "gaussian"
@@ -280,7 +320,7 @@ layer {
   bottom: "conv5"
   top: "pool5"
   spp_param {
-    pyramid_height: 4
+    pyramid_height: 3
     pool: MAX
   }
 }

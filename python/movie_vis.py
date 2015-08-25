@@ -73,7 +73,7 @@ def create_filter_movies(out_dir, filter_names):
 	for _filter in filter_names:
 		in_dir = os.path.join(images_dir, _filter)
 		out_file = os.path.join(movies_dir, "%s.mp4" % _filter)
-		create_movie(in_dir, out_file)
+		#create_movie(in_dir, out_file)
 		
 def create_image_movies(out_dir, image_basenames, activation_names):
 	for image_name in image_basenames:
@@ -84,7 +84,7 @@ def create_image_movies(out_dir, image_basenames, activation_names):
 		for activation in activation_names:
 			in_dir = os.path.join(images_dir, activation)
 			out_file = os.path.join(movies_dir, "%s.mp4" % activation)
-			create_movie(in_dir, out_file)
+			#create_movie(in_dir, out_file)
 
 def main(model_file, snapshot_dir, out_dir, flags, images):
 	# set up output file

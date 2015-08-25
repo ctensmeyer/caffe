@@ -177,6 +177,9 @@ def save_filters(net, args):
 	out_dir = os.path.join(args.output_dir, "filters")
 	os.mkdir(out_dir)
 	for name, lblob in net.params.items():
+		if name in args.omit_layers:
+			print "Ommitting %s" % name
+			continue
 		print name
 		out_file = os.path.join(out_dir, name + ".png")
 		weights = lblob[0].data
@@ -202,6 +205,9 @@ def save_activations(net, args):
 		net.blobs[args.input].data[...] = tmp
 		net.forward()
 		for name, data in net.blobs.items():
+			if name in args.omit_layers:
+				print "Ommitting %s" % name
+				continue
 			try:
 				print "\t%s: %s" % (name, data.data.shape)
 				out_file = os.path.join(outdir, name + ".png")
@@ -250,11 +256,14 @@ def get_args():
 				help="Name of input blob")
 	parser.add_argument("-l", "--local_norm", default=False, action="store_true",
 				help="Name of input blob")
-
+	parser.add_argument("--omit", default="", type=str,
+				help="Name of blobs to omit.  Common separated list")
 
 	parser.add_argument('test_images', nargs=argparse.REMAINDER,
 		help="images to run through the network")
 	args = parser.parse_args()
+	args.omit_layers = args.omit.split(',')
+
 	return args
 
 if __name__ == "__main__":

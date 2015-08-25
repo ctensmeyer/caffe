@@ -94,3 +94,5 @@ MANIFEST-*
 
 # Log Dir
 logs/*
+
+experiments/*

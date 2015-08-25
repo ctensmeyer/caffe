@@ -18,6 +18,20 @@ LABEL_DELIM = '|'
 GL_TYPE_MAP = {
 	"1940USFedCen" : {}
 }
+METADATA_TYPE_MAP = {
+	"1911EnglandAddr" : {
+	    # differences in ink color / printed number
+		"4" : "Instructions",
+		"5" : "Instructions",
+		"96" : "Instructions",
+		"15" : "Instructions",
+		"16" : "Instructions",
+		
+		"29" : "Cover",
+		"34" : "Cover",
+		"31" : "Cover" # this one is a little messed up
+	}
+}
 
 _countries = list()
 _languages = list()
@@ -49,7 +63,12 @@ def choose_layout_type(d):
 			if gl_type in mapping:
 				return mapping[gl_type]
 	if d.get('LayoutTypeDerivedFromMetadata'):
-		return "%s_%s" % (training_name, d.get('LayoutTypeDerivedFromMetadata'))
+		meta_type = d['LayoutTypeDerivedFromMetadata']
+		if training_name in METADATA_TYPE_MAP:
+			mapping = METADATA_TYPE_MAP[training_name]
+			if meta_type in mapping:
+				meta_type = mapping[meta_type]
+		return "%s_%s" % (training_name, meta_type)
 	return ""
 			
 
@@ -116,10 +135,11 @@ def process_labels(label_file, args):
 
 
 def open_db(db_file):
-	env = lmdb.open(db_file, readonly=False, map_size=int(2 ** 38), writemap=True)
+	env = lmdb.open(db_file, readonly=False, map_size=int(2 ** 42), writemap=True)
 	txn = env.begin(write=True)
 	return env, txn
 	
+_collection_counter = collections.Counter()
 def package(im, label_info, args):
 	doc_datum = caffe.proto.caffe_pb2.DocumentDatum()
 	datum_im = doc_datum.image
@@ -158,31 +178,55 @@ def package(im, label_info, args):
 	if label_info.get('Decade'):
 		decade = label_info.get('Decade')
 		doc_datum.decade_str = decade
-		doc_datum.decade = regression(float(decade), _decade_scale, _decade_shift)
-	if label_info.get('TrainingSetName'):
+		try:
+			doc_datum.decade = regression(float(decade), _decade_scale, _decade_shift)
+		except:
+			pass
+
+	if label_info.get('DBID') and args.use_dbid:
+		name = label_info.get('DBID')
+		doc_datum.collection_str = name
+		doc_datum.collection = one_of_k(name, _collections)
+	elif label_info.get('TrainingSetName'):
 		name = label_info.get('TrainingSetName')
 		doc_datum.collection_str = name
 		doc_datum.collection = one_of_k(name, _collections)
+
 	if label_info.get('ColumnCount'):
 		col_count = label_info.get('ColumnCount')
 		doc_datum.column_count_str = col_count
-		doc_datum.column_count = regression(float(col_count), _col_count_scale, _col_count_shift)
+		try:
+			doc_datum.column_count = regression(float(col_count), _col_count_scale, _col_count_shift)
+		except:
+			pass
 	if label_info.get('PossibleRecords'):
 		poss_records = label_info.get('PossibleRecords')
 		doc_datum.possible_records_str = poss_records
-		doc_datum.possible_records = regression(float(poss_records), _record_scale, _record_shift)
+		try:
+			doc_datum.possible_records = regression(float(poss_records), _record_scale, _record_shift)
+		except:
+			pass
 	if label_info.get('ActualRecords'):
 		actual_records = label_info.get('ActualRecords')
 		doc_datum.actual_records_str = actual_records
-		doc_datum.actual_records = regression(float(actual_records), _record_scale, _record_shift)
+		try:
+			doc_datum.actual_records = regression(float(actual_records), _record_scale, _record_shift)
+		except:
+			pass
 	if label_info.get('PagesPerImage'):
 		pages = label_info.get('PagesPerImage')
 		doc_datum.pages_per_image_str = pages
-		doc_datum.pages_per_image = regression(float(pages), _per_image_scale, _per_image_shift)
+		try:
+			doc_datum.pages_per_image = regression(float(pages), _per_image_scale, _per_image_shift)
+		except:
+			pass
 	if label_info.get('DocsPerImage'):
 		docs = label_info.get('DocsPerImage')
 		doc_datum.docs_per_image_str = docs
-		doc_datum.docs_per_image = regression(float(docs), _per_image_scale, _per_image_shift)
+		try:
+			doc_datum.docs_per_image = regression(float(docs), _per_image_scale, _per_image_shift)
+		except:
+			pass
 	if label_info.get('MachineText'):
 		mt = label_info.get('MachineText')
 		doc_datum.machine_text_str = mt
@@ -208,7 +252,7 @@ def package(im, label_info, args):
 		doc_datum.record_type_fine_str = rtype
 		doc_datum.record_type_fine = one_of_k(rtype, _record_type_fines)
 	if label_info.get('MediaType'):
-		mtype = label_info.get('MediaType')
+		mtype = label_info.get('MediaType').lower()
 		doc_datum.media_type_str = mtype
 		doc_datum.media_type = one_of_k(mtype, _media_types)
 	if label_info.get('IsDocument'):
@@ -231,6 +275,12 @@ def package(im, label_info, args):
 		ar = label_info.get('orig_ar')
 		doc_datum.original_aspect_ratio_str = str(ar)
 		doc_datum.original_aspect_ratio = ar
+
+	if args.number > 0 and doc_datum.collection_str:
+		num = _collection_counter[doc_datum.collection_str] / args.number
+		doc_datum.num_str = str(num)
+		doc_datum.num = num
+		_collection_counter[doc_datum.collection_str] += 1
 
 	return doc_datum
 
@@ -310,8 +360,8 @@ def load_encoding(args):
 		_hand_text = d["HWText"]
 		_layout_categories = d["LayoutCategory"]
 		_layout_types = d["layout_type"]
-		_record_type_broad = d["RecordTypeBroad"]
-		_record_type_fine = d["RecordTypeFine"]
+		_record_type_broads = d["RecordTypeBroad"]
+		_record_type_fines = d["RecordTypeFine"]
 		_media_types = d["MediaType"]
 
 
@@ -339,6 +389,9 @@ def print_encoding(args):
 	print "Handwritten Text:\n%s\n\n" % json.dumps(_hand_text, sort_keys=True, indent=4)
 
 	print "Is* : Y=1, N=0\n"
+
+	if _collection_counter.values() and args.number > 0:
+		print "Largest num: ", max(_collection_counter.values()) / args.number
 
 def main(args):
 	dbs = {}
@@ -393,6 +446,7 @@ def main(args):
 				print env.info()
 				txn = env.begin(write=True)
 				dbs[db_file] = (env, txn)
+				serialize_encoding(args)
 		except Exception as e:
 			print e
 			print traceback.print_exc(file=sys.stdout)
@@ -400,8 +454,8 @@ def main(args):
 
 	print "Done Processing Images"
 
-	print_encoding(args)
 	serialize_encoding(args)
+	print_encoding(args)
 
 	for key, val in dbs.items():
 		print "Closing DB: ", key
@@ -432,12 +486,16 @@ def get_args():
 						help='How to store the image in the DocumentDatum')
 	parser.add_argument('-t', '--truncate', type=float, default='2',
 						help='Upper/Lower bound on the image AR')
-	parser.add_argument('-c', '--collection-folder', default=False, action="store_true",
-						help='If the collection or metadata file is missing, use the directory containing the image as the collection')
+	parser.add_argument('-d', '--use-dbid', default=False, action="store_true",
+						help='For instances with metadata, use the DBID field for the collection attribute instead of TrainingSetName')
 	parser.add_argument('-i', '--initial-encoding', default="", type=str,
 						help='Use the specified encoding of metadata to labels (pickle)')
 	parser.add_argument('--no-shuffle', dest="shuffle", default=True, action="store_false",
 						help='How to store the image in the DocumentDatum')
+	parser.add_argument('-c', '--collection-folder', default=False, action="store_true",
+						help='If the collection or metadata file is missing, use the directory containing the image as the collection')
+	parser.add_argument('-n', '--number', default=0, type=int,
+						help='Partition collections into groups of n for the num attribute')
 	args = parser.parse_args()
 	return args
 

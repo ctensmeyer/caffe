@@ -12,6 +12,7 @@ void EuclideanLossLayer<Dtype>::LayerSetUp(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
   LossLayer<Dtype>::LayerSetUp(bottom, top);
   normalize_ = this->layer_param_.loss_param().normalize();
+  log_output_ = this->layer_param_.loss_param().log_output();
 }
 
 template <typename Dtype>
@@ -36,7 +37,24 @@ void EuclideanLossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   Dtype dot = caffe_cpu_dot(count, diff_.cpu_data(), diff_.cpu_data());
   Dtype loss = dot / norm / Dtype(2);
   top[0]->mutable_cpu_data()[0] = loss;
+
+  if (log_output_) {
+  	int num_instances = bottom[0]->shape(0);
+	int num_values = bottom[0]->count(1);
+	for (int n = 0; n < num_instances; n++) {
+	  ostringstream stream_actual;
+	  ostringstream stream_predicted;
+	  for (int x = 0; x < num_values; x++) {
+	  	int idx = n * num_values + x;
+		stream_predicted << bottom[0]->cpu_data()[idx] << " ";
+		stream_actual << bottom[1]->cpu_data()[idx] << " ";
+	  }
+	  LOG(INFO) << "[" << this->layer_param().name() << "] Actual values: " << stream_actual.str() << " Predicted values: " << stream_predicted.str();
+	}
+  }
+  ++count;
 }
+
 
 template <typename Dtype>
 void EuclideanLossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,

@@ -849,11 +849,22 @@ class TopKLayer : public NeuronLayer<Dtype> {
     const vector<Blob<Dtype>*>& top);
   virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
     const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+
+  virtual void Forward_cpu_lateral(const Blob<Dtype>* bottom, Blob<Dtype>* top);
+  virtual void Forward_cpu_lifetime(const Blob<Dtype>* bottom, Blob<Dtype>* top);
+  virtual void Forward_cpu_conv_spatial(const Blob<Dtype>* bottom, Blob<Dtype>* top);
+  virtual void Forward_cpu_conv_cross_channel(const Blob<Dtype>* bottom, Blob<Dtype>* top);
+  virtual void Forward_cpu_conv_lifetime_channel(const Blob<Dtype>* bottom, Blob<Dtype>* top);
+  virtual void kth_element_idxs_(const std::vector<Dtype> &v, std::vector<size_t> &idx,
+                                 const size_t k, const int sortAscend = 1);
+
+  virtual int compute_k(const int num_per_slice);
   
-//  Blob<uint> idxs_;
-  
-  uint uint_k_;
-  uint channels4norm;
+  bool k_is_perc_;
+  int k_;
+  float k_perc_;
+  float a_;
+  TopKParameter::Grouping grouping_;
 };
 
 }  // namespace caffe
