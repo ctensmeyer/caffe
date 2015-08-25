@@ -390,8 +390,8 @@ def print_encoding(args):
 
 	print "Is* : Y=1, N=0\n"
 
-	if _collection_counter.values():
-		print "Largest num: ", max(_collection_counter.values())
+	if _collection_counter.values() and args.number > 0:
+		print "Largest num: ", max(_collection_counter.values()) / args.number
 
 def main(args):
 	dbs = {}
