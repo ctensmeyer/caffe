@@ -94,7 +94,11 @@ class LinearImageTransformer : public ImageTransformer<Dtype> {
   virtual void SampleTransformParams(const vector<int>& in_shape) {}
 
  protected:
+  virtual void LoadShiftFile();
+  virtual void ResizeShiftImage(const vector<int>& in_shape);
   LinearTransformParameter param_;
+  cv::Mat* shift_image_original_;
+  cv::Mat* shift_image_current_;
 };
 
 template <typename Dtype>

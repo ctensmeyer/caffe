@@ -65,8 +65,8 @@ Dtype DocDataLayer<Dtype>::GetLabelValue(DocumentDatum& doc, const std::string& 
     return doc.has_is_historical_document() ? doc.is_historical_document() : missing_value_;
   } else if (label_name == "is_textual") {
     return doc.has_is_textual_document() ? doc.is_textual_document() : missing_value_;
-  } else if (label_name == "collection") {
-    return doc.has_collection() ? doc.collection() : missing_value_;
+  } else if (label_name == "dbid") {
+    return doc.has_dbid() ? doc.dbid() : missing_value_;
   } else if (label_name == "original_aspect_ratio") {
     return doc.has_original_aspect_ratio() ? doc.original_aspect_ratio() : missing_value_;
   } else if (label_name == "num") {

@@ -198,6 +198,8 @@ def main(args):
 					sequences['Test_Layer_Activations'][layer][blob][_iter] = avg
 				else:
 					del sequences['Test_Layer_Activations'][layer][blob][_iter]
+			sequences['Test_Layer_Activations'][layer][blob] = [ (x, y) for x, y in 
+				sequences['Test_Layer_Activations'][layer][blob].items() ]
 
 	plot_per_layer_graphs(sequences["Test_Layer_Activations"], os.path.join(args.out_dir, "Test_Layer_Activations"), "activation")
 
