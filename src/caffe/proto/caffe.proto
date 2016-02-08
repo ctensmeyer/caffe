@@ -586,7 +586,7 @@ message ReflectTransformParameter {
   optional float vert_reflect_prob = 2 [default = 0];
 }
 
-// computes pixel-wise linear transform: y = scale * x + shift
+// computes pixel-wise linear transform: y = scale * (x - shift)
 message LinearTransformParameter {
   // both are either specified exactly once, or the same number of
   // times as the number of channels
@@ -595,7 +595,6 @@ message LinearTransformParameter {
 
   // paths to files containing Image messages containing the shift/scale values
   optional string shift_file = 3;
-  optional string scale_file = 4;
   // if shift_file or scale_file does not match the dimensions of the input image
   // exactly, which interpolation to use when resizing shift or scale image
   enum Interpolation {
@@ -607,7 +606,7 @@ message LinearTransformParameter {
   }
   optional Interpolation interpolation = 5 [default = INTER_LINEAR];
   // If shift_file or scale_file contain images that do not match the dimensions
-  // of the input image, then an error should occur (causes iterpolation to be ignored
+  // of the input image, then an error should occur (causes iterpolation to be ignored)
   optional bool error_on_size_mismatch = 6 [default = false];
 }
 
