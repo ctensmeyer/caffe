@@ -201,6 +201,13 @@ def main(args):
 
 	plot_per_layer_graphs(sequences["Test_Layer_Activations"], os.path.join(args.out_dir, "Test_Layer_Activations"), "activation")
 
+	if 'accuracy_raw' in sequences['Test_Losses']:
+		accuracies = sequences['Test_Losses']['accuracy_raw']
+		accuracies.sort(key=lambda tup: tup[1])
+		tup = accuracies[-1]
+		print tup
+		print tup[0]
+
 
 def get_args():
 	parser = argparse.ArgumentParser(description="Creates an LMDB of DocumentDatums")
