@@ -15,13 +15,11 @@ namespace caffe {
 
 template <typename Dtype>
 void ReflectImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
-  bool do_horz_reflect = (param_.horz_reflect_prob() >= this->RandFloat(0, 1));
-  bool do_vert_reflect = (param_.vert_reflect_prob() >= this->RandFloat(0, 1));
-  if (do_horz_reflect || do_vert_reflect) {
+  if (reflect_h_ || reflect_v_) {
     int flip_code;
-	if (do_horz_reflect && do_vert_reflect) {
+	if (reflect_h_ && reflect_v_) {
 	  flip_code = -1;
-	} else if (do_horz_reflect) {
+	} else if (reflect_h_) {
 	  flip_code = 0;
 	} else {
 	  flip_code = 1;
@@ -31,6 +29,12 @@ void ReflectImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) 
     // no op
     out = in;
   }
+}
+
+template <typename Dtype>
+void ReflectImageTransformer<Dtype>::SampleTransformParams(const vector<int>& in_shape) {
+  reflect_h_ = this->RandFloat(0, 1) <= param_.horz_reflect_prob();
+  reflect_v_ = this->RandFloat(0, 1) <= param_.vert_reflect_prob();
 }
 
 INSTANTIATE_CLASS(ReflectImageTransformer);

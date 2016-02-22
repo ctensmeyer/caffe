@@ -15,7 +15,7 @@ namespace caffe {
 template <typename Dtype>
 class ImageTransformer {
  public:
-  explicit ImageTransformer() {}
+  explicit ImageTransformer() { num_sampled_params_ = 0;}
   virtual ~ImageTransformer() {}
 
   void InitRand();
@@ -26,10 +26,11 @@ class ImageTransformer {
   void CVMatToArray(const cv::Mat& cv_img, Dtype* out);
   virtual void Transform(const cv::Mat& in, cv::Mat& out) {}
   virtual vector<int> InferOutputShape(const vector<int>& in_shape) {return in_shape;}
-  virtual void SampleTransformParams(const vector<int>& in_shape) {};
+  virtual void SampleTransformParams(const vector<int>& in_shape) { num_sampled_params_++; };
 
  protected:
   shared_ptr<Caffe::RNG> rng_;
+  int num_sampled_params_;
 };
 
 template <typename Dtype>
@@ -137,9 +138,12 @@ class ReflectImageTransformer : public ImageTransformer<Dtype> {
   virtual ~ReflectImageTransformer() {};
 
   virtual void Transform(const cv::Mat& in, cv::Mat& out);
+  virtual void SampleTransformParams(const vector<int>& in_shape);
 
  protected:
   ReflectTransformParameter param_;
+  bool reflect_h_;
+  bool reflect_v_;
 };
 
 }  // namespace caffe

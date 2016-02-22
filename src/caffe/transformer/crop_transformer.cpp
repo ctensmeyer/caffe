@@ -136,6 +136,8 @@ template <typename Dtype>
 void CropImageTransformer<Dtype>::SampleTransformParams(const vector<int>& in_shape) {
   CHECK_GE(in_shape.size(), 2);
   CHECK_LE(in_shape.size(), 4);
+
+  ImageTransformer<Dtype>::SampleTransformParams(in_shape);
   int in_width = in_shape[in_shape.size() - 1];
   int in_height = in_shape[in_shape.size() - 2];
 

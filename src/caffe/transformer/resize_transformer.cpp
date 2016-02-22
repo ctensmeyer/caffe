@@ -76,6 +76,7 @@ void ResizeImageTransformer<Dtype>::ValidateParam() {
 
 template <typename Dtype>
 void ResizeImageTransformer<Dtype>::SampleTransformParams(const vector<int>& in_shape) {
+  ImageTransformers<Dtype>::SampleTransformParams(in_shape);
   CHECK_GE(in_shape.size(), 2);
   CHECK_LE(in_shape.size(), 4);
   int in_width = in_shape[in_shape.size() - 1];

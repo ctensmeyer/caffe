@@ -173,6 +173,7 @@ void SequenceImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out)
 
 template <typename Dtype>
 void SequenceImageTransformer<Dtype>::SampleTransformParams(const vector<int>& in_shape) {
+  ImageTransformer<Dtype>::SampleTransformParams(in_shape);
   vector<int> shape = in_shape;
   for (int i = 0; i < transformers_->size(); i++) {
     ImageTransformer<Dtype>* transformer = (*transformers_)[i];
@@ -225,6 +226,7 @@ vector<int> ProbImageTransformer<Dtype>::InferOutputShape(const vector<int>& in_
 
 template <typename Dtype>
 void ProbImageTransformer<Dtype>::SampleTransformParams(const vector<int>& in_shape) {
+  ImageTransformer<Dtype>::SampleTransformParams(in_shape);
   SampleIdx();
 
   CHECK_GE(cur_idx_, 0) << "cur_idx_ is not initialized";
