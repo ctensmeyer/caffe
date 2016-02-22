@@ -9,6 +9,8 @@
 
 namespace caffe {
 
+
+
 // TODO: verify if the width/height dimension order is correct
 template <typename Dtype>
 class ImageTransformer {
@@ -28,6 +30,10 @@ class ImageTransformer {
  protected:
   shared_ptr<Caffe::RNG> rng_;
 };
+
+template <typename Dtype>
+ImageTransformer<Dtype>* CreateImageTransformer(ImageTransformationParameter param);
+
 
 template <typename Dtype>
 class ResizeImageTransformer : public ImageTransformer<Dtype> {

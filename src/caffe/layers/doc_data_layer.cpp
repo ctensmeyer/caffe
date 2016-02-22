@@ -153,7 +153,7 @@ void DocDataLayer<Dtype>::NextIndex() {
 template <typename Dtype>
 void DocDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-  CreateImageTransformer(this->layer_param_.image_transform_param());
+  this->image_transformer_ = CreateImageTransformer<Dtype>(this->layer_param_.image_transform_param());
   DocDataParameter doc_param = this->layer_param_.doc_data_param();
   num_labels_ = doc_param.label_names_size();
   missing_value_ = doc_param.missing_value();
@@ -379,71 +379,6 @@ void DocDataLayer<Dtype>::InternalThreadEntry() {
   NextIndex();
 }
 
-template <typename Dtype>
-void DocDataLayer<Dtype>::CreateImageTransformer(ImageTransformationParameter param) {
-  vector<ImageTransformer<Dtype>*>* transformers = new vector<ImageTransformer<Dtype>*>();
-  for (int i = 0; i < param.params_size(); i++) {
-    ProbImageTransformParameter prob_param = param.params(i);
-    vector<ImageTransformer<Dtype>*>* prob_transformers = new vector<ImageTransformer<Dtype>*>();
-	vector<float> weights;
-
-    float weight;
-
-	// Resize
-	for (int j = 0; j < prob_param.resize_params_size(); j++) {
-	  ResizeTransformParameter resize_param = prob_param.resize_params(j); 
-	  if (j < prob_param.resize_prob_weights_size()) {
-	    weight = prob_param.resize_prob_weights(j);
-	  } else {
-	    weight = 1;
-	  }
-	  ImageTransformer<Dtype>* transformer = new ResizeImageTransformer<Dtype>(resize_param);
-	  prob_transformers->push_back(transformer);
-	  weights.push_back(weight);
-	}
-
-    // Linear
-	for (int j = 0; j < prob_param.linear_params_size(); j++) {
-	  LinearTransformParameter linear_param = prob_param.linear_params(j); 
-	  if (j < prob_param.linear_prob_weights_size()) {
-	    weight = prob_param.linear_prob_weights(j);
-	  } else {
-	    weight = 1;
-	  }
-	  ImageTransformer<Dtype>* transformer = new LinearImageTransformer<Dtype>(linear_param);
-	  prob_transformers->push_back(transformer);
-	  weights.push_back(weight);
-	}
-	// Crop
-	for (int j = 0; j < prob_param.crop_params_size(); j++) {
-	  CropTransformParameter crop_param = prob_param.crop_params(j); 
-	  if (j < prob_param.crop_prob_weights_size()) {
-	    weight = prob_param.crop_prob_weights(j);
-	  } else {
-	    weight = 1;
-	  }
-	  ImageTransformer<Dtype>* transformer = new CropImageTransformer<Dtype>(crop_param);
-	  prob_transformers->push_back(transformer);
-	  weights.push_back(weight);
-	}
-	// Reflect
-	for (int j = 0; j < prob_param.reflect_params_size(); j++) {
-	  ReflectTransformParameter reflect_param = prob_param.reflect_params(j); 
-	  if (j < prob_param.reflect_prob_weights_size()) {
-	    weight = prob_param.reflect_prob_weights(j);
-	  } else {
-	    weight = 1;
-	  }
-	  ImageTransformer<Dtype>* transformer = new ReflectImageTransformer<Dtype>(reflect_param);
-	  prob_transformers->push_back(transformer);
-	  weights.push_back(weight);
-	}
-
-    ImageTransformer<Dtype>* prob_transformer = new ProbImageTransformer<Dtype>(prob_transformers, weights);
-	transformers->push_back(prob_transformer);
-  }
-  image_transformer_ = new SequenceImageTransformer<Dtype>(transformers);
-}
 
 template <typename Dtype>
 void DocDataLayer<Dtype>::Forward_cpu(

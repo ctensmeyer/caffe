@@ -14,6 +14,76 @@
 namespace caffe {
 
 template <typename Dtype>
+ImageTransformer<Dtype>* CreateImageTransformer(ImageTransformationParameter param) {
+  vector<ImageTransformer<Dtype>*>* transformers = new vector<ImageTransformer<Dtype>*>();
+  for (int i = 0; i < param.params_size(); i++) {
+    ProbImageTransformParameter prob_param = param.params(i);
+    vector<ImageTransformer<Dtype>*>* prob_transformers = new vector<ImageTransformer<Dtype>*>();
+	vector<float> weights;
+
+    float weight;
+
+	// Resize
+	for (int j = 0; j < prob_param.resize_params_size(); j++) {
+	  ResizeTransformParameter resize_param = prob_param.resize_params(j); 
+	  if (j < prob_param.resize_prob_weights_size()) {
+	    weight = prob_param.resize_prob_weights(j);
+	  } else {
+	    weight = 1;
+	  }
+	  ImageTransformer<Dtype>* transformer = new ResizeImageTransformer<Dtype>(resize_param);
+	  prob_transformers->push_back(transformer);
+	  weights.push_back(weight);
+	}
+
+    // Linear
+	for (int j = 0; j < prob_param.linear_params_size(); j++) {
+	  LinearTransformParameter linear_param = prob_param.linear_params(j); 
+	  if (j < prob_param.linear_prob_weights_size()) {
+	    weight = prob_param.linear_prob_weights(j);
+	  } else {
+	    weight = 1;
+	  }
+	  ImageTransformer<Dtype>* transformer = new LinearImageTransformer<Dtype>(linear_param);
+	  prob_transformers->push_back(transformer);
+	  weights.push_back(weight);
+	}
+	// Crop
+	for (int j = 0; j < prob_param.crop_params_size(); j++) {
+	  CropTransformParameter crop_param = prob_param.crop_params(j); 
+	  if (j < prob_param.crop_prob_weights_size()) {
+	    weight = prob_param.crop_prob_weights(j);
+	  } else {
+	    weight = 1;
+	  }
+	  ImageTransformer<Dtype>* transformer = new CropImageTransformer<Dtype>(crop_param);
+	  prob_transformers->push_back(transformer);
+	  weights.push_back(weight);
+	}
+	// Reflect
+	for (int j = 0; j < prob_param.reflect_params_size(); j++) {
+	  ReflectTransformParameter reflect_param = prob_param.reflect_params(j); 
+	  if (j < prob_param.reflect_prob_weights_size()) {
+	    weight = prob_param.reflect_prob_weights(j);
+	  } else {
+	    weight = 1;
+	  }
+	  ImageTransformer<Dtype>* transformer = new ReflectImageTransformer<Dtype>(reflect_param);
+	  prob_transformers->push_back(transformer);
+	  weights.push_back(weight);
+	}
+
+    ImageTransformer<Dtype>* prob_transformer = new ProbImageTransformer<Dtype>(prob_transformers, weights);
+	transformers->push_back(prob_transformer);
+  }
+  return new SequenceImageTransformer<Dtype>(transformers);
+}
+
+// instantiate template function
+template ImageTransformer<float>* CreateImageTransformer(ImageTransformationParameter param);
+template ImageTransformer<double>* CreateImageTransformer(ImageTransformationParameter param);
+
+template <typename Dtype>
 void ImageTransformer<Dtype>::InitRand() {
   const unsigned int rng_seed = caffe_rng_rand();
   rng_.reset(new Caffe::RNG(rng_seed));
