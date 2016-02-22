@@ -79,7 +79,8 @@ Dtype DocDataLayer<Dtype>::GetLabelValue(DocumentDatum& doc, const std::string& 
 
 template <typename Dtype>
 int DocDataLayer<Dtype>::SampleCat(const vector<float>& probs) {
-  float rand = image_transformer_->RandFloat(0,1);
+  float rand;
+  caffe_rng_uniform(1, 0.f, 1.f, &rand);
   float cum_prob = 0;
   int i;
   for (i = 0; i < probs.size(); i++) {

@@ -15,10 +15,11 @@ namespace caffe {
 template <typename Dtype>
 class ImageTransformer {
  public:
-  explicit ImageTransformer() { InitRand(); }
+  explicit ImageTransformer() {}
   virtual ~ImageTransformer() {}
 
   void InitRand();
+  void InitRand(unsigned int seed);
   int RandInt(int n);
   float RandFloat(float min, float max);
 

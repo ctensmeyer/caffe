@@ -15,6 +15,7 @@ namespace caffe {
 
 template <typename Dtype>
 ImageTransformer<Dtype>* CreateImageTransformer(ImageTransformationParameter param) {
+  const unsigned int rng_seed = (param.has_rng_seed()) ? param.rng_seed() : 0;
   vector<ImageTransformer<Dtype>*>* transformers = new vector<ImageTransformer<Dtype>*>();
   for (int i = 0; i < param.params_size(); i++) {
     ProbImageTransformParameter prob_param = param.params(i);
@@ -32,6 +33,7 @@ ImageTransformer<Dtype>* CreateImageTransformer(ImageTransformationParameter par
 	    weight = 1;
 	  }
 	  ImageTransformer<Dtype>* transformer = new ResizeImageTransformer<Dtype>(resize_param);
+	  transformer->InitRand(rng_seed);
 	  prob_transformers->push_back(transformer);
 	  weights.push_back(weight);
 	}
@@ -45,6 +47,7 @@ ImageTransformer<Dtype>* CreateImageTransformer(ImageTransformationParameter par
 	    weight = 1;
 	  }
 	  ImageTransformer<Dtype>* transformer = new LinearImageTransformer<Dtype>(linear_param);
+	  transformer->InitRand(rng_seed);
 	  prob_transformers->push_back(transformer);
 	  weights.push_back(weight);
 	}
@@ -57,6 +60,7 @@ ImageTransformer<Dtype>* CreateImageTransformer(ImageTransformationParameter par
 	    weight = 1;
 	  }
 	  ImageTransformer<Dtype>* transformer = new CropImageTransformer<Dtype>(crop_param);
+	  transformer->InitRand(rng_seed);
 	  prob_transformers->push_back(transformer);
 	  weights.push_back(weight);
 	}
@@ -69,14 +73,18 @@ ImageTransformer<Dtype>* CreateImageTransformer(ImageTransformationParameter par
 	    weight = 1;
 	  }
 	  ImageTransformer<Dtype>* transformer = new ReflectImageTransformer<Dtype>(reflect_param);
+	  transformer->InitRand(rng_seed);
 	  prob_transformers->push_back(transformer);
 	  weights.push_back(weight);
 	}
 
     ImageTransformer<Dtype>* prob_transformer = new ProbImageTransformer<Dtype>(prob_transformers, weights);
+	prob_transformer->InitRand(rng_seed);
 	transformers->push_back(prob_transformer);
   }
-  return new SequenceImageTransformer<Dtype>(transformers);
+  ImageTransformer<Dtype>* seq_transformer = new SequenceImageTransformer<Dtype>(transformers);
+  seq_transformer->InitRand(rng_seed);
+  return seq_transformer;
 }
 
 // instantiate template function
@@ -84,8 +92,8 @@ template ImageTransformer<float>* CreateImageTransformer(ImageTransformationPara
 template ImageTransformer<double>* CreateImageTransformer(ImageTransformationParameter param);
 
 template <typename Dtype>
-void ImageTransformer<Dtype>::InitRand() {
-  const unsigned int rng_seed = caffe_rng_rand();
+void ImageTransformer<Dtype>::InitRand(unsigned int seed) {
+  const unsigned int rng_seed = (seed) ? seed : caffe_rng_rand();
   rng_.reset(new Caffe::RNG(rng_seed));
 }
 
