@@ -518,6 +518,7 @@ message ProbImageTransformParameter {
   repeated ReflectTransformParameter reflect_params = 3;
   repeated LinearTransformParameter linear_params = 4;
   repeated GaussNoiseTransformParameter gauss_noise_params = 5;
+  repeated RotateTransformParameter rotate_params = 6;
 
   // the number of values for each of these fields should match the number
   // of values for the corresponding fields 1-5.  If left unspecificed,
@@ -527,6 +528,7 @@ message ProbImageTransformParameter {
   repeated float reflect_prob_weights = 13;
   repeated float linear_prob_weights = 14;
   repeated float gauss_noise_prob_weights = 15;
+  repeated float rotate_prob_weights = 16;
 }
 
 message ResizeTransformParameter {
@@ -613,6 +615,10 @@ message LinearTransformParameter {
 
 message GaussNoiseTransformParameter {
   repeated float std_dev = 1;
+}
+
+message RotateTransformParameter {
+  optional float max_angle = 1 [default = 0];
 }
 
 // Message that stores parameters shared by loss layers
