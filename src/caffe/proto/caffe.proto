@@ -517,7 +517,7 @@ message ProbImageTransformParameter {
   repeated CropTransformParameter crop_params = 2;
   repeated ReflectTransformParameter reflect_params = 3;
   repeated LinearTransformParameter linear_params = 4;
-  repeated ChannelTransformParameter channel_params = 5;
+  repeated GaussNoiseTransformParameter gauss_noise_params = 5;
 
   // the number of values for each of these fields should match the number
   // of values for the corresponding fields 1-5.  If left unspecificed,
@@ -526,7 +526,7 @@ message ProbImageTransformParameter {
   repeated float crop_prob_weights = 12;
   repeated float reflect_prob_weights = 13;
   repeated float linear_prob_weights = 14;
-  repeated float channel_prob_weights = 15;
+  repeated float gauss_noise_prob_weights = 15;
 }
 
 message ResizeTransformParameter {
@@ -611,22 +611,8 @@ message LinearTransformParameter {
   optional bool error_on_size_mismatch = 6 [default = false];
 }
 
-
-message ChannelTransformParameter {
-  // exactly one of to_color, to_gray, to_binary must be specified
-
-  // Force the decoded image to have 3 color channels.
-  optional bool to_color = 1 [default = false];
-  // Force the decoded image to have 1 color channel.
-  optional bool to_gray = 2 [default = false];
-  // Force the decoded image to have 1 color channel casting all 
-  // pixels to min/max value based on binary_threshold
-  optional bool to_binary = 3 [default = false];
-  optional float binary_threshold = 4;
-
-  // if true, append the created channel to input channels
-  optional bool append = 5 [default = false];
-
+message GaussNoiseTransformParameter {
+  repeated float std_dev = 1;
 }
 
 // Message that stores parameters shared by loss layers

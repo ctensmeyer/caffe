@@ -77,6 +77,19 @@ ImageTransformer<Dtype>* CreateImageTransformer(ImageTransformationParameter par
 	  prob_transformers->push_back(transformer);
 	  weights.push_back(weight);
 	}
+	// GaussNoise
+	for (int j = 0; j < prob_param.gauss_noise_params_size(); j++) {
+	  GaussNoiseTransformParameter gauss_noise_param = prob_param.gauss_noise_params(j); 
+	  if (j < prob_param.gauss_noise_prob_weights_size()) {
+	    weight = prob_param.gauss_noise_prob_weights(j);
+	  } else {
+	    weight = 1;
+	  }
+	  ImageTransformer<Dtype>* transformer = new GaussNoiseImageTransformer<Dtype>(gauss_noise_param);
+	  transformer->InitRand(rng_seed);
+	  prob_transformers->push_back(transformer);
+	  weights.push_back(weight);
+	}
 
     ImageTransformer<Dtype>* prob_transformer = new ProbImageTransformer<Dtype>(prob_transformers, weights);
 	prob_transformer->InitRand(rng_seed);
@@ -117,6 +130,7 @@ float ImageTransformer<Dtype>::RandFloat(float min, float max) {
       variate_generator(rng, random_distribution);
   return variate_generator();
 }
+
 
 template <typename Dtype>
 void ImageTransformer<Dtype>::CVMatToArray(const cv::Mat& cv_img, Dtype* out) {
