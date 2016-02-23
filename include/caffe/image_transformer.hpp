@@ -151,6 +151,24 @@ class ReflectImageTransformer : public ImageTransformer<Dtype> {
   bool reflect_v_;
 };
 
+template <typename Dtype>
+class GaussNoiseImageTransformer : public ImageTransformer<Dtype> {
+ public:
+  explicit GaussNoiseImageTransformer(GaussNoiseTransformParameter param) :
+    param_(param) { rand_mask_ = new Blob<Dtype>();};
+  virtual ~GaussNoiseImageTransformer() {};
+
+  void RandGauss(const int n, const Dtype mean, const Dtype std_dev, Dtype* out);
+  virtual void Transform(const cv::Mat& in, cv::Mat& out);
+  virtual void SampleTransformParams(const vector<int>& in_shape);
+  virtual void PrintParams();
+
+ protected:
+  GaussNoiseTransformParameter param_;
+  float cur_std_dev_;
+  Blob<Dtype>* rand_mask_;
+};
+
 }  // namespace caffe
 
 #endif  // CAFFE_IMAGE_TRANSFORMER_HPP_
