@@ -10,7 +10,6 @@
 namespace caffe {
 
 
-
 // TODO: verify if the width/height dimension order is correct
 template <typename Dtype>
 class ImageTransformer {
@@ -26,7 +25,10 @@ class ImageTransformer {
   void CVMatToArray(const cv::Mat& cv_img, Dtype* out);
   virtual void Transform(const cv::Mat& in, cv::Mat& out) {}
   virtual vector<int> InferOutputShape(const vector<int>& in_shape) {return in_shape;}
-  virtual void SampleTransformParams(const vector<int>& in_shape) { num_sampled_params_++; };
+  virtual void SampleTransformParams(const vector<int>& in_shape) { num_sampled_params_++; }
+  virtual void PrintParams() { 
+    DLOG(INFO) << "PrintParams (" << this << ") " << "Num Sampled: " << num_sampled_params_;
+  }
 
  protected:
   shared_ptr<Caffe::RNG> rng_;
@@ -46,6 +48,7 @@ class ResizeImageTransformer : public ImageTransformer<Dtype> {
   virtual void Transform(const cv::Mat& in, cv::Mat& out);
   virtual vector<int> InferOutputShape(const vector<int>& in_shape);
   virtual void SampleTransformParams(const vector<int>& in_shape);
+  virtual void PrintParams();
 
  protected:
   void ValidateParam();
@@ -119,6 +122,7 @@ class CropImageTransformer : public ImageTransformer<Dtype> {
   virtual void Transform(const cv::Mat& in, cv::Mat& out);
   virtual vector<int> InferOutputShape(const vector<int>& in_shape);
   virtual void SampleTransformParams(const vector<int>& in_shape);
+  virtual void PrintParams();
 
  protected:
   CropTransformParameter param_;
@@ -139,6 +143,7 @@ class ReflectImageTransformer : public ImageTransformer<Dtype> {
 
   virtual void Transform(const cv::Mat& in, cv::Mat& out);
   virtual void SampleTransformParams(const vector<int>& in_shape);
+  virtual void PrintParams();
 
  protected:
   ReflectTransformParameter param_;

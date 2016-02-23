@@ -93,6 +93,7 @@ void ResizeImageTransformer<Dtype>::SampleTransformParams(const vector<int>& in_
   } else {
     CHECK(0) << "Invalid resize param";
   }
+  PrintParams();
 }
 
 template <typename Dtype>
@@ -184,6 +185,11 @@ void ResizeImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
   cv::Size size(cur_width_, cur_height_);
   cv::resize(in, out, size, 0, 0, interpolation);
 }
+template <typename Dtype>
+void ResizeImageTransformer<Dtype>::PrintParams() {
+  ImageTransformer<Dtype>::PrintParams();
+  DLOG(INFO) << "PrintParams (" << this << ") " << " cur height/width: " << cur_height_ << ", " << cur_width_;
+  }
 
 INSTANTIATE_CLASS(ResizeImageTransformer);
 

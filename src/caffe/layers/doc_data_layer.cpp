@@ -285,8 +285,10 @@ void DocDataLayer<Dtype>::InternalThreadEntry() {
   image_transformer_->SampleTransformParams(in_shape);
   vector<int> top_shape = image_transformer_->InferOutputShape(in_shape);
   this->transformed_data_.Reshape(top_shape);
+  /*
   DLOG(INFO) << "Prefetch db: " << cur_index_ << " Shape: " << 
   	this->transformed_data_.shape_string() << " Doc id: " << doc.id();
+  */
   // Reshape prefetch_data according to the batch_size.
   top_shape[0] = batch_size;
   this->prefetch_data_.Reshape(top_shape);
@@ -369,12 +371,14 @@ void DocDataLayer<Dtype>::InternalThreadEntry() {
   }
   timer.Stop();
   batch_timer.Stop();
+  /*
   DLOG(INFO) << "Prefetch batch: " << batch_timer.MilliSeconds() << " ms.";
   DLOG(INFO) << "     Read time: " << read_time / 1000 << " ms.";
   DLOG(INFO) << "   Decode time: " << decode_time / 1000 << " ms.";
   DLOG(INFO) << "Transform time: " << trans_time / 1000 << " ms.";
   DLOG(INFO) << "    Label time: " << label_time / 1000 << " ms.";
   DLOG(INFO) << "     Seek time: " << seek_time / 1000 << " ms.";
+  */
 
   // Choose a db at random to pull from on the next batch
   NextIndex();

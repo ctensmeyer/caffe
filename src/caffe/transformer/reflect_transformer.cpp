@@ -33,8 +33,16 @@ void ReflectImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) 
 
 template <typename Dtype>
 void ReflectImageTransformer<Dtype>::SampleTransformParams(const vector<int>& in_shape) {
+  ImageTransformer<Dtype>::SampleTransformParams(in_shape);
   reflect_h_ = this->RandFloat(0, 1) <= param_.horz_reflect_prob();
   reflect_v_ = this->RandFloat(0, 1) <= param_.vert_reflect_prob();
+  PrintParams();
+}
+
+template <typename Dtype>
+void ReflectImageTransformer<Dtype>::PrintParams() {
+  ImageTransformer<Dtype>::PrintParams();
+  DLOG(INFO) << "PrintParams (" << this << ") " << "\tcur horz/vert reflect: " << reflect_h_ << ", " << reflect_v_;
 }
 
 INSTANTIATE_CLASS(ReflectImageTransformer);

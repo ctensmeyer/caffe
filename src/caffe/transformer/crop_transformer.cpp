@@ -152,6 +152,7 @@ void CropImageTransformer<Dtype>::SampleTransformParams(const vector<int>& in_sh
   } else {
     CHECK(0) << "Invalid crop param";
   }
+  PrintParams();
 }
 
 template <typename Dtype>
@@ -190,8 +191,14 @@ void CropImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
 	  CHECK(0) << "Invalid CropLocation: " << param_.location();
 	  break;
   }
+  DLOG(INFO) << "(" << this << ") CropTransformer location: (" << crop_h_pos << ", " << crop_w_pos << ")";
   cv::Rect roi(crop_w_pos, crop_h_pos, cur_width_, cur_height_);
   out = in(roi);
+}
+template <typename Dtype>
+void CropImageTransformer<Dtype>::PrintParams() {
+  ImageTransformer<Dtype>::PrintParams();
+  DLOG(INFO) << "PrintParams (" << this << ") "  << " cur height/width: " << cur_height_ << ", " << cur_width_;
 }
 
 INSTANTIATE_CLASS(CropImageTransformer);
