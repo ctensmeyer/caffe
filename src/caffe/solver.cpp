@@ -240,9 +240,6 @@ void Solver<Dtype>::Step(int iters) {
               << result_vec[k] << loss_msg_stream.str();
         }
       }
-#if DEBUG
-        DLOG(INFO) << "Testing 1 2 3";
-#endif
     }
     ApplyUpdate();
 

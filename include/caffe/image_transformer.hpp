@@ -9,25 +9,35 @@
 
 namespace caffe {
 
+
 // TODO: verify if the width/height dimension order is correct
 template <typename Dtype>
 class ImageTransformer {
  public:
-  explicit ImageTransformer() { InitRand(); }
+  explicit ImageTransformer() { num_sampled_params_ = 0;}
   virtual ~ImageTransformer() {}
 
   void InitRand();
+  void InitRand(unsigned int seed);
   int RandInt(int n);
   float RandFloat(float min, float max);
 
   void CVMatToArray(const cv::Mat& cv_img, Dtype* out);
   virtual void Transform(const cv::Mat& in, cv::Mat& out) {}
   virtual vector<int> InferOutputShape(const vector<int>& in_shape) {return in_shape;}
-  virtual void SampleTransformParams(const vector<int>& in_shape) {};
+  virtual void SampleTransformParams(const vector<int>& in_shape) { num_sampled_params_++; }
+  virtual void PrintParams() { 
+    DLOG(INFO) << "PrintParams (" << this << ") " << "Num Sampled: " << num_sampled_params_;
+  }
 
  protected:
   shared_ptr<Caffe::RNG> rng_;
+  int num_sampled_params_;
 };
+
+template <typename Dtype>
+ImageTransformer<Dtype>* CreateImageTransformer(ImageTransformationParameter param);
+
 
 template <typename Dtype>
 class ResizeImageTransformer : public ImageTransformer<Dtype> {
@@ -38,6 +48,7 @@ class ResizeImageTransformer : public ImageTransformer<Dtype> {
   virtual void Transform(const cv::Mat& in, cv::Mat& out);
   virtual vector<int> InferOutputShape(const vector<int>& in_shape);
   virtual void SampleTransformParams(const vector<int>& in_shape);
+  virtual void PrintParams();
 
  protected:
   void ValidateParam();
@@ -111,6 +122,7 @@ class CropImageTransformer : public ImageTransformer<Dtype> {
   virtual void Transform(const cv::Mat& in, cv::Mat& out);
   virtual vector<int> InferOutputShape(const vector<int>& in_shape);
   virtual void SampleTransformParams(const vector<int>& in_shape);
+  virtual void PrintParams();
 
  protected:
   CropTransformParameter param_;
@@ -130,9 +142,13 @@ class ReflectImageTransformer : public ImageTransformer<Dtype> {
   virtual ~ReflectImageTransformer() {};
 
   virtual void Transform(const cv::Mat& in, cv::Mat& out);
+  virtual void SampleTransformParams(const vector<int>& in_shape);
+  virtual void PrintParams();
 
  protected:
   ReflectTransformParameter param_;
+  bool reflect_h_;
+  bool reflect_v_;
 };
 
 }  // namespace caffe

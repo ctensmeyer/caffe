@@ -121,7 +121,6 @@ class DocDataLayer : public BasePrefetchingDataLayer<Dtype> {
 
  protected:
   virtual void InternalThreadEntry();
-  virtual void CreateImageTransformer(ImageTransformationParameter param);
   virtual void NextIndex();
   virtual void NextInOrderIndex();
   virtual int SampleCat(const vector<float>& probs);
