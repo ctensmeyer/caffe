@@ -182,6 +182,19 @@ class RotateImageTransformer : public ImageTransformer<Dtype> {
   RotateTransformParameter param_;
 };
 
+template <typename Dtype>
+class ShearImageTransformer : public ImageTransformer<Dtype> {
+ public:
+  explicit ShearImageTransformer(ShearTransformParameter param) :
+    param_(param) { };
+  virtual ~ShearImageTransformer() {};
+
+  virtual void Transform(const cv::Mat& in, cv::Mat& out);
+
+ protected:
+  ShearTransformParameter param_;
+};
+
 }  // namespace caffe
 
 #endif  // CAFFE_IMAGE_TRANSFORMER_HPP_
