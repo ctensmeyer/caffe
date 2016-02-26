@@ -169,6 +169,32 @@ class GaussNoiseImageTransformer : public ImageTransformer<Dtype> {
   Blob<Dtype>* rand_mask_;
 };
 
+template <typename Dtype>
+class RotateImageTransformer : public ImageTransformer<Dtype> {
+ public:
+  explicit RotateImageTransformer(RotateTransformParameter param) :
+    param_(param) { };
+  virtual ~RotateImageTransformer() {};
+
+  virtual void Transform(const cv::Mat& in, cv::Mat& out);
+
+ protected:
+  RotateTransformParameter param_;
+};
+
+template <typename Dtype>
+class ShearImageTransformer : public ImageTransformer<Dtype> {
+ public:
+  explicit ShearImageTransformer(ShearTransformParameter param) :
+    param_(param) { };
+  virtual ~ShearImageTransformer() {};
+
+  virtual void Transform(const cv::Mat& in, cv::Mat& out);
+
+ protected:
+  ShearTransformParameter param_;
+};
+
 }  // namespace caffe
 
 #endif  // CAFFE_IMAGE_TRANSFORMER_HPP_
