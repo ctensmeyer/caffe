@@ -195,6 +195,32 @@ class ShearImageTransformer : public ImageTransformer<Dtype> {
   ShearTransformParameter param_;
 };
 
+template <typename Dtype>
+class GaussBlurImageTransformer : public ImageTransformer<Dtype> {
+ public:
+  explicit GaussBlurImageTransformer(GaussBlurTransformParameter param) :
+    param_(param) { };
+  virtual ~GaussBlurImageTransformer() {};
+
+  virtual void Transform(const cv::Mat& in, cv::Mat& out);
+
+ protected:
+  GaussBlurTransformParameter param_;
+};
+
+template <typename Dtype>
+class UnsharpMaskImageTransformer : public ImageTransformer<Dtype> {
+ public:
+  explicit UnsharpMaskImageTransformer(UnsharpMaskTransformParameter param) :
+    param_(param) { };
+  virtual ~UnsharpMaskImageTransformer() {};
+
+  virtual void Transform(const cv::Mat& in, cv::Mat& out);
+
+ protected:
+  UnsharpMaskTransformParameter param_;
+};
+
 }  // namespace caffe
 
 #endif  // CAFFE_IMAGE_TRANSFORMER_HPP_
