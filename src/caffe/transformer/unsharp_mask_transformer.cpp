@@ -20,7 +20,10 @@ void UnsharpMaskImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& o
   CHECK_GE(param_.max_amount(), 0) << "Amount must be non-negative";
   float sigma = this->RandFloat(0, param_.max_sigma()); 
   float amount = this->RandFloat(0, param_.max_amount()); 
-  int size = (int) (2 * sigma + 0.999);
+  int size = (int) (4 * sigma + 0.999);
+  if (size % 2 == 0) {
+  	 size++;
+  }
 
   // out uses the same number of channels as in, but uses floats
   out.create(in.size(), CV_32F | (0x18 & in.type()));
