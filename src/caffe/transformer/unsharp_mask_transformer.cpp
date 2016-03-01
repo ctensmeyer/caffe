@@ -17,8 +17,7 @@ namespace caffe {
 template <typename Dtype>
 void UnsharpMaskImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
   CHECK_GT(param_.max_sigma(), 0) << "Max Sigma must be positive";
-  CHECK_GE(param_.max_amount(), 0) << "Amount must be in range [0,1]";
-  CHECK_LE(param_.max_amount(), 1) << "Amount must be in range [0,1]";
+  CHECK_GE(param_.max_amount(), 0) << "Amount must be non-negative";
   float sigma = this->RandFloat(0, param_.max_sigma()); 
   float amount = this->RandFloat(0, param_.max_amount()); 
   int size = (int) (2 * sigma + 0.999);

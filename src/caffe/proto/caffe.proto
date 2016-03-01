@@ -637,7 +637,7 @@ message GaussBlurTransformParameter {
 
 message UnsharpMaskTransformParameter {
   optional float max_sigma = 1 [default = 1];
-  optional float max_amount = 2 [default = 0.25];
+  optional float max_amount = 2 [default = 1];
 }
 
 // Message that stores parameters shared by loss layers
