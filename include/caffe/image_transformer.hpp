@@ -21,6 +21,7 @@ class ImageTransformer {
   void InitRand(unsigned int seed);
   int RandInt(int n);
   float RandFloat(float min, float max);
+  void RandGauss(const int n, const Dtype mean, const Dtype std_dev, Dtype* out);
 
   void CVMatToArray(const cv::Mat& cv_img, Dtype* out);
   virtual void Transform(const cv::Mat& in, cv::Mat& out) {}
@@ -158,7 +159,6 @@ class GaussNoiseImageTransformer : public ImageTransformer<Dtype> {
     param_(param) { rand_mask_ = new Blob<Dtype>();};
   virtual ~GaussNoiseImageTransformer() {};
 
-  void RandGauss(const int n, const Dtype mean, const Dtype std_dev, Dtype* out);
   virtual void Transform(const cv::Mat& in, cv::Mat& out);
   virtual void SampleTransformParams(const vector<int>& in_shape);
   virtual void PrintParams();
@@ -219,6 +219,19 @@ class UnsharpMaskImageTransformer : public ImageTransformer<Dtype> {
 
  protected:
   UnsharpMaskTransformParameter param_;
+};
+
+template <typename Dtype>
+class PerspectiveImageTransformer : public ImageTransformer<Dtype> {
+ public:
+  explicit PerspectiveImageTransformer(PerspectiveTransformParameter param) :
+    param_(param) { };
+  virtual ~PerspectiveImageTransformer() {};
+
+  virtual void Transform(const cv::Mat& in, cv::Mat& out);
+
+ protected:
+  PerspectiveTransformParameter param_;
 };
 
 }  // namespace caffe
