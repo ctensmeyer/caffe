@@ -142,6 +142,19 @@ ImageTransformer<Dtype>* CreateImageTransformer(ImageTransformationParameter par
 	  prob_transformers->push_back(transformer);
 	  weights.push_back(weight);
 	}
+	// Perspective
+	for (int j = 0; j < prob_param.perspective_params_size(); j++) {
+	  PerspectiveTransformParameter perspective_param = prob_param.perspective_params(j); 
+	  if (j < prob_param.perspective_prob_weights_size()) {
+	    weight = prob_param.perspective_prob_weights(j);
+	  } else {
+	    weight = 1;
+	  }
+	  ImageTransformer<Dtype>* transformer = new PerspectiveImageTransformer<Dtype>(perspective_param);
+	  transformer->InitRand(rng_seed);
+	  prob_transformers->push_back(transformer);
+	  weights.push_back(weight);
+	}
 
     ImageTransformer<Dtype>* prob_transformer = new ProbImageTransformer<Dtype>(prob_transformers, weights);
 	prob_transformer->InitRand(rng_seed);
