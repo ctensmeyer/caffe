@@ -183,6 +183,23 @@ float ImageTransformer<Dtype>::RandFloat(float min, float max) {
   return variate_generator();
 }
 
+template <typename Dtype>
+void ImageTransformer<Dtype>::RandGauss(const int n, const Dtype mean, const Dtype std_dev, Dtype* out) {
+  CHECK(this->rng_);
+  CHECK_GE(n, 0);
+  CHECK(out);
+  CHECK_GT(std_dev, 0);
+  caffe::rng_t* rng =
+      static_cast<caffe::rng_t*>(this->rng_->generator());
+
+  boost::normal_distribution<Dtype> random_distribution(mean, std_dev);
+  boost::variate_generator<caffe::rng_t*, boost::normal_distribution<Dtype> >
+      variate_generator(rng, random_distribution);
+  for (int i = 0; i < n; ++i) {
+    out[i] = variate_generator();
+  }
+}
+
 
 template <typename Dtype>
 void ImageTransformer<Dtype>::CVMatToArray(const cv::Mat& cv_img, Dtype* out) {
