@@ -13,38 +13,6 @@
 
 namespace caffe {
 
-template <typename Dtype>
-void GaussNoiseImageTransformer<Dtype>::RandGauss(const int n, const Dtype mean, const Dtype std_dev, Dtype* out) {
-  CHECK(this->rng_);
-  CHECK_GE(n, 0);
-  CHECK(out);
-  CHECK_GT(std_dev, 0);
-  caffe::rng_t* rng =
-      static_cast<caffe::rng_t*>(this->rng_->generator());
-
-  boost::normal_distribution<Dtype> random_distribution(mean, std_dev);
-  boost::variate_generator<caffe::rng_t*, boost::normal_distribution<Dtype> >
-      variate_generator(rng, random_distribution);
-  for (int i = 0; i < n; ++i) {
-    out[i] = variate_generator();
-  }
-}
-
-/*
-template <typename Dtype>
-void caffe_rng_gaussian(const int n, const Dtype a,
-                        const Dtype sigma, Dtype* r) {
-  CHECK_GE(n, 0);
-  CHECK(r);
-  CHECK_GT(sigma, 0);
-  boost::normal_distribution<Dtype> random_distribution(a, sigma);
-  boost::variate_generator<caffe::rng_t*, boost::normal_distribution<Dtype> >
-      variate_generator(caffe_rng(), random_distribution);
-  for (int i = 0; i < n; ++i) {
-    r[i] = variate_generator();
-  }
-}
-*/
 
 template <typename Dtype>
 void GaussNoiseImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
@@ -60,7 +28,7 @@ void GaussNoiseImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& ou
   shape.push_back(in_width);
   rand_mask_->Reshape(shape);
   Dtype* rand_data = rand_mask_->mutable_cpu_data();
-  RandGauss(in_channels * in_height * in_width, 0, cur_std_dev_, rand_data);
+  this->RandGauss(in_channels * in_height * in_width, 0, cur_std_dev_, rand_data);
 
 
   // uses the opencv random state

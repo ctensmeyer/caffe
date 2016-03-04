@@ -19,7 +19,6 @@ void RotateImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
   // out uses the same number of channels as in, but uses floats
   out.create(in.size(), CV_32F | (0x18 & in.type()));
 
-  const int in_channels = in.channels();
   const int in_height = in.rows;
   const int in_width = in.cols;
   cv::Point2f pt(in_height / 2., in_width / 2.);

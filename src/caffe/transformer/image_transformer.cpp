@@ -142,6 +142,19 @@ ImageTransformer<Dtype>* CreateImageTransformer(ImageTransformationParameter par
 	  prob_transformers->push_back(transformer);
 	  weights.push_back(weight);
 	}
+	// Perspective
+	for (int j = 0; j < prob_param.perspective_params_size(); j++) {
+	  PerspectiveTransformParameter perspective_param = prob_param.perspective_params(j); 
+	  if (j < prob_param.perspective_prob_weights_size()) {
+	    weight = prob_param.perspective_prob_weights(j);
+	  } else {
+	    weight = 1;
+	  }
+	  ImageTransformer<Dtype>* transformer = new PerspectiveImageTransformer<Dtype>(perspective_param);
+	  transformer->InitRand(rng_seed);
+	  prob_transformers->push_back(transformer);
+	  weights.push_back(weight);
+	}
 
     ImageTransformer<Dtype>* prob_transformer = new ProbImageTransformer<Dtype>(prob_transformers, weights);
 	prob_transformer->InitRand(rng_seed);
@@ -181,6 +194,23 @@ float ImageTransformer<Dtype>::RandFloat(float min, float max) {
   boost::variate_generator<caffe::rng_t*, boost::uniform_real<float> >
       variate_generator(rng, random_distribution);
   return variate_generator();
+}
+
+template <typename Dtype>
+void ImageTransformer<Dtype>::RandGauss(const int n, const Dtype mean, const Dtype std_dev, Dtype* out) {
+  CHECK(this->rng_);
+  CHECK_GE(n, 0);
+  CHECK(out);
+  CHECK_GT(std_dev, 0);
+  caffe::rng_t* rng =
+      static_cast<caffe::rng_t*>(this->rng_->generator());
+
+  boost::normal_distribution<Dtype> random_distribution(mean, std_dev);
+  boost::variate_generator<caffe::rng_t*, boost::normal_distribution<Dtype> >
+      variate_generator(rng, random_distribution);
+  for (int i = 0; i < n; ++i) {
+    out[i] = variate_generator();
+  }
 }
 
 
