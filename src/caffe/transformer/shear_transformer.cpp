@@ -28,7 +28,7 @@ void ShearImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
   shear.at<float>(0,0) = 1;
   shear.at<float>(1,1) = 1;
 
-  if (this->RandInt(1)) {
+  if (this->RandInt(2)) {
     // shear in x
     shear.at<float>(0,1) = shear_factor;
     shear.at<float>(1,0) = 0;
