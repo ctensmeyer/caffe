@@ -143,13 +143,9 @@ class ReflectImageTransformer : public ImageTransformer<Dtype> {
   virtual ~ReflectImageTransformer() {};
 
   virtual void Transform(const cv::Mat& in, cv::Mat& out);
-  virtual void SampleTransformParams(const vector<int>& in_shape);
-  virtual void PrintParams();
 
  protected:
   ReflectTransformParameter param_;
-  bool reflect_h_;
-  bool reflect_v_;
 };
 
 template <typename Dtype>

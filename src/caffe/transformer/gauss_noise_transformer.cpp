@@ -41,7 +41,7 @@ void GaussNoiseImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& ou
       int index = 0;
       for (int w = 0; w < in_width; ++w) {
         for (int c = 0; c < in_channels; ++c) {
-  	      out_ptr[index] = (in_ptr[index] + rand_data[index]);
+  	      out_ptr[index] = (in_ptr[index] + rand_data[h * in_height + index]);
           //DLOG(INFO) << "c: " << c << " h: " << h << " w: " << w << " index: " << index << " in_val: " << ((float)in_ptr[index]) << " + " << rand_data[index] << " = " << out_ptr[index];
   	      index++;
         }
@@ -52,7 +52,7 @@ void GaussNoiseImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& ou
       int index = 0;
       for (int w = 0; w < in_width; ++w) {
         for (int c = 0; c < in_channels; ++c) {
-  	      out_ptr[index] = (in_ptr[index] + rand_data[index]);
+  	      out_ptr[index] = (in_ptr[index] + rand_data[h * in_height + index]);
           //DLOG(INFO) << "c: " << c << " h: " << h << " w: " << w << " index: " << index << " in_val: " << ((float)in_ptr[index]) << " + " << rand_data[index] << " = " << out_ptr[index];
   	      index++;
         }
