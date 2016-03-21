@@ -28,10 +28,10 @@ def apply_crop(im, tokens):
 	if (y < 0 and y + height >= 0) or (x < 0 and x + width >= 0):
 		print "Invalid crop: negative indexing has wrap around (%r with %r)" % (im.shape, tokens)
 		exit(1)
-	if (height >= im.shape[0]) or (width >= im.shape[1]):
+	if (height > im.shape[0]) or (width > im.shape[1]):
 		print "Invalid crop: crop dims larger than image (%r with %r)" % (im.shape, tokens)
 		exit(1)
-	if (y + height >= im.shape[0]) or (x + width >= im.shape[1]):
+	if (y + height > im.shape[0]) or (x + width > im.shape[1]):
 		print "Invalid crop: crop goes off edge of image (%r with %r)" % (im.shape, tokens)
 		exit(1)
 		
