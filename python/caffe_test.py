@@ -180,11 +180,12 @@ def set_transform_weights(args):
 		im = preprocess_im(im, args)
 		ims = map(lambda transform_strs: apply_transforms(im, transform_strs), transforms)
 		votes = get_vote_for_label(ims, caffenet, label)
-		print "Votes: ", votes
+		#print "Votes: ", votes
 		weights += votes
 
-		if num_total == 10:
+		if num_total == 40000:
 			break
+
 	normalized = (weights / num_total)[:,np.newaxis]
 	return normalized
 
@@ -227,6 +228,9 @@ def predict(ims, caffenet, weights=None):
 	return label
 
 def main(args):
+	if args.log_file:
+		log = open(args.log_file, 'w')
+		log.write("%s\n" % str(sys.argv))
 	caffenet = init_caffe(args)
 	test_env = lmdb.open(args.test_lmdb, readonly=True, map_size=int(2 ** 42))
 	txn = test_env.begin(write=False)
@@ -235,7 +239,9 @@ def main(args):
 	weights = None
 	if args.tune_lmdb:
 		weights = set_transform_weights(args)
-	print "Weights: %r" % weights
+	#print "Weights: %r" % weights
+	if args.log_file:
+		log.write("%r\n" % weights)
 
 	num_total = 0
 	num_correct = 0
@@ -252,12 +258,11 @@ def main(args):
 		if predicted_label == label:
 			num_correct += 1
 
-		if num_total == 1000:
-			break
-
+	acc = (100. * num_correct / num_total)
 	print "Done"
-	print "Accuracy: %.3f%%" % (100. * num_correct / num_total)
-	
+	print "Accuracy: %.3f%%" % acc
+	if args.log_file:
+		log.write("%f\n" % acc)
 			
 def get_args():
 	parser = argparse.ArgumentParser(description="Classifies data")
@@ -280,6 +285,8 @@ def get_args():
 				help="File containing transformations to do")
 	parser.add_argument("-l", "--tune-lmdb", type=str, default="",
 				help="Tune the weighted averaging to minmize CE loss on this data")
+	parser.add_argument("-f", "--log-file", type=str, default="",
+				help="Log File")
 	
 	return parser.parse_args()
 	
