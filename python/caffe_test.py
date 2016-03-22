@@ -179,7 +179,7 @@ def set_transform_weights(args):
 		im, label = get_image(value, args)
 		im = preprocess_im(im, args)
 		ims = map(lambda transform_strs: apply_transforms(im, transform_strs), transforms)
-		votes = get_vote_for_label(ims, caffenet, label)
+		votes = get_vote_for_label(ims, caffenet, label, hard=args.hard_weights)
 		#print "Votes: ", votes
 		weights += votes
 
@@ -189,7 +189,7 @@ def set_transform_weights(args):
 	normalized = (weights / num_total)[:,np.newaxis]
 	return normalized
 
-def get_vote_for_label(ims, caffenet, label):
+def get_vote_for_label(ims, caffenet, label, hard=False):
 	# batch up all transforms at once
 	caffenet.blobs["data"].reshape(len(ims), ims[0].shape[2], ims[0].shape[0], ims[0].shape[1]) 
 	for idx, im in enumerate(ims):
@@ -200,9 +200,16 @@ def get_vote_for_label(ims, caffenet, label):
 	# propagate on all transforms
 	caffenet.forward()
 
-	# sum up weighted prediction vectors
 	all_outputs = caffenet.blobs["prob"].data
-	return all_outputs[:, label]
+	if hard:
+		# use 1/0 right or not
+		predictions = np.argmax(all_outputs, axis=1)
+		accuracy = np.zeros(shape=(len(ims),))
+		accuracy[predictions == label] = 1
+		return accuracy
+	else:
+		# use the probability of the correct label
+		return all_outputs[:, label]
 
 def predict(ims, caffenet, weights=None):
 	# set up transform weights
@@ -222,10 +229,11 @@ def predict(ims, caffenet, weights=None):
 
 	# sum up weighted prediction vectors
 	all_outputs = caffenet.blobs["prob"].data
+	all_predictions = np.argmax(all_outputs, axis=1)
 	weighted_outputs = all_outputs * weights
 	mean_outputs = np.sum(all_outputs, axis=0)
 	label = np.argmax(mean_outputs)
-	return label
+	return label, all_predictions
 
 def main(args):
 	if args.log_file:
@@ -236,15 +244,17 @@ def main(args):
 	txn = test_env.begin(write=False)
 	cursor = txn.cursor()
 	transforms = get_transforms(args)
-	weights = None
 	if args.tune_lmdb:
 		weights = set_transform_weights(args)
-	#print "Weights: %r" % weights
+	else:
+		weights = np.ones(shape=(len(transforms),1))
+	print "Weights: %r" % weights
 	if args.log_file:
-		log.write("%r\n" % weights)
+		log.write("Weights: \n%s" % np.array_str(weights, max_line_width=80, precision=4))
 
 	num_total = 0
 	num_correct = 0
+	all_num_correct = np.zeros(shape=(len(transforms),))
 	for key, value in cursor:
 		if num_total % 1000 == 0:
 			print "Processed %d images" % num_total
@@ -254,15 +264,22 @@ def main(args):
 		im = preprocess_im(im, args)
 		ims = map(lambda transform_strs: apply_transforms(im, transform_strs), transforms)
 
-		predicted_label = predict(ims, caffenet, weights)
+		predicted_label, all_predictions = predict(ims, caffenet, weights)
 		if predicted_label == label:
 			num_correct += 1
 
-	acc = (100. * num_correct / num_total)
+		# compute per-transformation accuracy
+		all_num_correct[all_predictions == label] += 1
+
+	overall_acc = float(num_correct) / num_total
+	transform_accs = all_num_correct / num_total
+
 	print "Done"
-	print "Accuracy: %.3f%%" % acc
+	print "Transform Accuracy:\n %r" % transform_accs
+	print "Overall Accuracy: %.3f" % overall_acc
 	if args.log_file:
-		log.write("%f\n" % acc)
+		log.write("Transform Accuracy:\n %s" % np.array_str(transform_accs, max_line_width=80, precision=4))
+		log.write("Overall Accuracy: %f\n" % overall_acc)
 			
 def get_args():
 	parser = argparse.ArgumentParser(description="Classifies data")
@@ -287,6 +304,8 @@ def get_args():
 				help="Tune the weighted averaging to minmize CE loss on this data")
 	parser.add_argument("-f", "--log-file", type=str, default="",
 				help="Log File")
+	parser.add_argument("-z", "--hard-weights", default=False, action="store_true",
+				help="Compute Transform weights using hard assignment")
 	
 	return parser.parse_args()
 	
