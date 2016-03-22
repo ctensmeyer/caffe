@@ -275,10 +275,10 @@ def main(args):
 	transform_accs = all_num_correct / num_total
 
 	print "Done"
-	print "Transform Accuracy:\n %r" % transform_accs
+	print "Transform Accuracy:\n %r\n" % transform_accs
 	print "Overall Accuracy: %.3f" % overall_acc
 	if args.log_file:
-		log.write("Transform Accuracy:\n %s" % np.array_str(transform_accs, max_line_width=80, precision=4))
+		log.write("Transform Accuracy:\n %s\n" % np.array_str(transform_accs, max_line_width=80, precision=4))
 		log.write("Overall Accuracy: %f\n" % overall_acc)
 			
 def get_args():
