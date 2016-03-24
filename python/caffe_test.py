@@ -1,12 +1,13 @@
 
 import os
 import sys
-import caffe
-import numpy as np
 import cv2
-import argparse
+import math
 import lmdb
+import caffe
 import random
+import argparse
+import numpy as np
 import caffe.proto.caffe_pb2
 
 def init_caffe(args):
@@ -36,7 +37,7 @@ def apply_crop(im, tokens):
 		print "Invalid crop: crop goes off edge of image (%r with %r)" % (im.shape, tokens)
 		exit(1)
 		
-	return im[y:y+height,x:x+width,:]
+	return im[y:y+height,x:x+width]
 
 def apply_dense_crop(im, tokens):
 	height, width, = int(tokens[1]), int(tokens[2])
@@ -49,7 +50,7 @@ def apply_dense_crop(im, tokens):
 	while (y + height) <= im.shape[0]:
 		x = 0
 		while (x + width) <= im.shape[1]:
-			ims.append(im[y:y+height,x:x+width,:])
+			ims.append(im[y:y+height,x:x+width])
 			x += x_stride
 		y += y_stride
 	
@@ -63,7 +64,7 @@ def apply_rand_crop(im, tokens):
 
 	y = random.randint(0, im.shape[0] - height)
 	x = random.randint(0, im.shape[1] - width)
-	return im[y:y+height,x:x+width,:]
+	return im[y:y+height,x:x+width]
 
 # "resize height width"
 def apply_resize(im, tokens):
@@ -86,14 +87,18 @@ def apply_mirror(im, tokens):
 def apply_gaussnoise(im, tokens):
 	seed, sigma = int(tokens[1]), float(tokens[2])
 	np.random.seed(seed)
-	return im + np.random.normal(0, sigma, im.shape)
+	noise = np.random.normal(0, sigma, im.shape[:2])
+	if len(im.shape) == 2:
+		return im + noise
+	else:
+		return im + noise[:,:,np.newaxis]
 
 # "rotate degree"
 def apply_rotation(im, tokens):
 	degree = float(tokens[1])
 	center = (im.shape[0] / 2, im.shape[1] / 2)
 	rot_mat = cv2.getRotationMatrix2D(center, degree, 1.0)
-	return cv2.warpAffine(im, rot_mat, im.shape, flags=cv2.INTER_LINEAR)
+	return cv2.warpAffine(im, rot_mat, im.shape[:2], flags=cv2.INTER_LINEAR)
 
 # "blur sigma"
 def apply_blur(im, tokens):
@@ -105,14 +110,15 @@ def apply_blur(im, tokens):
 	
 # "unsharpmask sigma amount"
 def apply_unsharpmask(im, tokens):
-	blurred = apply_blur(im)
+	blurred = apply_blur(im, tokens)
+	amount = float(tokens[2])
 	return (1 + amount) * im + (-amount * blurred)
 
 # "shear degree {h,v}"
 def apply_shear(im, tokens):
 	degree = float(tokens[1])
 	radians = math.tan(degree * math.pi / 180)
-	shear_mat = np.array([ [1, 0, 0], [0, 1, 0] ])
+	shear_mat = np.array([ [1, 0, 0], [0, 1, 0] ], dtype=np.float)
 	if tokens[2] == 'h':
 		shear_mat[0,1] = radians
 	elif tokens[2] == 'v':
@@ -123,12 +129,12 @@ def apply_shear(im, tokens):
 
 # "perspective dy1 dx1 dy2 dx2 dy3 dx3 dy4 dx4"
 def apply_perspective(im, tokens):
-	pts1 = np.float32([[0,0],[1,0],[1,1],[0,1]])
-	pts2 = np.float32([[0 + float(tokens[1]) ,0 + float(tokens[2])],
+	pts1 = np.array([[0,0],[1,0],[1,1],[0,1]], dtype=np.float32)
+	pts2 = np.array([[0 + float(tokens[1]) ,0 + float(tokens[2])],
 					   [1 + float(tokens[3]) ,0 + float(tokens[4])],
 					   [1 + float(tokens[5]) ,1 + float(tokens[6])],
 					   [0 + float(tokens[7]) ,1 + float(tokens[8])]
-					   ])
+					   ], dtype=np.float32)
 	M = cv2.getPerspectiveTransform(pts1,pts2)
 	return cv2.warpPerspective(im, M, im.shape[:2])
 
@@ -171,7 +177,7 @@ def apply_transforms(im, multi_transform_str):
 def apply_all_transforms(im, transform_strs):
 	ims = list()
 	for ts in transform_strs:
-		im_out = apply_transform(im, ts)
+		im_out = apply_transforms(im, ts)
 		if type(im_out) is list:
 			ims.extend(im_out)
 		else:
@@ -184,7 +190,8 @@ def get_transforms(args):
 		transforms = map(lambda s: s.rstrip(), open(args.transform_file, 'r').readlines())
 	if not transforms:
 		transforms.append("none")
-	return transforms
+	fixed_transforms = not any(map(lambda s: s.startswith("densecrop"), transforms))
+	return transforms, fixed_transforms
 
 def get_image(dd_serialized, args):
 	doc_datum = caffe.proto.caffe_pb2.DocumentDatum()
@@ -197,37 +204,54 @@ def get_image(dd_serialized, args):
 	label = doc_datum.dbid
 	return im, label
 
-def preprocess_im(im, args):
-	# currently only does mean and shift
-	# transposition is handled by predict() so intermediate augmentations can take place
-	#im = cv2.resize(im, (227,227))
-	mean_vals = np.asarray(map(int, args.means.split(',')))
-	return args.scale * (im - mean_vals)
+# currently only does mean and shift
+# transposition is handled by predict() so intermediate augmentations can take place
+def preprocess_im(im, slice_idx, args):
+
+	# find the correct mean values.  
+	means_tokens = args.means.split(args.delimiter)
+	mean_idx = min(slice_idx, len(means_tokens) - 1)
+	mean_vals = np.asarray(map(int, means_tokens[mean_idx].split(',')))
+
+	# find the correct scale value
+	scale_tokens = args.scales.split(args.delimiter)
+	scale_idx = min(slice_idx, len(scale_tokens) - 1)
+	scale_val = float(scale_tokens[scale_idx])
+
+	preprocessed_im = scale_val * (im - mean_vals)
+	return preprocessed_im
 
 def set_transform_weights(args):
+	# check if transform weights need to be done
+	if args.tune_lmdbs == "":
+		# no lmdb is provided for tuning the weights
+		return None
+	transforms, fixed_transforms = get_transforms(args)
+	if not fixed_transforms:
+		# number of transforms varies by image, so no fixed set of weights
+		return None
+
 	caffenet = init_caffe(args)
-	tune_env = lmdb.open(args.tune_lmdb, readonly=True, map_size=int(2 ** 42))
-	txn = tune_env.begin(write=False)
-	cursor = txn.cursor()
-	transforms = get_transforms(args)
+	tune_dbs = open_dbs(args.tune_lmdbs.split(args.delimiter))
 
 	weights = np.zeros(shape=(len(transforms),))
-
 	num_total = 0
-	for key, value in cursor:
-		if num_total % 1000 == 0:
-			print "Tuned on %d images" % num_total
+	done = False
+	while not done:
+		if num_total % args.print_count == 0:
+			print "Tuned %d images" % num_total
 		num_total += 1
 
-		im, label = get_image(value, args)
-		im = preprocess_im(im, args)
-		ims = apply_all_transforms(im, transforms)
+		# get the per-transform vote for the correct label
+		ims, label = prepare_images(tune_dbs, transforms, args)
 		votes = get_vote_for_label(ims, caffenet, label, hard=args.hard_weights)
-		#print "Votes: ", votes
 		weights += votes
 
-		if num_total == 40000:
-			break
+		# check stopping criteria
+		done = (num_total == args.max_images)
+		for env, txn, cursor in tune_dbs:
+			has_next = cursor.next() 
+			done |= (not has_next) # set done if there are no more elements
 
 	normalized = (weights / num_total)[:,np.newaxis]
 	return normalized
@@ -280,66 +304,158 @@ def predict(ims, caffenet, weights=None):
 	label = np.argmax(mean_outputs)
 	return label, all_predictions
 
-def main(args):
-	if args.log_file:
-		log = open(args.log_file, 'w')
-		log.write("%s\n" % str(sys.argv))
-	caffenet = init_caffe(args)
-	test_env = lmdb.open(args.test_lmdb, readonly=True, map_size=int(2 ** 42))
-	txn = test_env.begin(write=False)
-	cursor = txn.cursor()
-	transforms = get_transforms(args)
-	fixed_transforms = not any(map(lambda s: s.startswith("densecrop"), transforms))
-	print "Fixed Transforms: ", fixed_transforms
-	if args.tune_lmdb:
-		weights = set_transform_weights(args)
-	else:
-		weights = None
-	print "Weights: %r" % weights
-	if args.log_file:
-		if weights:
-			log.write("Weights: \n%s\n" % np.array_str(weights, max_line_width=80, precision=4))
-		else:
-			log.write("Weights: %s\n" % weights)
+def open_dbs(db_paths):
+	dbs = list()
+	for path in db_paths:
+		env = lmdb.open(path, readonly=True, map_size=int(2 ** 42))
+		txn = env.begin(write=False)
+		cursor = txn.cursor()
+		cursor.first()
+		dbs.append( (env, txn, cursor) )
+	return dbs
 
+def close_dbs(dbs):
+	for env, txn, cursor in dbs:
+		txn.abort()
+		env.close()
+
+def log(args, s, newline=True):
+	print s
+	if args.log_file:
+		if not hasattr(args, 'log'):
+			args.log = open(args.log_file, 'w')
+		if newline:
+			args.log.write("%s\n" % s)
+		else:
+			args.log.write(s)
+
+
+# slice index refers to which LMDB the partial image came from
+# transform index refers to which transforms of the image
+def prepare_images(test_dbs, transforms, args):
+	ims_slice_transforms = list()
+	labels = list()
+	keys = list()
+
+	# apply the transformations to every slice of the image independently
+	for slice_idx, entry in enumerate(test_dbs):
+		env, txn, cursor = entry
+
+		im_slice, label_slice = get_image(cursor.value(), args)
+		im_slice = preprocess_im(im_slice, slice_idx, args)  
+		transformed_slices = apply_all_transforms(im_slice, transforms)
+
+		ims_slice_transforms.append(transformed_slices)
+		labels.append(label_slice)
+		keys.append(cursor.key())
+
+	# check that all keys match
+	key = keys[0]
+	for slice_idx, _key in enumerate(keys):
+		if _key != key:
+			log(args, "WARNING!, keys differ %s vs %s for slices %d and %d" % (key, _key, 0, slice_idx))
+
+	
+	# check that all labels match
+	label = labels[0]
+	for slice_idx, _label in enumerate(labels):
+		if _label != label:
+			log(args, "WARNING!, key %s has differing labels: %d vs %d for slices %d and %d" % (key, label, _label, 0, slice_idx))
+
+	#TODO: verify correct
+	# stack each set of slices (along channels) into a single numpy array
+	num_transforms = len(ims_slice_transforms[0])
+	num_slices = len(ims_slice_transforms)
+	ims = list()
+	for transform_idx in xrange(num_transforms):
+		im_slices = list()
+		for slice_idx in xrange(num_slices):
+			im_slice = ims_slice_transforms[slice_idx][transform_idx]
+			im_slices.append(np.atleast_3d(im_slice))
+		whole_im = np.concatenate(im_slices, axis=2) # append along channels
+		ims.append(whole_im)
+
+	return ims, label
+
+
+def main(args):
+	log(args, str(sys.argv))
+
+	# load transforms from file
+	log(args, "Loading transforms")
+	transforms, fixed_transforms = get_transforms(args)
+	log(args, "Fixed Transforms: %s" % str(fixed_transforms))
+
+	# get per-transform weights.  Can be none if transforms produce variable numbers of images, or
+	# no lmdb is provided to tune the weights
+	log(args, "Setting the transform weights...")
+	weights = set_transform_weights(args) 
+	weight_str = np.array_str(weights, max_line_width=80, precision=4) if weights is not None else str(weights)
+	log(args, "Weights: %s" % weight_str)
+
+	log(args, "Initializing network for testing")
+	caffenet = init_caffe(args)
+	log(args, "Opening test lmdbs")
+	test_dbs = open_dbs(args.test_lmdbs.split(args.delimiter))
+
+	# set up the class confusion matrix
 	num_output = caffenet.blobs["prob"].data.shape[1]
 	conf_mat = np.zeros(shape=(num_output, num_output))
 
 	num_total = 0
 	num_correct = 0
-	if fixed_transforms:
-		all_num_correct = np.zeros(shape=(len(transforms),))
-	for key, value in cursor:
-		if num_total % 1000 == 0:
+	all_num_correct = np.zeros(shape=(len(transforms),))
+	done = False
+	while not done:
+		if num_total % args.print_count == 0:
 			print "Processed %d images" % num_total
 		num_total += 1
 
-		im, label = get_image(value, args)
-		im = preprocess_im(im, args)
-		ims = apply_all_transforms(im, transforms)
-
+		ims, label = prepare_images(test_dbs, transforms, args)
 		predicted_label, all_predictions = predict(ims, caffenet, weights)
+
+		# keep track of correct predictions
 		if predicted_label == label:
 			num_correct += 1
 		conf_mat[label,predicted_label] += 1
 
 		# compute per-transformation accuracy
-		if fixed_transforms:
+		if all_predictions.shape[0] == all_num_correct.shape[0]:
 			all_num_correct[all_predictions == label] += 1
 
-	overall_acc = float(num_correct) / num_total
-	if fixed_transforms:
-		transform_accs = all_num_correct / num_total
+		# check stopping criteria
+		done = (num_total == args.max_images)
+		for env, txn, cursor in test_dbs:
+			has_next = cursor.next() 
+			done |= (not has_next) # set done if there are no more elements
 
-	print "Done"
-	if fixed_transforms:
-		print "Transform Accuracy:\n %r\n" % transform_accs
-	print "Overall Accuracy: %.3f" % overall_acc
-	if args.log_file:
-		if fixed_transforms:
-			log.write("Transform Accuracy:\n %s\n" % np.array_str(transform_accs, max_line_width=80, precision=4))
-		log.write("Overall Accuracy: %f\n" % overall_acc)
-	print conf_mat
+	overall_acc = float(num_correct) / num_total
+	transform_accs = all_num_correct / num_total
+
+	log(args, "Done")
+	log(args, "Conf Mat:\n %r" % conf_mat)
+	log(args, "\nTransform Accuracy:\n %r" % transform_accs)
+	log(args, "\nOverall Accuracy: %f" % overall_acc)
+
+	close_dbs(test_dbs)
+		
+
+def check_args(args):
+	num_tune_lmdbs = 0 if args.tune_lmdbs == "" else len(args.tune_lmdbs.split(args.delimiter))
+	num_test_lmdbs = 0 if args.test_lmdbs == "" else len(args.test_lmdbs.split(args.delimiter))
+	if num_test_lmdbs == 0:
+		raise Exception("No test lmdbs specified");
+	if num_tune_lmdbs != 0 and num_tune_lmdbs != num_test_lmdbs:
+		raise Exception("Different number of tune and test lmdbs: %d vs %d" % (num_tune_lmdb, num_test_lmdbs))
+
+	num_scales = len(args.scales.split(args.delimiter))
+	if num_scales != 1 and num_scales != num_test_lmdbs:
+		raise Exception("Different number of test lmdbs and scales: %d vs %d" % (num_test_lmdbs, num_scales))
+
+	num_means = len(args.means.split(args.delimiter))
+	if num_means != 1 and num_means != num_test_lmdbs:
+		raise Exception("Different number of test lmdbs and means: %d vs %d" % (num_test_lmdbs, num_means))
+		
 			
 def get_args():
 	parser = argparse.ArgumentParser(description="Classifies data")
@@ -347,8 +463,8 @@ def get_args():
 				help="The model definition file (e.g. deploy.prototxt)")
 	parser.add_argument("caffe_weights", 
 				help="The model weight file (e.g. net.caffemodel)")
-	parser.add_argument("test_lmdb", 
-				help="LMDB of test images (encoded DocDatums)")
+	parser.add_argument("test_lmdbs", 
+				help="LMDBs of test images (encoded DocDatums), files separated with ;")
 
 	parser.add_argument("-m", "--means", type=str, default="",
 				help="Optional mean values per the channel (e.g. 127 for grayscale or 182,192,112 for BGR)")
@@ -356,18 +472,27 @@ def get_args():
 				help="GPU to use for running the network")
 	parser.add_argument('-g', '--gray', default=False, action="store_true",
 						help='Force images to be grayscale.  Force color if ommited')
-	parser.add_argument("-a", "--scale", type=float, default=(1.0 / 255),
+	parser.add_argument("-a", "--scales", type=str, default=str(1.0 / 255),
 				help="Optional scale factor")
 	parser.add_argument("-t", "--transform_file", type=str, default="",
 				help="File containing transformations to do")
-	parser.add_argument("-l", "--tune-lmdb", type=str, default="",
+	parser.add_argument("-l", "--tune-lmdbs", type=str, default="",
 				help="Tune the weighted averaging to minmize CE loss on this data")
 	parser.add_argument("-f", "--log-file", type=str, default="",
 				help="Log File")
 	parser.add_argument("-z", "--hard-weights", default=False, action="store_true",
 				help="Compute Transform weights using hard assignment")
-	
-	return parser.parse_args()
+	parser.add_argument("-c", "--print-count", default=1000, type=int, 
+				help="Print every print-count images processed")
+	parser.add_argument("--max-images", default=40000, type=int, 
+				help="Max number of images for processing or tuning")
+	parser.add_argument("-d", "--delimiter", default=':', type=str, 
+				help="Delimiter used for indicating multiple image slice parameters")
+
+	args = parser.parse_args()
+
+	check_args(args)
+	return args
 	
 
 if __name__ == "__main__":
