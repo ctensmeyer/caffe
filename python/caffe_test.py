@@ -6,6 +6,7 @@ import numpy as np
 import cv2
 import argparse
 import lmdb
+import random
 import caffe.proto.caffe_pb2
 
 def init_caffe(args):
@@ -35,6 +36,33 @@ def apply_crop(im, tokens):
 		print "Invalid crop: crop goes off edge of image (%r with %r)" % (im.shape, tokens)
 		exit(1)
 		
+	return im[y:y+height,x:x+width,:]
+
+def apply_dense_crop(im, tokens):
+	height, width, = int(tokens[1]), int(tokens[2])
+	y_stride, x_stride, = int(tokens[3]), int(tokens[4])
+	if (height > im.shape[0]) or (width > im.shape[1]):
+		print "Invalid crop: crop dims larger than image (%r with %r)" % (im.shape, tokens)
+		exit(1)
+	ims = list()
+	y = 0
+	while (y + height) <= im.shape[0]:
+		x = 0
+		while (x + width) <= im.shape[1]:
+			ims.append(im[y:y+height,x:x+width,:])
+			x += x_stride
+		y += y_stride
+	
+	return ims
+
+def apply_rand_crop(im, tokens):
+	height, width = int(tokens[1]), int(tokens[2])
+	if (height > im.shape[0]) or (width > im.shape[1]):
+		print "Invalid crop: crop dims larger than image (%r with %r)" % (im.shape, tokens)
+		exit(1)
+
+	y = random.randint(0, im.shape[0] - height)
+	x = random.randint(0, im.shape[1] - width)
 	return im[y:y+height,x:x+width,:]
 
 # "resize height width"
@@ -104,10 +132,15 @@ def apply_perspective(im, tokens):
 	M = cv2.getPerspectiveTransform(pts1,pts2)
 	return cv2.warpPerspective(im, M, im.shape[:2])
 
+
 def apply_transform(im, transform_str):
 	tokens = transform_str.split()
 	if tokens[0] == 'crop':
 		return apply_crop(im, tokens)
+	if tokens[0] == 'densecrop':
+		return apply_dense_crop(im, tokens)
+	if tokens[0] == 'randcrop':
+		return apply_rand_crop(im, tokens)
 	elif tokens[0] == 'resize':
 		return apply_resize(im, tokens)
 	elif tokens[0] == 'mirror':
@@ -134,6 +167,16 @@ def apply_transforms(im, multi_transform_str):
 	for ts in transform_strs:
 		im = apply_transform(im, ts)
 	return im
+
+def apply_all_transforms(im, transform_strs):
+	ims = list()
+	for ts in transform_strs:
+		im_out = apply_transform(im, ts)
+		if type(im_out) is list:
+			ims.extend(im_out)
+		else:
+			ims.append(im_out)
+	return ims
 
 def get_transforms(args):
 	transforms = list()
@@ -178,7 +221,7 @@ def set_transform_weights(args):
 
 		im, label = get_image(value, args)
 		im = preprocess_im(im, args)
-		ims = map(lambda transform_strs: apply_transforms(im, transform_strs), transforms)
+		ims = apply_all_transforms(im, transforms)
 		votes = get_vote_for_label(ims, caffenet, label, hard=args.hard_weights)
 		#print "Votes: ", votes
 		weights += votes
@@ -191,16 +234,8 @@ def set_transform_weights(args):
 
 def get_vote_for_label(ims, caffenet, label, hard=False):
 	# batch up all transforms at once
-	caffenet.blobs["data"].reshape(len(ims), ims[0].shape[2], ims[0].shape[0], ims[0].shape[1]) 
-	for idx, im in enumerate(ims):
-		transposed = np.transpose(im, [2,0,1])
-		transposed = transposed[np.newaxis, :, :, :]
-		caffenet.blobs["data"].data[idx,:,:,:] = transposed
+	all_outputs = fprop(caffenet, ims)
 
-	# propagate on all transforms
-	caffenet.forward()
-
-	all_outputs = caffenet.blobs["prob"].data
 	if hard:
 		# use 1/0 right or not
 		predictions = np.argmax(all_outputs, axis=1)
@@ -211,24 +246,34 @@ def get_vote_for_label(ims, caffenet, label, hard=False):
 		# use the probability of the correct label
 		return all_outputs[:, label]
 
+
+def fprop(caffenet, ims, batchsize=256):
+	# batch up all transforms at once
+	idx = 0
+	responses = list()
+	while idx < len(ims):
+		sub_ims = ims[idx:idx+batchsize]
+		caffenet.blobs["data"].reshape(len(sub_ims), ims[0].shape[2], ims[0].shape[0], ims[0].shape[1]) 
+		for x, im in enumerate(sub_ims):
+			transposed = np.transpose(im, [2,0,1])
+			transposed = transposed[np.newaxis, :, :, :]
+			caffenet.blobs["data"].data[x,:,:,:] = transposed
+		idx += batchsize
+
+		# propagate on batch
+		caffenet.forward()
+		responses.append(np.copy(caffenet.blobs["prob"].data))
+	return np.concatenate(responses, axis=0)
+	
+
 def predict(ims, caffenet, weights=None):
 	# set up transform weights
 	if weights is None:
 		weights = np.array([1] * len(ims))
 		weights = weights[:,np.newaxis]
-		
-	# batch up all transforms at once
-	caffenet.blobs["data"].reshape(len(ims), ims[0].shape[2], ims[0].shape[0], ims[0].shape[1]) 
-	for idx, im in enumerate(ims):
-		transposed = np.transpose(im, [2,0,1])
-		transposed = transposed[np.newaxis, :, :, :]
-		caffenet.blobs["data"].data[idx,:,:,:] = transposed
 
-	# propagate on all transforms
-	caffenet.forward()
+	all_outputs = fprop(caffenet, ims)
 
-	# sum up weighted prediction vectors
-	all_outputs = caffenet.blobs["prob"].data
 	all_predictions = np.argmax(all_outputs, axis=1)
 	weighted_outputs = all_outputs * weights
 	mean_outputs = np.sum(all_outputs, axis=0)
@@ -244,17 +289,26 @@ def main(args):
 	txn = test_env.begin(write=False)
 	cursor = txn.cursor()
 	transforms = get_transforms(args)
+	fixed_transforms = not any(map(lambda s: s.startswith("densecrop"), transforms))
+	print "Fixed Transforms: ", fixed_transforms
 	if args.tune_lmdb:
 		weights = set_transform_weights(args)
 	else:
-		weights = np.ones(shape=(len(transforms),1))
+		weights = None
 	print "Weights: %r" % weights
 	if args.log_file:
-		log.write("Weights: \n%s" % np.array_str(weights, max_line_width=80, precision=4))
+		if weights:
+			log.write("Weights: \n%s\n" % np.array_str(weights, max_line_width=80, precision=4))
+		else:
+			log.write("Weights: %s\n" % weights)
+
+	num_output = caffenet.blobs["prob"].data.shape[1]
+	conf_mat = np.zeros(shape=(num_output, num_output))
 
 	num_total = 0
 	num_correct = 0
-	all_num_correct = np.zeros(shape=(len(transforms),))
+	if fixed_transforms:
+		all_num_correct = np.zeros(shape=(len(transforms),))
 	for key, value in cursor:
 		if num_total % 1000 == 0:
 			print "Processed %d images" % num_total
@@ -262,24 +316,30 @@ def main(args):
 
 		im, label = get_image(value, args)
 		im = preprocess_im(im, args)
-		ims = map(lambda transform_strs: apply_transforms(im, transform_strs), transforms)
+		ims = apply_all_transforms(im, transforms)
 
 		predicted_label, all_predictions = predict(ims, caffenet, weights)
 		if predicted_label == label:
 			num_correct += 1
+		conf_mat[label,predicted_label] += 1
 
 		# compute per-transformation accuracy
-		all_num_correct[all_predictions == label] += 1
+		if fixed_transforms:
+			all_num_correct[all_predictions == label] += 1
 
 	overall_acc = float(num_correct) / num_total
-	transform_accs = all_num_correct / num_total
+	if fixed_transforms:
+		transform_accs = all_num_correct / num_total
 
 	print "Done"
-	print "Transform Accuracy:\n %r\n" % transform_accs
+	if fixed_transforms:
+		print "Transform Accuracy:\n %r\n" % transform_accs
 	print "Overall Accuracy: %.3f" % overall_acc
 	if args.log_file:
-		log.write("Transform Accuracy:\n %s\n" % np.array_str(transform_accs, max_line_width=80, precision=4))
+		if fixed_transforms:
+			log.write("Transform Accuracy:\n %s\n" % np.array_str(transform_accs, max_line_width=80, precision=4))
 		log.write("Overall Accuracy: %f\n" % overall_acc)
+	print conf_mat
 			
 def get_args():
 	parser = argparse.ArgumentParser(description="Classifies data")
