@@ -1,12 +1,17 @@
 
 import os
 import sys
-import cv2
 import math
 import lmdb
 import caffe
 import random
 import argparse
+import StringIO
+import skimage.io
+import skimage.color
+import skimage.filters
+import skimage.transform
+import scipy.ndimage.filters
 import numpy as np
 import caffe.proto.caffe_pb2
 
@@ -69,16 +74,16 @@ def apply_rand_crop(im, tokens):
 # "resize height width"
 def apply_resize(im, tokens):
 	size = int(tokens[1]), int(tokens[2])
-	return cv2.resize(im, size)
+	return skimage.transform.resize(im, size, preserve_range=True, mode='reflect').astype(np.uint8)
 
 # "mirror {h,v,hv}"
 def apply_mirror(im, tokens):
 	if tokens[1] == 'h':
-		return cv2.flip(im, 0)
+		return np.fliplr(im)
 	elif tokens[1] == 'v':
-		return cv2.flip(im, 1)
+		return np.flipud(im)
 	elif tokens[1] == 'hv':
-		return cv2.flip(im, -1)
+		return np.fliplr(np.flipud(im))
 	else:
 		print "Unrecongized mirror operation %r" % tokens
 		exit(1)
@@ -89,19 +94,33 @@ def apply_gaussnoise(im, tokens):
 	np.random.seed(seed)
 	noise = np.random.normal(0, sigma, im.shape[:2])
 	if len(im.shape) == 2:
-		im = (im + noise),
+		im = (im + noise)
 	else:
-		im = im + noise[:,:,np.newaxis]
+		im = (im + noise[:,:,np.newaxis])
 	im = np.clip(im, 0, 255)
 	im = im.astype(np.uint8)
 	return im
 
-# "rotate degree"
+# "rotation degree"
 def apply_rotation(im, tokens):
 	degree = float(tokens[1])
-	center = (im.shape[0] / 2, im.shape[1] / 2)
-	rot_mat = cv2.getRotationMatrix2D(center, degree, 1.0)
-	return cv2.warpAffine(im, rot_mat, im.shape[:2], flags=cv2.INTER_LINEAR)
+	return skimage.img_as_ubyte(skimage.transform.rotate(im, degree))
+
+# ported from openCV imgproc/smooth.cpp
+def cv_gauss_1d_kernel(sigma, n):
+	kernel = [0.0] * n
+
+	scale2X = -0.5/(sigma*sigma);
+	_sum = 0
+	for i in xrange(n):
+		x = i - (n-1)*0.5
+		t = math.exp(scale2X * x * x)
+		kernel[i] = t
+		_sum += t
+	for i in xrange(n):
+		kernel[i] /= _sum
+
+	return kernel
 
 # "blur sigma"
 def apply_blur(im, tokens):
@@ -109,28 +128,35 @@ def apply_blur(im, tokens):
 	size = int(sigma * 4 + .999)
 	if size % 2 == 0:
 		size += 1
-	return cv2.GaussianBlur(im, (size, size), sigma)
+	kernel = cv_gauss_1d_kernel(sigma, size)
+	im2 = im.astype(float)
+	im2 = scipy.ndimage.filters.convolve1d(im2, kernel, axis=0)
+	im2 = scipy.ndimage.filters.convolve1d(im2, kernel, axis=1)
+	#float_response = skimage.filters.gaussian_filter(im, sigma, multichannel=True, mode='reflect')
+	return im2.astype(np.uint8) #skimage.img_as_ubyte(np.clip(float_response, -1, 1))
 	
 # "unsharpmask sigma amount"
 def apply_unsharpmask(im, tokens):
-	blurred = np.atleast_3d(apply_blur(im, tokens))
+	blurred = apply_blur(im, tokens)
 	amount = float(tokens[2])
-	sharp = (1 + amount) * im + (-amount * blurred)
-	sharp = np.clip(sharp, 0, 255)
-	return sharp
+	sharpened = (1 + amount) * im + (-amount * blurred)
+	sharpened = np.clip(sharpened, 0, 255)
+	return sharpened.astype(np.uint8)
 
 # "shear degree {h,v}"
 def apply_shear(im, tokens):
 	degree = float(tokens[1])
-	radians = math.tan(degree * math.pi / 180)
-	shear_mat = np.array([ [1, 0, 0], [0, 1, 0] ], dtype=np.float)
+	radians = -1 * math.tan(degree * math.pi / 180)
+	shear_mat = np.array([ [1, 0, 0], [0, 1, 0], [0, 0, 1] ], dtype=np.float)
 	if tokens[2] == 'h':
 		shear_mat[0,1] = radians
 	elif tokens[2] == 'v':
 		shear_mat[1,0] = radians
 	else:
 		print "Invalid shear type: %r" % tokens
-	return cv2.warpAffine(im, shear_mat, im.shape[:2], flags=cv2.INTER_LINEAR)
+	# the shear parameter of AffineTransform.__init__ doesn't specify x or y
+	tform = skimage.transform.AffineTransform(matrix=shear_mat)
+	return skimage.img_as_ubyte(skimage.transform.warp(im, tform))
 
 # "perspective dy1 dx1 dy2 dx2 dy3 dx3 dy4 dx4"
 def apply_perspective(im, tokens):
@@ -140,8 +166,9 @@ def apply_perspective(im, tokens):
 					   [1 + float(tokens[5]) ,1 + float(tokens[6])],
 					   [0 + float(tokens[7]) ,1 + float(tokens[8])]
 					   ], dtype=np.float32)
-	M = cv2.getPerspectiveTransform(pts1,pts2)
-	return cv2.warpPerspective(im, M, im.shape[:2])
+	tform = skimage.transform.ProjectiveTransform()
+	tform.estimate(pts2, pts1)
+	return skimage.img_as_ubyte(skimage.transform.warp(im, tform))
 
 
 def apply_transform(im, transform_str):
@@ -201,15 +228,41 @@ def get_transforms(args):
 	fixed_transforms = not any(map(lambda s: s.startswith("densecrop"), transforms))
 	return transforms, fixed_transforms
 
-def get_image(dd_serialized, args):
+def get_image(dd_serialized, slice_idx, args):
 	doc_datum = caffe.proto.caffe_pb2.DocumentDatum()
 	doc_datum.ParseFromString(dd_serialized)	
-	nparr = np.fromstring(doc_datum.image.data, np.uint8)
-	im = cv2.imdecode(nparr, 0 if args.gray else 1)
-	if args.gray:
-		# explicit single channel to match dimensions of color
-		im = im[:,:,np.newaxis]
 	label = doc_datum.dbid
+
+	# decode the image from the doc datum
+	string_fd = StringIO.StringIO(doc_datum.image.data)
+	im = skimage.img_as_ubyte(skimage.io.imread(string_fd))
+
+	# get the number of channels to retain
+	channel_tokens = args.channels.split(args.delimiter)
+	channel_idx = min(0, len(channel_tokens)-1)
+	num_channels = int(channel_tokens[channel_idx])
+
+	# 0 for default, 1 for grayscale, 2 for abstract, 3 for RGB
+	num_cur_channels = im.shape[2] if len(im.shape) > 2 else 1
+
+	if num_channels != num_cur_channels and num_channels != 0:
+		if num_channels > 3:
+			raise Exception("Cannot request for more than 3 channels if not already supplied")
+		if num_cur_channels > num_channels:
+			if num_cur_channels > 2 and num_channels == 1:
+				# RGB -> Gray or RGBA -> Gray
+				im = skimage.img_as_ubyte(skimage.color.rgb2gray(im))
+			else:
+				# lop off excess channels (3,4 -> 2 or 4 -> 3)
+				im = im[:,:,num_channels]
+		else:
+			# num_cur_channels < num_channels
+			if num_cur_channels == 1:
+				im = skimage.img_as_ubyte(skimage.color.gray2rgb(im))
+				im = im[:,:,num_channels]
+			else:
+				raise Exception("How did we get here? (%d, %d)" % (num_channels, num_cur_channels))
+
 	return im, label
 
 # currently only does mean and shift
@@ -349,7 +402,8 @@ def prepare_images(test_dbs, transforms, args):
 	for slice_idx, entry in enumerate(test_dbs):
 		env, txn, cursor = entry
 
-		im_slice, label_slice = get_image(cursor.value(), args)
+		im_slice, label_slice = get_image(cursor.value(), slice_idx, args)
+		#im_slice = preprocess_im(im_slice, slice_idx, args)  
 		transformed_slices = apply_all_transforms(im_slice, transforms)
 		for transform_idx in xrange(len(transformed_slices)):
 			transformed_slices[transform_idx] = scale_shift_im(transformed_slices[transform_idx], slice_idx, args)
@@ -465,6 +519,9 @@ def check_args(args):
 	if num_means != 1 and num_means != num_test_lmdbs:
 		raise Exception("Different number of test lmdbs and means: %d vs %d" % (num_test_lmdbs, num_means))
 		
+	num_channels = len(args.channels.split(args.delimiter))
+	if num_channels != 1 and num_channels != num_test_lmdbs:
+		raise Exception("Different number of test lmdbs and channels: %d vs %d" % (num_test_lmdbs, num_channels))
 			
 def get_args():
 	parser = argparse.ArgumentParser(description="Classifies data")
@@ -479,8 +536,8 @@ def get_args():
 				help="Optional mean values per the channel (e.g. 127 for grayscale or 182,192,112 for BGR)")
 	parser.add_argument("--gpu", type=int, default=-1,
 				help="GPU to use for running the network")
-	parser.add_argument('-g', '--gray', default=False, action="store_true",
-						help='Force images to be grayscale.  Force color if ommited')
+	parser.add_argument('-c', '--channels', default="0", type=str,
+						help='Number of channels to take from each slice')
 	parser.add_argument("-a", "--scales", type=str, default=str(1.0 / 255),
 				help="Optional scale factor")
 	parser.add_argument("-t", "--transform_file", type=str, default="",
@@ -491,7 +548,7 @@ def get_args():
 				help="Log File")
 	parser.add_argument("-z", "--hard-weights", default=False, action="store_true",
 				help="Compute Transform weights using hard assignment")
-	parser.add_argument("-c", "--print-count", default=1000, type=int, 
+	parser.add_argument("--print-count", default=1000, type=int, 
 				help="Print every print-count images processed")
 	parser.add_argument("--max-images", default=40000, type=int, 
 				help="Max number of images for processing or tuning")
