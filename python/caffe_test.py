@@ -1,10 +1,10 @@
 
 import os
 import sys
+import caffe
 import cv2
 import math
 import lmdb
-import caffe
 import random
 import argparse
 import numpy as np
@@ -201,12 +201,17 @@ def get_transforms(args):
 	fixed_transforms = not any(map(lambda s: s.startswith("densecrop"), transforms))
 	return transforms, fixed_transforms
 
-def get_image(dd_serialized, args):
+def get_image(dd_serialized, slice_idx, args):
 	doc_datum = caffe.proto.caffe_pb2.DocumentDatum()
 	doc_datum.ParseFromString(dd_serialized)	
+
+	channel_tokens = args.channels.split(args.delimiter)
+	channel_idx = min(0, len(channel_tokens)-1)
+	num_channels = int(channel_tokens[channel_idx])
+
 	nparr = np.fromstring(doc_datum.image.data, np.uint8)
-	im = cv2.imdecode(nparr, 0 if args.gray else 1)
-	if args.gray:
+	im = cv2.imdecode(nparr, int(num_channels == 1) )
+	if im.ndim == 2:
 		# explicit single channel to match dimensions of color
 		im = im[:,:,np.newaxis]
 	label = doc_datum.dbid
@@ -224,7 +229,7 @@ def scale_shift_im(im, slice_idx, args):
 	# find the correct scale value
 	scale_tokens = args.scales.split(args.delimiter)
 	scale_idx = min(slice_idx, len(scale_tokens) - 1)
-	scale_val = float(scale_tokens[scale_idx])
+	scale_val = float(scale_tokens[scale_idx]) 
 
 	preprocessed_im = scale_val * (im - mean_vals)
 	return preprocessed_im
@@ -349,7 +354,7 @@ def prepare_images(test_dbs, transforms, args):
 	for slice_idx, entry in enumerate(test_dbs):
 		env, txn, cursor = entry
 
-		im_slice, label_slice = get_image(cursor.value(), args)
+		im_slice, label_slice = get_image(cursor.value(), slice_idx, args)
 		transformed_slices = apply_all_transforms(im_slice, transforms)
 		for transform_idx in xrange(len(transformed_slices)):
 			transformed_slices[transform_idx] = scale_shift_im(transformed_slices[transform_idx], slice_idx, args)
@@ -371,7 +376,6 @@ def prepare_images(test_dbs, transforms, args):
 		if _label != label:
 			log(args, "WARNING!, key %s has differing labels: %d vs %d for slices %d and %d" % (key, label, _label, 0, slice_idx))
 
-	#TODO: verify correct
 	# stack each set of slices (along channels) into a single numpy array
 	num_transforms = len(ims_slice_transforms[0])
 	num_slices = len(ims_slice_transforms)
@@ -464,6 +468,10 @@ def check_args(args):
 	num_means = len(args.means.split(args.delimiter))
 	if num_means != 1 and num_means != num_test_lmdbs:
 		raise Exception("Different number of test lmdbs and means: %d vs %d" % (num_test_lmdbs, num_means))
+
+	num_channels = len(args.channels.split(args.delimiter))
+	if num_channels != 1 and num_channels != num_test_lmdbs:
+		raise Exception("Different number of test lmdbs and channels: %d vs %d" % (num_test_lmdbs, num_channels))
 		
 			
 def get_args():
@@ -479,8 +487,8 @@ def get_args():
 				help="Optional mean values per the channel (e.g. 127 for grayscale or 182,192,112 for BGR)")
 	parser.add_argument("--gpu", type=int, default=-1,
 				help="GPU to use for running the network")
-	parser.add_argument('-g', '--gray', default=False, action="store_true",
-						help='Force images to be grayscale.  Force color if ommited')
+	parser.add_argument('-c', '--channels', default="0", type=str,
+				help='Number of channels to take from each slice')
 	parser.add_argument("-a", "--scales", type=str, default=str(1.0 / 255),
 				help="Optional scale factor")
 	parser.add_argument("-t", "--transform_file", type=str, default="",
@@ -491,7 +499,7 @@ def get_args():
 				help="Log File")
 	parser.add_argument("-z", "--hard-weights", default=False, action="store_true",
 				help="Compute Transform weights using hard assignment")
-	parser.add_argument("-c", "--print-count", default=1000, type=int, 
+	parser.add_argument("--print-count", default=1000, type=int, 
 				help="Print every print-count images processed")
 	parser.add_argument("--max-images", default=40000, type=int, 
 				help="Max number of images for processing or tuning")

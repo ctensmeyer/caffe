@@ -537,7 +537,7 @@ def get_args():
 	parser.add_argument("--gpu", type=int, default=-1,
 				help="GPU to use for running the network")
 	parser.add_argument('-c', '--channels', default="0", type=str,
-						help='Number of channels to take from each slice')
+				help='Number of channels to take from each slice')
 	parser.add_argument("-a", "--scales", type=str, default=str(1.0 / 255),
 				help="Optional scale factor")
 	parser.add_argument("-t", "--transform_file", type=str, default="",
