@@ -105,7 +105,6 @@ def parse_log_file(args):
 			print list(enumerate(tokens))
 			print e
 			print traceback.format_exc()
-			exit()
 
 	return sequences
 
