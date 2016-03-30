@@ -206,7 +206,7 @@ def get_image(dd_serialized, slice_idx, args):
 	doc_datum.ParseFromString(dd_serialized)	
 
 	channel_tokens = args.channels.split(args.delimiter)
-	channel_idx = min(0, len(channel_tokens)-1)
+	channel_idx = min(slice_idx, len(channel_tokens)-1)
 	num_channels = int(channel_tokens[channel_idx])
 
 	nparr = np.fromstring(doc_datum.image.data, np.uint8)
