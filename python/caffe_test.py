@@ -210,7 +210,7 @@ def get_image(dd_serialized, slice_idx, args):
 	num_channels = int(channel_tokens[channel_idx])
 
 	nparr = np.fromstring(doc_datum.image.data, np.uint8)
-	im = cv2.imdecode(nparr, int(num_channels == 1) )
+	im = cv2.imdecode(nparr, int(num_channels == 3) )
 	if im.ndim == 2:
 		# explicit single channel to match dimensions of color
 		im = im[:,:,np.newaxis]
@@ -413,7 +413,7 @@ def main(args):
 
 	# set up the class confusion matrix
 	num_output = caffenet.blobs["prob"].data.shape[1]
-	conf_mat = np.zeros(shape=(num_output, num_output))
+	conf_mat = np.zeros(shape=(num_output, num_output), dtype=np.int)
 
 	num_total = 0
 	num_correct = 0
