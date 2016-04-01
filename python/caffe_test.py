@@ -313,7 +313,7 @@ def predict(ims, caffenet, args, weights=None):
 
 	all_predictions = np.argmax(all_outputs, axis=1)
 	weighted_outputs = all_outputs * weights
-	mean_outputs = np.sum(all_outputs, axis=0)
+	mean_outputs = np.sum(weighted_outputs, axis=0)
 	label = np.argmax(mean_outputs)
 	return label, all_predictions
 
