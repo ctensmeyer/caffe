@@ -83,9 +83,9 @@ def apply_mirror(im, tokens):
 		print "Unrecongized mirror operation %r" % tokens
 		exit(1)
 
-# "guassnoise seed sigma"
+# "guassnoise sigma seed"
 def apply_gaussnoise(im, tokens):
-	seed, sigma = int(tokens[1]), float(tokens[2])
+	sigma, seed = float(tokens[1]), int(tokens[2])
 	np.random.seed(seed)
 	noise = np.random.normal(0, sigma, im.shape[:2])
 	if len(im.shape) == 2:
@@ -451,6 +451,7 @@ def main(args):
 	log(args, "\nOverall Accuracy: %f" % overall_acc)
 
 	close_dbs(test_dbs)
+	args.log.close()
 		
 
 def check_args(args):
