@@ -257,7 +257,7 @@ def set_transform_weights(args):
 
 		# get the per-transform vote for the correct label
 		ims, label = prepare_images(tune_dbs, transforms, args)
-		votes = get_vote_for_label(ims, caffenet, label, hard=args.hard_weights)
+		votes = get_vote_for_label(ims, caffenet, label, args)
 		weights += votes
 
 		# check stopping criteria
@@ -269,11 +269,11 @@ def set_transform_weights(args):
 	normalized = (weights / num_total)[:,np.newaxis]
 	return normalized
 
-def get_vote_for_label(ims, caffenet, label, hard=False):
+def get_vote_for_label(ims, caffenet, label, args):
 	# batch up all transforms at once
-	all_outputs = fprop(caffenet, ims)
+	all_outputs = fprop(caffenet, ims, args)
 
-	if hard:
+	if args.hard_weights:
 		# use 1/0 right or not
 		predictions = np.argmax(all_outputs, axis=1)
 		accuracy = np.zeros(shape=(len(ims),))
@@ -284,7 +284,7 @@ def get_vote_for_label(ims, caffenet, label, hard=False):
 		return all_outputs[:, label]
 
 
-def fprop(caffenet, ims, batchsize=256):
+def fprop(caffenet, ims, batchsize=64):
 	# batch up all transforms at once
 	idx = 0
 	responses = list()
@@ -303,17 +303,17 @@ def fprop(caffenet, ims, batchsize=256):
 	return np.concatenate(responses, axis=0)
 	
 
-def predict(ims, caffenet, weights=None):
+def predict(ims, caffenet, args, weights=None):
 	# set up transform weights
 	if weights is None:
 		weights = np.array([1] * len(ims))
 		weights = weights[:,np.newaxis]
 
-	all_outputs = fprop(caffenet, ims)
+	all_outputs = fprop(caffenet, ims, args.batch_size)
 
 	all_predictions = np.argmax(all_outputs, axis=1)
 	weighted_outputs = all_outputs * weights
-	mean_outputs = np.sum(all_outputs, axis=0)
+	mean_outputs = np.sum(weighted_outputs, axis=0)
 	label = np.argmax(mean_outputs)
 	return label, all_predictions
 
@@ -425,7 +425,7 @@ def main(args):
 		num_total += 1
 
 		ims, label = prepare_images(test_dbs, transforms, args)
-		predicted_label, all_predictions = predict(ims, caffenet, weights)
+		predicted_label, all_predictions = predict(ims, caffenet, args, weights)
 
 		# keep track of correct predictions
 		if predicted_label == label:
@@ -506,6 +506,8 @@ def get_args():
 				help="Max number of images for processing or tuning")
 	parser.add_argument("-d", "--delimiter", default=':', type=str, 
 				help="Delimiter used for indicating multiple image slice parameters")
+	parser.add_argument("-b", "--batch-size", default=64, type=int, 
+				help="Max number of transforms in single batch per original image")
 
 	args = parser.parse_args()
 
