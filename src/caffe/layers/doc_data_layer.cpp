@@ -4,6 +4,7 @@
 
 #include <string>
 #include <vector>
+#include <boost/random.hpp>
 
 #include "caffe/common.hpp"
 #include "caffe/data_layers.hpp"
@@ -23,6 +24,33 @@ DocDataLayer<Dtype>::~DocDataLayer<Dtype>() {
     delete prefetch_labels_.back();
 	prefetch_labels_.pop_back();
   }
+}
+
+template <typename Dtype>
+void DocDataLayer<Dtype>::InitRand(unsigned int seed) {
+  const unsigned int rng_seed = (seed) ? seed : caffe_rng_rand();
+  rng_.reset(new Caffe::RNG(rng_seed));
+}
+
+template <typename Dtype>
+int DocDataLayer<Dtype>::RandInt(int n) {
+  CHECK(rng_);
+  CHECK_GT(n, 0);
+  caffe::rng_t* rng =
+      static_cast<caffe::rng_t*>(rng_->generator());
+  return ((*rng)() % n);
+}
+
+template <typename Dtype>
+float DocDataLayer<Dtype>::RandFloat(float min, float max) {
+  CHECK(rng_);
+  CHECK_GE(max, min);
+  caffe::rng_t* rng =
+      static_cast<caffe::rng_t*>(rng_->generator());
+  boost::uniform_real<float> random_distribution(min, caffe_nextafter<float>(max));
+  boost::variate_generator<caffe::rng_t*, boost::uniform_real<float> >
+      variate_generator(rng, random_distribution);
+  return variate_generator();
 }
 
 template <typename Dtype>
@@ -79,8 +107,7 @@ Dtype DocDataLayer<Dtype>::GetLabelValue(DocumentDatum& doc, const std::string& 
 
 template <typename Dtype>
 int DocDataLayer<Dtype>::SampleCat(const vector<float>& probs) {
-  float rand;
-  caffe_rng_uniform(1, 0.f, 1.f, &rand);
+  float rand = this->RandFloat(0, 1.0f);
   float cum_prob = 0;
   int i;
   for (i = 0; i < probs.size(); i++) {
@@ -154,6 +181,7 @@ void DocDataLayer<Dtype>::NextIndex() {
 template <typename Dtype>
 void DocDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
+  this->InitRand(this->layer_param_.doc_data_param().seed());
   this->image_transformer_ = CreateImageTransformer<Dtype>(this->layer_param_.image_transform_param());
   DocDataParameter doc_param = this->layer_param_.doc_data_param();
   num_labels_ = doc_param.label_names_size();
@@ -178,8 +206,7 @@ void DocDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
 	cursor.reset(db->NewCursor());
     // Check if we should randomly skip a few data points
     if (doc_param.rand_skip()) {
-      unsigned int skip = caffe_rng_rand() %
-                          doc_param.rand_skip();
+      unsigned int skip = this->RandInt(doc_param.rand_skip());
       LOG(INFO) << "Skipping first " << skip << " data points.";
       while (skip-- > 0) {
         cursor->Next();
@@ -221,6 +248,9 @@ void DocDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
   // Read a data point, to initialize the prefetch and top blobs.
   DocumentDatum doc;
   doc.ParseFromString(cursors_[cur_index_]->value());
+  if (this->layer_param_.doc_data_param().force_color()) {
+    doc.mutable_image()->set_channels(3);
+  }
 
   vector<int> in_shape;
   in_shape.push_back(1);
@@ -275,7 +305,9 @@ void DocDataLayer<Dtype>::InternalThreadEntry() {
   const int batch_size = this->layer_param_.doc_data_param().batch_size();
   DocumentDatum doc;
   doc.ParseFromString(cursors_[cur_index_]->value());
-
+  if (this->layer_param_.doc_data_param().force_color()) {
+    doc.mutable_image()->set_channels(3);
+  }
   vector<int> in_shape;
   in_shape.push_back(1);
   in_shape.push_back(doc.image().channels());
@@ -307,11 +339,17 @@ void DocDataLayer<Dtype>::InternalThreadEntry() {
     // get a datum
     DocumentDatum doc;
     doc.ParseFromString(cursors_[cur_index_]->value());
+	//string key = cursors_[cur_index_]->key();
+	//LOG(INFO) << "Item " << item_id << " Key: " << key.c_str();
+    if (this->layer_param_.doc_data_param().force_color()) {
+      doc.mutable_image()->set_channels(3);
+    }
     read_time += timer.MicroSeconds();
     timer.Start();
     // Apply data transformations (mirror, scale, crop...)
-
-	cv::Mat pretransform_img = ImageToCVMat(doc.image(), doc.image().channels() == 3);
+	
+	bool do_color = (doc.image().channels() == 3);
+	cv::Mat pretransform_img = ImageToCVMat(doc.image(), do_color);
 	decode_time += timer.MicroSeconds();
     timer.Start();
 	cv::Mat posttransform_img;
@@ -336,8 +374,7 @@ void DocDataLayer<Dtype>::InternalThreadEntry() {
 
 	int num_to_advance = 1;
 	if (this->layer_param_.doc_data_param().rand_advance_skip() > 0) {
-	  num_to_advance += caffe_rng_rand() %
-				(this->layer_param_.doc_data_param().rand_advance_skip() + 1);
+	  num_to_advance += this->RandInt(this->layer_param_.doc_data_param().rand_advance_skip() + 1);
 	}
 	bool do_break = false;
 	for (int i = 0; i < num_to_advance; i++) {

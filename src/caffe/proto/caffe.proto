@@ -837,6 +837,10 @@ message DocDataParameter {
 
   // done
   optional bool in_order = 12 [default = false];
+
+  optional bool force_color = 13 [default = false];
+
+  optional uint32 seed = 14 [default = 0];
 }
 
 message DropoutParameter {

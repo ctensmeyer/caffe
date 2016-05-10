@@ -117,7 +117,6 @@ class DocDataLayer : public BasePrefetchingDataLayer<Dtype> {
   virtual inline int ExactNumBottomBlobs() const { return 0; }
   virtual inline int MinTopBlobs() const { return 1; }
   virtual inline int MaxTopBlobs() const { return 23; }
-  //virtual inline int MaxTopBlobs() const { return 2; }
 
  protected:
   virtual void InternalThreadEntry();
@@ -125,6 +124,11 @@ class DocDataLayer : public BasePrefetchingDataLayer<Dtype> {
   virtual void NextInOrderIndex();
   virtual int SampleCat(const vector<float>& probs);
   virtual Dtype GetLabelValue(DocumentDatum& doc, const std::string& label_name);
+
+  void InitRand();
+  void InitRand(unsigned int seed);
+  int RandInt(int n);
+  float RandFloat(float min, float max);
 
   vector<shared_ptr<db::DB> > dbs_;
   vector<shared_ptr<db::Cursor> > cursors_;
@@ -138,6 +142,7 @@ class DocDataLayer : public BasePrefetchingDataLayer<Dtype> {
   vector<Blob<Dtype>*> prefetch_labels_;
   vector<std::string> label_names_;
   Dtype missing_value_;
+  shared_ptr<Caffe::RNG> rng_;
 
   ImageTransformer<Dtype>* image_transformer_;
 };

@@ -7,6 +7,7 @@ import math
 import lmdb
 import random
 import argparse
+import pickle
 import numpy as np
 import caffe.proto.caffe_pb2
 
@@ -279,10 +280,6 @@ def scale_shift_im(im, slice_idx, args):
 	return preprocessed_im
 
 def set_transform_weights(args):
-	# check if transform weights need to be done
-	if args.tune_lmdbs == "":
-		# no lmdb is provided for tuning the weights
-		return None
 	transforms, fixed_transforms = get_transforms(args)
 	if not fixed_transforms:
 		# number of transforms varies by image, so no fixed set of weights
@@ -343,7 +340,10 @@ def fprop(caffenet, ims, batchsize=64):
 
 		# propagate on batch
 		caffenet.forward()
-		responses.append(np.copy(caffenet.blobs["prob"].data))
+		tmp = np.copy(caffenet.blobs["prob"].data)
+		if tmp.ndim > 2:
+			tmp = np.squeeze(tmp, axis=(2,3))
+		responses.append(tmp)
 	return np.concatenate(responses, axis=0)
 	
 
@@ -355,6 +355,17 @@ def predict(ims, caffenet, args, weights=None):
 	all_outputs = fprop(caffenet, ims, args.batch_size)
 
 	all_predictions = np.argmax(all_outputs, axis=1)
+	# throw out non-script predictions
+	for idx in xrange(all_outputs.shape[0]):
+		transform_prediction = np.argmax(all_outputs[idx])
+		#print all_outputs[idx]
+		#print transform_prediction
+		if transform_prediction == 0 or transform_prediction > 12:
+			weights[idx] = 0
+		else:
+			all_outputs[idx][0] = 0
+			all_outputs[idx][13:] = 0
+		
 	mean_outputs = np.average(all_outputs, axis=0, weights=weights)
 	label = np.argmax(mean_outputs)
 	return label, all_predictions, mean_outputs
@@ -455,12 +466,7 @@ def main(args):
 	transforms, fixed_transforms = get_transforms(args)
 	log(args, "Fixed Transforms: %s" % str(fixed_transforms))
 
-	# get per-transform weights.  Can be none if transforms produce variable numbers of images, or
-	# no lmdb is provided to tune the weights
-	log(args, "Setting the transform weights...")
-	weights = set_transform_weights(args) 
-	weight_str = np.array_str(weights, max_line_width=80, precision=4) if weights is not None else str(weights)
-	log(args, "Weights: %s" % weight_str)
+	weights = None
 
 	log(args, "Initializing network for testing")
 	caffenet = init_caffe(args)
@@ -475,6 +481,9 @@ def main(args):
 	num_correct = 0
 	all_num_correct = np.zeros(shape=(len(transforms),))
 	done = False
+
+	all_mean_outputs = list()
+	all_labels = list()
 	while not done:
 		if num_total % args.print_count == 0:
 			print "Processed %d images" % num_total
@@ -503,6 +512,10 @@ def main(args):
 		if all_predictions.shape[0] == all_num_correct.shape[0]:
 			all_num_correct[all_predictions == label] += 1
 
+		# store outputs
+		all_mean_outputs.append(mean_outputs[:13])
+		all_labels.append(label)
+
 		# check stopping criteria
 		done = (num_total == args.max_images)
 		for env, txn, cursor in test_dbs:
@@ -517,16 +530,17 @@ def main(args):
 	log(args, "\nTransform Accuracy:\n %r" % transform_accs)
 	log(args, "\nOverall Accuracy: %f" % overall_acc)
 
+	if args.out:
+		fd = open(args.out, 'wb')
+		pickle.dump( (all_mean_outputs, all_labels), fd)
+
 	close_dbs(test_dbs)
 		
 
 def check_args(args):
-	num_tune_lmdbs = 0 if args.tune_lmdbs == "" else len(args.tune_lmdbs.split(args.delimiter))
 	num_test_lmdbs = 0 if args.test_lmdbs == "" else len(args.test_lmdbs.split(args.delimiter))
 	if num_test_lmdbs == 0:
 		raise Exception("No test lmdbs specified");
-	if num_tune_lmdbs != 0 and num_tune_lmdbs != num_test_lmdbs:
-		raise Exception("Different number of tune and test lmdbs: %d vs %d" % (num_tune_lmdb, num_test_lmdbs))
 
 	num_scales = len(args.scales.split(args.delimiter))
 	if num_scales != 1 and num_scales != num_test_lmdbs:
@@ -550,32 +564,30 @@ def get_args():
 	parser.add_argument("test_lmdbs", 
 				help="LMDBs of test images (encoded DocDatums), files separated with ;")
 
-	parser.add_argument("-m", "--means", type=str, default="",
+	parser.add_argument("-m", "--means", type=str, default="127",
 				help="Optional mean values per the channel (e.g. 127 for grayscale or 182,192,112 for BGR)")
-	parser.add_argument("--gpu", type=int, default=-1,
+	parser.add_argument("--gpu", type=int, default=0,
 				help="GPU to use for running the network")
-	parser.add_argument('-c', '--channels', default="0", type=str,
+	parser.add_argument('-c', '--channels', default="1", type=str,
 				help='Number of channels to take from each slice')
 	parser.add_argument("-a", "--scales", type=str, default=str(1.0 / 255),
 				help="Optional scale factor")
 	parser.add_argument("-t", "--transform_file", type=str, default="",
 				help="File containing transformations to do")
-	parser.add_argument("-l", "--tune-lmdbs", type=str, default="",
-				help="Tune the weighted averaging to minmize CE loss on this data")
 	parser.add_argument("-f", "--log-file", type=str, default="",
 				help="Log File")
-	parser.add_argument("-z", "--hard-weights", default=False, action="store_true",
-				help="Compute Transform weights using hard assignment")
 	parser.add_argument("-y", "--clamm-weights", default=False, action="store_true",
 				help="For CLaMM, use heuristic weights")
-	parser.add_argument("--print-count", default=1000, type=int, 
+	parser.add_argument("--print-count", default=10, type=int, 
 				help="Print every print-count images processed")
 	parser.add_argument("--max-images", default=40000, type=int, 
 				help="Max number of images for processing or tuning")
 	parser.add_argument("-d", "--delimiter", default=':', type=str, 
 				help="Delimiter used for indicating multiple image slice parameters")
-	parser.add_argument("-b", "--batch-size", default=64, type=int, 
+	parser.add_argument("-b", "--batch-size", default=4, type=int, 
 				help="Max number of transforms in single batch per original image")
+	parser.add_argument("-o", "--out", default="predictions.pckl", type=str, 
+				help="Output pickle of preditions for use in ensembling")
 
 	args = parser.parse_args()
 
