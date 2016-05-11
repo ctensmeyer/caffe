@@ -357,14 +357,16 @@ def predict(ims, caffenet, args, weights=None):
 	all_predictions = np.argmax(all_outputs, axis=1)
 	# throw out non-script predictions
 	for idx in xrange(all_outputs.shape[0]):
-		transform_prediction = np.argmax(all_outputs[idx])
+		#transform_prediction = np.argmax(all_outputs[idx])
 		#print all_outputs[idx]
 		#print transform_prediction
-		if transform_prediction == 0 or transform_prediction > 12:
-			weights[idx] = 0
-		else:
-			all_outputs[idx][0] = 0
-			all_outputs[idx][13:] = 0
+		#if transform_prediction == 0 or transform_prediction > 12:
+		#	weights[idx] = 0
+		#else:
+		#	all_outputs[idx][0] = 0
+		#	all_outputs[idx][13:] = 0
+		all_outputs[idx][0] = 0
+		all_outputs[idx][13:] = 0
 		
 	mean_outputs = np.average(all_outputs, axis=0, weights=weights)
 	label = np.argmax(mean_outputs)
@@ -584,7 +586,7 @@ def get_args():
 				help="Max number of images for processing or tuning")
 	parser.add_argument("-d", "--delimiter", default=':', type=str, 
 				help="Delimiter used for indicating multiple image slice parameters")
-	parser.add_argument("-b", "--batch-size", default=4, type=int, 
+	parser.add_argument("-b", "--batch-size", default=16, type=int, 
 				help="Max number of transforms in single batch per original image")
 	parser.add_argument("-o", "--out", default="predictions.pckl", type=str, 
 				help="Output pickle of preditions for use in ensembling")
