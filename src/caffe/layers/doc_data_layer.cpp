@@ -255,8 +255,8 @@ void DocDataLayer<Dtype>::DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
   vector<int> in_shape;
   in_shape.push_back(1);
   in_shape.push_back(doc.image().channels());
-  in_shape.push_back(doc.image().width());
   in_shape.push_back(doc.image().height());
+  in_shape.push_back(doc.image().width());
 
   // Use data_transformer to infer the expected blob shape from datum.
   image_transformer_->SampleTransformParams(in_shape);
@@ -311,8 +311,9 @@ void DocDataLayer<Dtype>::InternalThreadEntry() {
   vector<int> in_shape;
   in_shape.push_back(1);
   in_shape.push_back(doc.image().channels());
-  in_shape.push_back(doc.image().width());
   in_shape.push_back(doc.image().height());
+  in_shape.push_back(doc.image().width());
+  DLOG(INFO) << "height: " << doc.image().height() << "\twidth: " << doc.image().width();
   // Use image_transformer to infer the expected blob shape from doc
   image_transformer_->SampleTransformParams(in_shape);
   vector<int> top_shape = image_transformer_->InferOutputShape(in_shape);

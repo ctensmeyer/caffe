@@ -140,6 +140,7 @@ void CropImageTransformer<Dtype>::SampleTransformParams(const vector<int>& in_sh
   ImageTransformer<Dtype>::SampleTransformParams(in_shape);
   int in_width = in_shape[in_shape.size() - 1];
   int in_height = in_shape[in_shape.size() - 2];
+  DLOG(INFO) << "in_width: " << in_width << "\tin_height: " << in_height;
 
   if (param_.width_size()) {
     SampleFixedIndependent();
@@ -192,7 +193,7 @@ void CropImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
 	  break;
   }
   DLOG(INFO) << "(" << this << ") CropTransformer location: (" << crop_h_pos << ", " << crop_w_pos << ")";
-  cv::Rect roi(crop_h_pos, crop_w_pos, cur_height_, cur_width_);
+  cv::Rect roi(crop_w_pos, crop_h_pos, cur_width_, cur_height_);
   out = in(roi);
 }
 template <typename Dtype>
