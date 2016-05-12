@@ -23,8 +23,8 @@ vector<int> CropImageTransformer<Dtype>::InferOutputShape(const vector<int>& in_
   for (int i = 0; i < in_shape.size() - 2; i++) {
     shape.push_back(in_shape[i]);
   }
-  shape.push_back(cur_width_);
   shape.push_back(cur_height_);
+  shape.push_back(cur_width_);
   return shape;
 }
 
@@ -192,7 +192,7 @@ void CropImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
 	  break;
   }
   DLOG(INFO) << "(" << this << ") CropTransformer location: (" << crop_h_pos << ", " << crop_w_pos << ")";
-  cv::Rect roi(crop_w_pos, crop_h_pos, cur_width_, cur_height_);
+  cv::Rect roi(crop_h_pos, crop_w_pos, cur_height_, cur_width_);
   out = in(roi);
 }
 template <typename Dtype>
