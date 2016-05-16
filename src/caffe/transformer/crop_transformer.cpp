@@ -23,8 +23,8 @@ vector<int> CropImageTransformer<Dtype>::InferOutputShape(const vector<int>& in_
   for (int i = 0; i < in_shape.size() - 2; i++) {
     shape.push_back(in_shape[i]);
   }
-  shape.push_back(cur_width_);
   shape.push_back(cur_height_);
+  shape.push_back(cur_width_);
   return shape;
 }
 
@@ -140,6 +140,7 @@ void CropImageTransformer<Dtype>::SampleTransformParams(const vector<int>& in_sh
   ImageTransformer<Dtype>::SampleTransformParams(in_shape);
   int in_width = in_shape[in_shape.size() - 1];
   int in_height = in_shape[in_shape.size() - 2];
+  DLOG(INFO) << "in_width: " << in_width << "\tin_height: " << in_height;
 
   if (param_.width_size()) {
     SampleFixedIndependent();
