@@ -383,7 +383,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 206 (last added: binary_encode)
+// LayerParameter next available layer-specific ID: 207 (last added: precision_recall_param)
 // LayerParameter next available layer-specific ID: 137 (last added: reduction_param)
 // The 2xx numbers are reservered for additional layers added by Chris, while 1xx are
 //   used by the official caffe release.
@@ -465,6 +465,7 @@ message LayerParameter {
   optional PoolingParameter pooling_param = 121;
   optional PowerParameter power_param = 122;
   optional PReLUParameter prelu_param = 131;
+  optional PRParameter precision_recall_param = 207;
   optional PythonParameter python_param = 130;
   optional ReductionParameter reduction_param = 136;
   optional ReLUParameter relu_param = 123;
@@ -657,6 +658,8 @@ message LossParameter {
   optional bool normalize = 2 [default = true];
 
   optional bool log_output = 10 [default = false];
+
+  optional float cross_entropy_positive_weight = 11 [default = 1];
 }
 
 // Messages that store parameters used by individual layer types follow, in
@@ -679,6 +682,13 @@ message AccuracyParameter {
   optional int32 ignore_label = 3;
 
   optional bool log_output = 10 [default = false];
+}
+
+message PRParameter {
+  optional float thresh = 1 [default = 0.5];
+  // If specified, ignore instances with the given value.
+  // should not be 0 or 1
+  optional int32 ignore_label = 2; 
 }
 
 message ArgMaxParameter {

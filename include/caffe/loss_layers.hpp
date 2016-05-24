@@ -100,7 +100,7 @@ class PRLayer : public Layer<Dtype> {
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
 
-  virtual inline const char* type() const { return "PrecisionRecall"; }
+  virtual inline const char* type() const { return "PR"; }
   virtual inline int ExactNumBottomBlobs() const { return 2; }
   virtual inline int ExactNumTopBlobs() const { return 4; }
 
@@ -636,7 +636,8 @@ class SigmoidCrossEntropyLossLayer : public LossLayer<Dtype> {
   explicit SigmoidCrossEntropyLossLayer(const LayerParameter& param)
       : LossLayer<Dtype>(param),
           sigmoid_layer_(new SigmoidLayer<Dtype>(param)),
-          sigmoid_output_(new Blob<Dtype>()) {}
+          sigmoid_output_(new Blob<Dtype>()),
+		  class_weights_ (new Blob<Dtype>()) {}
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
@@ -692,6 +693,10 @@ class SigmoidCrossEntropyLossLayer : public LossLayer<Dtype> {
   vector<Blob<Dtype>*> sigmoid_bottom_vec_;
   /// top vector holder to call the underlying SigmoidLayer::Forward
   vector<Blob<Dtype>*> sigmoid_top_vec_;
+
+  bool has_positive_class_mult_;
+  Dtype positive_class_mult_; 
+  shared_ptr<Blob<Dtype> > class_weights_;
 };
 
 // Forward declare SoftmaxLayer for use in SoftmaxWithLossLayer.

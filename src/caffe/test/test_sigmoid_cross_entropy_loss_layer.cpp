@@ -36,6 +36,7 @@ class SigmoidCrossEntropyLossLayerTest : public MultiDeviceTest<TypeParam> {
     targets_filler_param.set_max(1);
     UniformFiller<Dtype> targets_filler(targets_filler_param);
     targets_filler.Fill(blob_bottom_targets_);
+	blob_bottom_targets_->mutable_cpu_data()[0] = 1.;
     blob_bottom_vec_.push_back(blob_bottom_targets_);
     blob_top_vec_.push_back(blob_top_loss_);
   }
@@ -110,6 +111,8 @@ TYPED_TEST(SigmoidCrossEntropyLossLayerTest, TestGradient) {
   typedef typename TypeParam::Dtype Dtype;
   LayerParameter layer_param;
   const Dtype kLossWeight = 3.7;
+  const Dtype kPositiveWeight = 2.5;
+  layer_param.mutable_loss_param()->set_cross_entropy_positive_weight(kPositiveWeight);
   layer_param.add_loss_weight(kLossWeight);
   SigmoidCrossEntropyLossLayer<Dtype> layer(layer_param);
   layer.SetUp(this->blob_bottom_vec_, this->blob_top_vec_);

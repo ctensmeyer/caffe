@@ -28,6 +28,10 @@ void SigmoidCrossEntropyLossLayer<Dtype>::Backward_gpu(
     // Scale down gradient
     const Dtype loss_weight = top[0]->cpu_diff()[0];
     caffe_gpu_scal(count, loss_weight / num, bottom_diff);
+
+	if (has_positive_class_mult_) {
+	  caffe_gpu_mul(count, class_weights_->gpu_data(), bottom_diff, bottom_diff);
+	}
   }
 }
 

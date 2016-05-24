@@ -17,6 +17,10 @@ void SigmoidCrossEntropyLossLayer<Dtype>::LayerSetUp(
   sigmoid_top_vec_.clear();
   sigmoid_top_vec_.push_back(sigmoid_output_.get());
   sigmoid_layer_->SetUp(sigmoid_bottom_vec_, sigmoid_top_vec_);
+  has_positive_class_mult_ = this->layer_param_.loss_param().has_cross_entropy_positive_weight(); 
+  if (has_positive_class_mult_) {
+    positive_class_mult_ = this->layer_param_.loss_param().cross_entropy_positive_weight(); 
+  }
 }
 
 template <typename Dtype>
@@ -26,6 +30,9 @@ void SigmoidCrossEntropyLossLayer<Dtype>::Reshape(
   CHECK_EQ(bottom[0]->count(), bottom[1]->count()) <<
       "SIGMOID_CROSS_ENTROPY_LOSS layer inputs must have the same count.";
   sigmoid_layer_->Reshape(sigmoid_bottom_vec_, sigmoid_top_vec_);
+  if (has_positive_class_mult_) {
+    class_weights_->Reshape(bottom[0]->shape());
+  }
 }
 
 template <typename Dtype>
@@ -40,12 +47,22 @@ void SigmoidCrossEntropyLossLayer<Dtype>::Forward_cpu(
   // Stable version of loss computation from input data
   const Dtype* input_data = bottom[0]->cpu_data();
   const Dtype* target = bottom[1]->cpu_data();
-  Dtype loss = 0;
-  for (int i = 0; i < count; ++i) {
-    loss -= input_data[i] * (target[i] - (input_data[i] >= 0)) -
-        log(1 + exp(input_data[i] - 2 * input_data[i] * (input_data[i] >= 0)));
+  Dtype* weights;
+
+  if (has_positive_class_mult_) {
+	  weights = class_weights_->mutable_cpu_data();
   }
-  top[0]->mutable_cpu_data()[0] = loss / num;
+  Dtype total_loss = 0;
+  for (int i = 0; i < count; ++i) {
+    Dtype loss = input_data[i] * (target[i] - (input_data[i] >= 0)) -
+        log(1 + exp(input_data[i] - 2 * input_data[i] * (input_data[i] >= 0)));
+	if (has_positive_class_mult_) {
+	    loss *= (1 + target[i] * positive_class_mult_);
+		weights[i] = (1 + target[i] * positive_class_mult_);
+	} 
+	total_loss -= loss;
+  }
+  top[0]->mutable_cpu_data()[0] = total_loss / num;
 }
 
 template <typename Dtype>
@@ -67,6 +84,10 @@ void SigmoidCrossEntropyLossLayer<Dtype>::Backward_cpu(
     // Scale down gradient
     const Dtype loss_weight = top[0]->cpu_diff()[0];
     caffe_scal(count, loss_weight / num, bottom_diff);
+
+	if (has_positive_class_mult_) {
+	  caffe_mul(count, class_weights_->cpu_data(), bottom_diff, bottom_diff);
+	}
   }
 }
 
