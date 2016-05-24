@@ -21,6 +21,7 @@ void SigmoidCrossEntropyLossLayer<Dtype>::LayerSetUp(
   if (has_positive_class_mult_) {
     positive_class_mult_ = this->layer_param_.loss_param().cross_entropy_positive_weight(); 
   }
+  normalize_ = this->layer_param_.loss_param().normalize(); 
 }
 
 template <typename Dtype>
@@ -62,7 +63,11 @@ void SigmoidCrossEntropyLossLayer<Dtype>::Forward_cpu(
 	} 
 	total_loss -= loss;
   }
-  top[0]->mutable_cpu_data()[0] = total_loss / num;
+  if (normalize_) {
+    top[0]->mutable_cpu_data()[0] = total_loss / count;
+  } else {
+    top[0]->mutable_cpu_data()[0] = total_loss / num;
+  }
 }
 
 template <typename Dtype>
@@ -83,7 +88,11 @@ void SigmoidCrossEntropyLossLayer<Dtype>::Backward_cpu(
     caffe_sub(count, sigmoid_output_data, target, bottom_diff);
     // Scale down gradient
     const Dtype loss_weight = top[0]->cpu_diff()[0];
-    caffe_scal(count, loss_weight / num, bottom_diff);
+	if (normalize_) {
+      caffe_scal(count, loss_weight / count, bottom_diff);
+	} else {
+      caffe_scal(count, loss_weight / num, bottom_diff);
+    }
 
 	if (has_positive_class_mult_) {
 	  caffe_mul(count, class_weights_->cpu_data(), bottom_diff, bottom_diff);

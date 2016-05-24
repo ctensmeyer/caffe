@@ -65,7 +65,9 @@ class SigmoidCrossEntropyLossLayerTest : public MultiDeviceTest<TypeParam> {
   void TestForward() {
     LayerParameter layer_param;
     const Dtype kLossWeight = 3.7;
+	const bool normalize = false;
     layer_param.add_loss_weight(kLossWeight);
+    layer_param.mutable_loss_param()->set_normalize(normalize);
     FillerParameter data_filler_param;
     data_filler_param.set_std(1);
     GaussianFiller<Dtype> data_filler(data_filler_param);

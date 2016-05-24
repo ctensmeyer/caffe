@@ -694,8 +694,14 @@ class SigmoidCrossEntropyLossLayer : public LossLayer<Dtype> {
   /// top vector holder to call the underlying SigmoidLayer::Forward
   vector<Blob<Dtype>*> sigmoid_top_vec_;
 
+  // whether to normalize by the number of values (true) or by the number of instances (false)
+  bool normalize_;
+
+  // if true, weight instances by (1 + target_val * positive_class_mult_)
   bool has_positive_class_mult_;
   Dtype positive_class_mult_; 
+
+  // record weights on forward pass to make backward pass efficient/easy to code
   shared_ptr<Blob<Dtype> > class_weights_;
 };
 
