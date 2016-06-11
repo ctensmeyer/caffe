@@ -155,6 +155,19 @@ ImageTransformer<Dtype>* CreateImageTransformer(ImageTransformationParameter par
 	  prob_transformers->push_back(transformer);
 	  weights.push_back(weight);
 	}
+	// ColorJitter
+	for (int j = 0; j < prob_param.color_jitter_params_size(); j++) {
+	  ColorJitterTransformParameter color_jitter_param = prob_param.color_jitter_params(j); 
+	  if (j < prob_param.color_jitter_prob_weights_size()) {
+	    weight = prob_param.color_jitter_prob_weights(j);
+	  } else {
+	    weight = 1;
+	  }
+	  ImageTransformer<Dtype>* transformer = new ColorJitterImageTransformer<Dtype>(color_jitter_param);
+	  transformer->InitRand(rng_seed);
+	  prob_transformers->push_back(transformer);
+	  weights.push_back(weight);
+	}
 
     ImageTransformer<Dtype>* prob_transformer = new ProbImageTransformer<Dtype>(prob_transformers, weights);
 	prob_transformer->InitRand(rng_seed);

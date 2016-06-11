@@ -526,6 +526,7 @@ message ProbImageTransformParameter {
   repeated GaussBlurTransformParameter gauss_blur_params = 8;
   repeated UnsharpMaskTransformParameter unsharp_mask_params = 9;
   repeated PerspectiveTransformParameter perspective_params = 10;
+  repeated ColorJitterTransformParameter color_jitter_params = 21;
 
   // the number of values for each of these fields should match the number
   // of values for the corresponding fields 1-5.  If left unspecificed,
@@ -540,6 +541,7 @@ message ProbImageTransformParameter {
   repeated float gauss_blur_prob_weights = 18;
   repeated float unsharp_mask_prob_weights = 19;
   repeated float perspective_prob_weights = 20;
+  repeated float color_jitter_prob_weights = 31;
 }
 
 message ResizeTransformParameter {
@@ -647,6 +649,10 @@ message UnsharpMaskTransformParameter {
 
 message PerspectiveTransformParameter {
   optional float max_sigma = 1 [default = 1];
+}
+
+message ColorJitterTransformParameter {
+  optional float sigma = 1 [default = 5];
 }
 
 // Message that stores parameters shared by loss layers

@@ -230,6 +230,19 @@ class PerspectiveImageTransformer : public ImageTransformer<Dtype> {
   PerspectiveTransformParameter param_;
 };
 
+template <typename Dtype>
+class ColorJitterImageTransformer : public ImageTransformer<Dtype> {
+ public:
+  explicit ColorJitterImageTransformer(ColorJitterTransformParameter param) :
+    param_(param) { };
+  virtual ~ColorJitterImageTransformer() {};
+
+  virtual void Transform(const cv::Mat& in, cv::Mat& out);
+
+ protected:
+  ColorJitterTransformParameter param_;
+};
+
 }  // namespace caffe
 
 #endif  // CAFFE_IMAGE_TRANSFORMER_HPP_
