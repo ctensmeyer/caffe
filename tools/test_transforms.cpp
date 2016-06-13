@@ -60,6 +60,8 @@ int main(int argc, char** argv) {
 	  transformer->Transform(pretransform_img, posttransform_img);
 	  cv::imwrite(out_file.c_str(), posttransform_img);
 	}
+	string out_file = out_dir + "/" + std::to_string(i) + ".png";
+	cv::imwrite(out_file.c_str(), pretransform_img);
 	cursor->Next();
   }
 

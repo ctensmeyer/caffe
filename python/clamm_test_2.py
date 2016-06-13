@@ -1,6 +1,8 @@
 
 import os
 import sys
+import matplotlib
+matplotlib.use('Agg')
 import caffe
 import cv2
 import math
@@ -9,6 +11,7 @@ import random
 import argparse
 import numpy as np
 import caffe.proto.caffe_pb2
+import matplotlib.pyplot as plt
 
 np.set_printoptions(precision=2, linewidth=170, suppress=True)
 
@@ -345,12 +348,14 @@ def prepare_images(test_dbs, transforms, args):
 	original_slice_transforms = list()
 	labels = list()
 	keys = list()
+	full_ims = list()
 
 	# apply the transformations to every slice of the image independently
 	for slice_idx, entry in enumerate(test_dbs):
 		env, txn, cursor = entry
 
 		im_slice, label_slice = get_image(cursor.value(), slice_idx, args)
+		full_ims.append(im_slice)
 		transformed_slices, weights = apply_all_transforms(im_slice, transforms)
 		original_slice_transforms.append(map(lambda im: np.copy(im), transformed_slices))
 
@@ -386,7 +391,7 @@ def prepare_images(test_dbs, transforms, args):
 		whole_im = np.concatenate(im_slices, axis=2) # append along channels
 		ims.append(whole_im)
 
-	return ims, original_slice_transforms, label
+	return ims, original_slice_transforms, label, full_ims
 
 
 def main(args):
@@ -417,9 +422,9 @@ def main(args):
 			print "Processed %d images" % num_total
 		num_total += 1
 
-		ims, originals, label = prepare_images(test_dbs, transforms, args)
-		weights = get_weights(ims, vote_net, args)
-		#weights = np.asarray([1] * len(ims))
+		ims, originals, label, full_ims = prepare_images(test_dbs, transforms, args)
+		#weights = get_weights(ims, vote_net, args)
+		weights = np.asarray([1] * len(ims))
 		
 		predicted_label, all_predictions, mean_outputs, all_outputs = predict(ims, predict_net, args, weights)
 
@@ -444,10 +449,18 @@ def main(args):
 
 		if args.out_dir:
 			sub_dir = os.path.join(args.out_dir, "%d_%d_%d_%s_%.3f" % (num_total, label, predicted_label, verdict, margin))
+			wrong_dir = os.path.join(args.out_dir, "wrong") 
 			try:
 				os.makedirs(sub_dir)
+				os.makedirs(wrong_dir)
 			except:
 				pass
+
+			if label != predicted_label:
+				im_fname = os.path.join(wrong_dir, "wrong_%d_%d_%d_%.3f.png" % (num_total, label, predicted_label, margin))
+				cv2.imwrite(im_fname, np.squeeze(full_ims[0]))
+			im_fname = os.path.join(sub_dir, "original_%d.png" % num_total)
+			cv2.imwrite(im_fname, np.squeeze(full_ims[0]))
 			for idx in xrange(len(originals[0])):
 				original_crop = originals[0][idx]
 				crop_prediction = int(all_predictions[idx])
@@ -487,8 +500,28 @@ def main(args):
 	log(args, "\nTransform Accuracy:\n %r" % transform_accs)
 	log(args, "\nOverall Accuracy: %f" % overall_acc)
 
+	if args.out_dir:
+		target_names = [ 'Caroline', 'Cursiva', 'Humanistic', 'Humanistic_Cursive', 'Hybrida', 'Uncial', 
+						'Praegothica', 'Southern_Textualis', 'Half_uncial', 'Semihybrida', 'Semitextualis', 
+						'Textualis']
+		outfile = os.path.join(args.out_dir, "conf_mat.png")
+		conf_mat = np.delete(np.delete(conf_mat, 0, axis=0), 0, axis=1)
+		cm_normalized = conf_mat.astype('float') / conf_mat.sum(axis=1)[:, np.newaxis]
+		plot_confusion_matrix(cm_normalized, target_names, outfile)
+
 	close_dbs(test_dbs)
 		
+def plot_confusion_matrix(cm, target_names, outfile, title='Confusion matrix', cmap=plt.cm.Blues):
+	plt.imshow(cm, interpolation='nearest', cmap=cmap)
+	plt.title(title)
+	plt.colorbar()
+	tick_marks = np.arange(len(target_names))
+	plt.xticks(tick_marks, target_names, rotation=90)
+	plt.yticks(tick_marks, target_names)
+	plt.tight_layout()
+	plt.ylabel('True label')
+	plt.xlabel('Predicted label')
+	plt.savefig(outfile)
 
 def check_args(args):
 	num_test_lmdbs = 0 if args.test_lmdbs == "" else len(args.test_lmdbs.split(args.delimiter))
@@ -521,23 +554,23 @@ def get_args():
 	parser.add_argument("test_lmdbs", 
 				help="LMDBs of test images (encoded DocDatums), files separated with ;")
 
-	parser.add_argument("-m", "--means", type=str, default="",
+	parser.add_argument("-m", "--means", type=str, default="127",
 				help="Optional mean values per the channel (e.g. 127 for grayscale or 182,192,112 for BGR)")
-	parser.add_argument("--gpu", type=int, default=-1,
+	parser.add_argument("--gpu", type=int, default=0,
 				help="GPU to use for running the network")
-	parser.add_argument('-c', '--channels', default="0", type=str,
+	parser.add_argument('-c', '--channels', default="1", type=str,
 				help='Number of channels to take from each slice')
-	parser.add_argument("-a", "--scales", type=str, default=str(1.0 / 255),
+	parser.add_argument("-a", "--scales", type=str, default="0.0039",
 				help="Optional scale factor")
 	parser.add_argument("-t", "--transform_file", type=str, default="",
 				help="File containing transformations to do")
-	parser.add_argument("-f", "--log-file", type=str, default="",
+	parser.add_argument("-f", "--log-file", type=str, default="log.txt",
 				help="Log File")
 	parser.add_argument("--print-count", default=10, type=int, 
 				help="Print every print-count images processed")
 	parser.add_argument("-d", "--delimiter", default=':', type=str, 
 				help="Delimiter used for indicating multiple image slice parameters")
-	parser.add_argument("-b", "--batch-size", default=64, type=int, 
+	parser.add_argument("-b", "--batch-size", default=4, type=int, 
 				help="Max number of transforms in single batch per original image")
 	parser.add_argument("-o", "--out-dir", default='', type=str, 
 				help="Out dir where to store analysis")

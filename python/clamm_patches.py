@@ -417,7 +417,6 @@ def main(args):
 		transforms = get_transforms(args)
 		if num_total % args.print_count == 0:
 			print "Processed %d patches" % num_total
-		num_total += len(transforms)
 
 		preprocessed_ims, ims, label = prepare_images(test_dbs, transforms, args)
 		prob_of_label = get_vote_for_label(preprocessed_ims, caffenet, label, args)
@@ -433,6 +432,7 @@ def main(args):
 			has_next = cursor.next() 
 			if not has_next:
 				cursor.first()
+		num_total += len(ims)
 
 	log(args, "Done")
 

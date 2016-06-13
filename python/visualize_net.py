@@ -63,7 +63,8 @@ def init_caffe(args):
 		transformer.set_mean(args.input, np.load(args.mean_file).mean(1).mean(1))
 	else:
 		transformer.set_mean(args.input, np.asarray([-1 * args.shift] * (1 if args.gray else 3)))
-	transformer.set_raw_scale(args.input, args.scale)
+	transformer.set_input_scale(args.input, args.scale)
+	print "scale: ", args.scale
 
 	if not args.gray:
 		transformer.set_channel_swap(args.input, (2,1,0))
@@ -202,6 +203,7 @@ def save_activations(net, args):
 
 		net.blobs[args.input].reshape(1, 1 if args.gray else 3, im.size[1], im.size[0])
 		tmp = net.transformer.preprocess(args.input, arr)
+		print tmp
 		net.blobs[args.input].data[...] = tmp
 		net.forward()
 		for name, data in net.blobs.items():
