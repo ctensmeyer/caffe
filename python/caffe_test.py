@@ -182,6 +182,8 @@ def apply_transform(im, transform_str):
 		return apply_shear(im, tokens)
 	elif tokens[0] == 'perspective':
 		return apply_perspective(im, tokens)
+	elif tokens[0] == 'color_jitter':
+		return apply_color_jitter(im, tokens)
 	elif tokens[0] == 'none':
 		return im
 	else:
