@@ -162,7 +162,7 @@ def apply_transform(im, transform_str):
 		return apply_rotation(im, tokens)
 	elif tokens[0] == 'blur':
 		return apply_blur(im, tokens)
-	elif tokens[0] == 'unsharpmask':
+	elif tokens[0] == 'unsharpmask' or tokens[0] == 'unsharp':
 		return apply_unsharpmask(im, tokens)
 	elif tokens[0] == 'shear':
 		return apply_shear(im, tokens)
@@ -194,7 +194,7 @@ def apply_all_transforms(im, transform_strs):
 def get_transforms(args):
 	transforms = list()
 	if args.transform_file:
-		transforms = map(lambda s: s.rstrip(), open(args.transform_file, 'r').readlines())
+		transforms = map(lambda s: s.rstrip().lower(), open(args.transform_file, 'r').readlines())
 	if not transforms:
 		transforms.append("none")
 	transforms = filter(lambda s: not s.startswith("#"), transforms)
@@ -271,7 +271,7 @@ def set_transform_weights(args):
 
 def get_vote_for_label(ims, caffenet, label, args):
 	# batch up all transforms at once
-	all_outputs = fprop(caffenet, ims, args)
+	all_outputs = fprop(caffenet, ims, args.batch_size)
 
 	if args.hard_weights:
 		# use 1/0 right or not
