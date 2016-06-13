@@ -68,7 +68,7 @@ def apply_rand_crop(im, tokens):
 
 # "resize height width"
 def apply_resize(im, tokens):
-	size = int(tokens[1]), int(tokens[2])
+	size = int(tokens[2]), int(tokens[1])
 	return cv2.resize(im, size)
 
 # "mirror {h,v,hv}"
@@ -83,13 +83,23 @@ def apply_mirror(im, tokens):
 		print "Unrecongized mirror operation %r" % tokens
 		exit(1)
 
+def apply_color_jitter(im, tokens):
+	sigma, seed = float(tokens[1]), int(tokens[2])
+	np.random.seed(seed)
+	if im.shape == 2:
+		im = im + np.random.normal(0, sigma)
+	else:
+		for c in xrange(im.shape[2]):
+			im[:,:,c] = im[:,:,c] + np.random.normal(0, sigma)
+	return im
+
 # "guassnoise sigma seed"
 def apply_gaussnoise(im, tokens):
 	sigma, seed = float(tokens[1]), int(tokens[2])
 	np.random.seed(seed)
 	noise = np.random.normal(0, sigma, im.shape[:2])
 	if len(im.shape) == 2:
-		im = (im + noise),
+		im = (im + noise)
 	else:
 		im = im + noise[:,:,np.newaxis]
 	im = np.clip(im, 0, 255)
@@ -142,7 +152,6 @@ def apply_perspective(im, tokens):
 					   ], dtype=np.float32)
 	M = cv2.getPerspectiveTransform(pts1,pts2)
 	return cv2.warpPerspective(im, M, im.shape[:2])
-
 
 def apply_transform(im, transform_str):
 	tokens = transform_str.split()

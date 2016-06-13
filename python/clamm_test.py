@@ -80,7 +80,7 @@ def apply_rand_crop(im, tokens):
 
 # "resize height width"
 def apply_resize(im, tokens):
-	size = int(tokens[1]), int(tokens[2])
+	size = int(tokens[2]), int(tokens[1])
 	return cv2.resize(im, size)
 
 # "resize2 scale_factor"
@@ -88,7 +88,7 @@ def apply_resize2(im, tokens):
 	scale_factor = float(tokens[1])
 	new_height = int(scale_factor * im.shape[0])
 	new_width = int(scale_factor * im.shape[1])
-	return cv2.resize(im, (new_height, new_width))
+	return cv2.resize(im, (new_width, new_height))
 
 # "mirror {h,v,hv}"
 def apply_mirror(im, tokens):
