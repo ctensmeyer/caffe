@@ -86,11 +86,16 @@ def apply_mirror(im, tokens):
 def apply_color_jitter(im, tokens):
 	sigma, seed = float(tokens[1]), int(tokens[2])
 	np.random.seed(seed)
+	im = im.astype(int)  # protect against over-flow wrapping
 	if im.shape == 2:
-		im = im + np.random.normal(0, sigma)
+		im = im + int(np.random.normal(0, sigma))
 	else:
 		for c in xrange(im.shape[2]):
-			im[:,:,c] = im[:,:,c] + np.random.normal(0, sigma)
+			im[:,:,c] = im[:,:,c] + int(np.random.normal(0, sigma))
+	
+	# truncate back to image range
+	im = np.clip(im, 0, 255)
+	im = im.astype(np.uint8) 
 	return im
 
 # "guassnoise sigma seed"
