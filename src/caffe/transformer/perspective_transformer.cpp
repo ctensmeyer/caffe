@@ -17,7 +17,8 @@ namespace caffe {
 
 template <typename Dtype>
 void PerspectiveImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
-  Dtype sigma = this->RandFloat(0, param_.max_sigma()); 
+  Dtype sigma;
+  this->RandFloat(1, 0, param_.max_sigma(), &sigma); 
   // out uses the same number of channels as in, but uses floats
   out.create(in.size(), CV_32F | (0x18 & in.type()));
 

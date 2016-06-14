@@ -15,7 +15,8 @@ namespace caffe {
 
 template <typename Dtype>
 void RotateImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
-  float angle = this->RandFloat(-param_.max_angle(), param_.max_angle()); 
+  Dtype angle;
+  this->RandFloat(1, -param_.max_angle(), param_.max_angle(), &angle); 
   // out uses the same number of channels as in, but uses floats
   out.create(in.size(), CV_32F | (0x18 & in.type()));
 
@@ -23,7 +24,7 @@ void RotateImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
   const int in_width = in.cols;
   cv::Point2f pt(in_height / 2., in_width / 2.);
 
-  cv::Mat rotate = cv::getRotationMatrix2D(pt, angle, 1.0);
+  cv::Mat rotate = cv::getRotationMatrix2D(pt, (float)angle, 1.0);
   cv::warpAffine(in, out, rotate, in.size());
 }
 

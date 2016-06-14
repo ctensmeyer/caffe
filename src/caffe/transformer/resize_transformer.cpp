@@ -101,12 +101,16 @@ void ResizeImageTransformer<Dtype>::SamplePercIndependent(int in_width, int in_h
   if (param_.width_perc_size() == 1) {
     cur_width_ = (int) (param_.width_perc(0) * in_width);
   } else {
-    cur_width_ = (int) (this->RandFloat(param_.width_perc(0), param_.width_perc(1)) * in_width);
+    Dtype rand;
+    this->RandFloat(1, param_.width_perc(0), param_.width_perc(1), &rand);
+    cur_width_ = (int) (rand * in_width);
   }
   if (param_.height_perc_size() == 1) {
     cur_height_ = (int) (param_.height_perc(0) * in_height);
   } else {
-    cur_height_ = (int) (this->RandFloat(param_.height_perc(0), param_.height_perc(1)) * in_height);
+    Dtype rand;
+    this->RandFloat(1, param_.height_perc(0), param_.height_perc(1), &rand);
+    cur_height_ = (int) (rand * in_height);
   }
 }
 
@@ -116,9 +120,10 @@ void ResizeImageTransformer<Dtype>::SamplePercTied(int in_width, int in_height) 
     cur_width_ = (int) (param_.size_perc(0) * in_width);
     cur_height_ = (int) (param_.size_perc(0) * in_height);
   } else {
-    float perc = this->RandFloat(param_.size_perc(0), param_.size_perc(1));
-    cur_width_ = (int) (perc *  in_width);
-    cur_height_ = (int) (perc * in_height);
+    Dtype rand;
+    this->RandFloat(1, param_.size_perc(0), param_.size_perc(1), &rand);
+    cur_width_ = (int) (rand *  in_width);
+    cur_height_ = (int) (rand * in_height);
   }
 }
 

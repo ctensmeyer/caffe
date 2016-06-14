@@ -17,8 +17,9 @@ namespace caffe {
 
 template <typename Dtype>
 void ShearImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
-  float shear_angle = this->RandFloat(-param_.max_shear_angle(), param_.max_shear_angle()); 
-  float shear_factor = tan(shear_angle * 3.14159265 / 180.0);
+  Dtype shear_angle;
+  this->RandFloat(1, -param_.max_shear_angle(), param_.max_shear_angle(), &shear_angle); 
+  float shear_factor = (float) tan(shear_angle * 3.14159265 / 180.0);
   // out uses the same number of channels as in, but uses floats
   out.create(in.size(), CV_32F | (0x18 & in.type()));
 

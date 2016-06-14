@@ -168,6 +168,19 @@ ImageTransformer<Dtype>* CreateImageTransformer(ImageTransformationParameter par
 	  prob_transformers->push_back(transformer);
 	  weights.push_back(weight);
 	}
+	// ElasticDeformation
+	for (int j = 0; j < prob_param.elastic_deformation_params_size(); j++) {
+	  ElasticDeformationTransformParameter elastic_deformation_param = prob_param.elastic_deformation_params(j); 
+	  if (j < prob_param.elastic_deformation_prob_weights_size()) {
+	    weight = prob_param.elastic_deformation_prob_weights(j);
+	  } else {
+	    weight = 1;
+	  }
+	  ImageTransformer<Dtype>* transformer = new ElasticDeformationImageTransformer<Dtype>(elastic_deformation_param);
+	  transformer->InitRand(rng_seed);
+	  prob_transformers->push_back(transformer);
+	  weights.push_back(weight);
+	}
 
     ImageTransformer<Dtype>* prob_transformer = new ProbImageTransformer<Dtype>(prob_transformers, weights);
 	prob_transformer->InitRand(rng_seed);
@@ -198,7 +211,7 @@ int ImageTransformer<Dtype>::RandInt(int n) {
 }
 
 template <typename Dtype>
-float ImageTransformer<Dtype>::RandFloat(float min, float max) {
+void ImageTransformer<Dtype>::RandFloat(const int n, const float min, const float max, float* out) {
   CHECK(rng_);
   CHECK_GE(max, min);
   caffe::rng_t* rng =
@@ -206,7 +219,23 @@ float ImageTransformer<Dtype>::RandFloat(float min, float max) {
   boost::uniform_real<float> random_distribution(min, caffe_nextafter<float>(max));
   boost::variate_generator<caffe::rng_t*, boost::uniform_real<float> >
       variate_generator(rng, random_distribution);
-  return variate_generator();
+  for (int i = 0; i < n; i++) {
+    out[i] = variate_generator();
+  }
+}
+
+template <typename Dtype>
+void ImageTransformer<Dtype>::RandFloat(const int n, const double min, const double max, double* out) {
+  CHECK(rng_);
+  CHECK_GE(max, min);
+  caffe::rng_t* rng =
+      static_cast<caffe::rng_t*>(rng_->generator());
+  boost::uniform_real<double> random_distribution(min, caffe_nextafter<double>(max));
+  boost::variate_generator<caffe::rng_t*, boost::uniform_real<double> >
+      variate_generator(rng, random_distribution);
+  for (int i = 0; i < n; i++) {
+    out[i] = variate_generator();
+  }
 }
 
 template <typename Dtype>
@@ -346,8 +375,9 @@ void ProbImageTransformer<Dtype>::SampleTransformParams(const vector<int>& in_sh
 
 template <typename Dtype>
 void ProbImageTransformer<Dtype>::SampleIdx() {
-  float rand = this->RandFloat(0,1);
-  float cum_prob = 0;
+  Dtype rand; 
+  this->RandFloat(1, 0, 1, &rand);
+  Dtype cum_prob = 0;
   int i;
   for (i = 0; i < probs_.size(); i++) {
     cum_prob += probs_[i];

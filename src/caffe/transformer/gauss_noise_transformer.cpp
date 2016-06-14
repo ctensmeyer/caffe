@@ -65,17 +65,16 @@ template <typename Dtype>
 void GaussNoiseImageTransformer<Dtype>::SampleTransformParams(const vector<int>& in_shape) {
   ImageTransformer<Dtype>::SampleTransformParams(in_shape);
 
-
   CHECK_GT(param_.std_dev_size(), 0) << "Must specify std_dev";
   CHECK_LE(param_.std_dev_size(), 2) << "Cannot specify more than 2 values for std_dev";
   
   if (param_.std_dev_size() == 1) {
     cur_std_dev_ = param_.std_dev(0);
   } else {
-    float min_std, max_std;
+    Dtype min_std, max_std;
     min_std = param_.std_dev(0);
     max_std = param_.std_dev(1);
-	cur_std_dev_ = this->RandFloat(min_std, max_std);
+	this->RandFloat(1, min_std, max_std, &cur_std_dev_);
   }
 
   PrintParams();

@@ -527,6 +527,7 @@ message ProbImageTransformParameter {
   repeated UnsharpMaskTransformParameter unsharp_mask_params = 9;
   repeated PerspectiveTransformParameter perspective_params = 10;
   repeated ColorJitterTransformParameter color_jitter_params = 21;
+  repeated ElasticDeformationTransformParameter elastic_deformation_params = 22;
 
   // the number of values for each of these fields should match the number
   // of values for the corresponding fields 1-5.  If left unspecificed,
@@ -542,6 +543,7 @@ message ProbImageTransformParameter {
   repeated float unsharp_mask_prob_weights = 19;
   repeated float perspective_prob_weights = 20;
   repeated float color_jitter_prob_weights = 31;
+  repeated float elastic_deformation_prob_weights = 32;
 }
 
 message ResizeTransformParameter {
@@ -653,6 +655,11 @@ message PerspectiveTransformParameter {
 
 message ColorJitterTransformParameter {
   optional float sigma = 1 [default = 5];
+}
+
+message ElasticDeformationTransformParameter {
+  optional float sigma = 1 [default = 3];
+  optional float max_alpha = 2 [default = 10];
 }
 
 // Message that stores parameters shared by loss layers

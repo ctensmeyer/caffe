@@ -16,8 +16,15 @@ namespace caffe {
 
 template <typename Dtype>
 void ReflectImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
-  bool reflect_h = this->RandFloat(0, 1) <= param_.horz_reflect_prob();
-  bool reflect_v = this->RandFloat(0, 1) <= param_.vert_reflect_prob();
+  bool reflect_h, reflect_v;
+  Dtype rand;
+
+  this->RandFloat(1, 0, 1, &rand);
+  reflect_h = (rand <= param_.horz_reflect_prob());
+
+  this->RandFloat(1, 0, 1, &rand);
+  reflect_v = (rand <= param_.vert_reflect_prob());
+
   if (reflect_h || reflect_v) {
     int flip_code;
 	if (reflect_h && reflect_v) {

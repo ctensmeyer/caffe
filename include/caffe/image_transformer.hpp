@@ -20,7 +20,8 @@ class ImageTransformer {
   void InitRand();
   void InitRand(unsigned int seed);
   int RandInt(int n);
-  float RandFloat(float min, float max);
+  void RandFloat(const int n, const float min, const float max, float* out);
+  void RandFloat(const int n, const double min, const double max, double* out);
   void RandGauss(const int n, const Dtype mean, const Dtype std_dev, Dtype* out);
 
   void CVMatToArray(const cv::Mat& cv_img, Dtype* out);
@@ -153,7 +154,7 @@ class GaussNoiseImageTransformer : public ImageTransformer<Dtype> {
  public:
   explicit GaussNoiseImageTransformer(GaussNoiseTransformParameter param) :
     param_(param) { rand_mask_ = new Blob<Dtype>();};
-  virtual ~GaussNoiseImageTransformer() {};
+  virtual ~GaussNoiseImageTransformer() { delete rand_mask_;};
 
   virtual void Transform(const cv::Mat& in, cv::Mat& out);
   virtual void SampleTransformParams(const vector<int>& in_shape);
@@ -161,7 +162,7 @@ class GaussNoiseImageTransformer : public ImageTransformer<Dtype> {
 
  protected:
   GaussNoiseTransformParameter param_;
-  float cur_std_dev_;
+  Dtype cur_std_dev_;
   Blob<Dtype>* rand_mask_;
 };
 
@@ -241,6 +242,21 @@ class ColorJitterImageTransformer : public ImageTransformer<Dtype> {
 
  protected:
   ColorJitterTransformParameter param_;
+};
+
+template <typename Dtype>
+class ElasticDeformationImageTransformer : public ImageTransformer<Dtype> {
+ public:
+  explicit ElasticDeformationImageTransformer(ElasticDeformationTransformParameter param) :
+    param_(param) { dis_x_ = new Blob<float>(); dis_y_ = new Blob<float>();};
+  virtual ~ElasticDeformationImageTransformer() {};
+
+  virtual void Transform(const cv::Mat& in, cv::Mat& out);
+
+ protected:
+  ElasticDeformationTransformParameter param_;
+  Blob<float>* dis_x_;
+  Blob<float>* dis_y_;
 };
 
 }  // namespace caffe
