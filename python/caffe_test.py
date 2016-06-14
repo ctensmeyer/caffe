@@ -9,6 +9,7 @@ import random
 import argparse
 import numpy as np
 import caffe.proto.caffe_pb2
+import scipy.ndimage
 
 def init_caffe(args):
 	if args.gpu >= 0:
@@ -19,6 +20,38 @@ def init_caffe(args):
 
 	caffenet = caffe.Net(args.caffe_model, args.caffe_weights, caffe.TEST)
 	return caffenet
+
+def apply_elastic_deformation(im, tokens):
+	sigma, alpha, seed = float(tokens[1]), float(tokens[2]), int(tokens[3])
+	np.random.seed(seed)
+
+	displacement_x = np.random.uniform(-1 * alpha, alpha, im.shape[:2])
+	displacement_y = np.random.uniform(-1 * alpha, alpha, im.shape[:2])
+
+	displacement_x = scipy.ndimage.gaussian_filter(displacement_x, sigma, truncate=2)
+	displacement_y = scipy.ndimage.gaussian_filter(displacement_y, sigma, truncate=2)
+
+	coords_y = np.asarray( [ [y] * im.shape[1] for y in xrange(im.shape[0]) ])
+	coords_y = np.clip(coords_y + displacement_y, 0, im.shape[0])
+
+	coords_x = np.transpose(np.asarray( [ [x] * im.shape[0] for x in xrange(im.shape[1]) ] ))
+	coords_x = np.clip(coords_x + displacement_x, 0, im.shape[1])
+
+	# the backwards mapping function, which assures that all coords are in
+	# the range of the input
+	if im.ndim == 3:
+		def mapping_func(coords):
+			return (coords_y[coords[:2]], coords_x[coords[:2]], coords[2])
+	else:
+		def mapping_func(coords):
+			return (coords_y[coords], coords_x[coords])
+
+	## first order spline interpoloation (bilinear?) using the backwards mapping
+	output = scipy.ndimage.geometric_transform(im, mapping=mapping_func, order=1, mode='reflect')
+
+	return output
+
+
 
 # "crop y x height width"
 def apply_crop(im, tokens):
@@ -184,6 +217,8 @@ def apply_transform(im, transform_str):
 		return apply_perspective(im, tokens)
 	elif tokens[0] == 'color_jitter':
 		return apply_color_jitter(im, tokens)
+	elif tokens[0] == 'elastic':
+		return apply_elastic_deformation(im, tokens)
 	elif tokens[0] == 'none':
 		return im
 	else:
