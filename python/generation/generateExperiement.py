@@ -104,20 +104,31 @@ EXPERIMENTS = {"standard": {"h_mirror" : (COMBO(ds), dict(hmirror=0.5, **default
 								"color_jitter_10": (COMBO(ds), dict(color_std=10, **default)),
 								"color_jitter_15": (COMBO(ds), dict(color_std=15, **default)),
 								"color_jitter_20": (COMBO(ds), dict(color_std=20, **default)),
-								}
-
+								},
+				"elastic": { "elastic_2_5": (COMBO(ds), dict(elastic_sigma=2, elastic_max_alpha=5, **default)),
+							 "elastic_2_10": (COMBO(ds), dict(elastic_sigma=2, elastic_max_alpha=10, **default)),
+							 "elastic_3_5": (COMBO(ds), dict(elastic_sigma=3, elastic_max_alpha=5, **default)),
+							 "elastic_3_10": (COMBO(ds), dict(elastic_sigma=3, elastic_max_alpha=10, **default)),
+						   },
+				"combined": { "crop_mirror_shear": (COMBO(ds, 256), dict(crop=True, hmirror=0.0, vmirror=0.5, shear=10, num_experiments=2, **default)),
+							  "crop_mirror": (COMBO(ds, 256), dict(crop=True, hmirror=0.0, vmirror=0.5, num_experiments=2, **default)),
+				              "mirror_shear": (COMBO(ds), dict(hmirror=0.0, vmirror=0.5, shear=10, num_experiments=2, **default)),
+				              "crop_shear": (COMBO(ds, 256), dict(crop=True, shear=10, num_experiments=2, **default)),
+						   },
                 }
 
 def augmentationExperiments():
-    group = "augmentation_2"
-    ds = DS[0]
+    group = "augmentation_combined"
+    ds = DS[1]
     
     #experiments = EXPERIMENTS['standard']
-    experiments = EXPERIMENTS['standard'].copy()
+    #experiments = EXPERIMENTS['standard'].copy()
     #experiments.update(EXPERIMENTS["rotate_shear"])
     #experiments.update(EXPERIMENTS["blur_sharp"])
     #experiments.update(EXPERIMENTS["perspective"])
-    experiments.update(EXPERIMENTS["color_jitter"])
+    #experiments.update(EXPERIMENTS["color_jitter"])
+    #experiments = EXPERIMENTS["elastic"]
+    experiments = EXPERIMENTS["combined"]
 
     for name, (tags, tr) in experiments.items():
         print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
