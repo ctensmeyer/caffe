@@ -41,14 +41,14 @@ def apply_elastic_deformation(im, tokens):
 	# the range of the input
 	if im.ndim == 3:
 		coords_y = coords_y[:,:,np.newaxis]
-		coords_y = np.concatenate(3 * [coords_y], axis=2)[np.newaxis,:,:,:]
+		coords_y = np.concatenate(im.shape[2] * [coords_y], axis=2)[np.newaxis,:,:,:]
 
 		coords_x = coords_x[:,:,np.newaxis]
-		coords_x = np.concatenate(3 * [coords_x], axis=2)[np.newaxis,:,:,:]
+		coords_x = np.concatenate(im.shape[2] * [coords_x], axis=2)[np.newaxis,:,:,:]
 
 		coords_d = np.zeros_like(coords_x)
-		coords_d[:,:,:,1] = 1
-		coords_d[:,:,:,2] = 2
+		for x in xrange(im.shape[2]):
+			coords_d[:,:,:,x] = x
 		coords = np.concatenate( (coords_y, coords_x, coords_d), axis=0)
 	else:
 		coords = np.concatenate( (coords_y[np.newaxis,:,:], coords_x[np.newaxis,:,:]), axis=0)
@@ -302,30 +302,33 @@ def set_transform_weights(args):
 		# number of transforms varies by image, so no fixed set of weights
 		return None
 
-	caffenet = init_caffe(args)
-	tune_dbs = open_dbs(args.tune_lmdbs.split(args.delimiter))
+	try:
+		caffenet = init_caffe(args)
+		tune_dbs = open_dbs(args.tune_lmdbs.split(args.delimiter))
 
-	weights = np.zeros(shape=(len(transforms),))
-	num_total = 0
-	done = False
-	while not done:
-		if num_total % args.print_count == 0:
-			print "Tuned %d images" % num_total
-		num_total += 1
+		weights = np.zeros(shape=(len(transforms),))
+		num_total = 0
+		done = False
+		while not done:
+			if num_total % args.print_count == 0:
+				print "Tuned %d images" % num_total
+			num_total += 1
 
-		# get the per-transform vote for the correct label
-		ims, label = prepare_images(tune_dbs, transforms, args)
-		votes = get_vote_for_label(ims, caffenet, label, args)
-		weights += votes
+			# get the per-transform vote for the correct label
+			ims, label = prepare_images(tune_dbs, transforms, args)
+			votes = get_vote_for_label(ims, caffenet, label, args)
+			weights += votes
 
-		# check stopping criteria
-		done = (num_total == args.max_images)
-		for env, txn, cursor in tune_dbs:
-			has_next = cursor.next() 
-			done |= (not has_next) # set done if there are no more elements
+			# check stopping criteria
+			done = (num_total == args.max_images)
+			for env, txn, cursor in tune_dbs:
+				has_next = cursor.next() 
+				done |= (not has_next) # set done if there are no more elements
 
-	normalized = (weights / num_total)[:,np.newaxis]
-	return normalized
+		normalized = (weights / num_total)[:,np.newaxis]
+		return normalized
+	finally:
+		close_dbs(tune_dbs)
 
 def get_vote_for_label(ims, caffenet, label, args):
 	# batch up all transforms at once
@@ -450,66 +453,68 @@ def prepare_images(test_dbs, transforms, args):
 
 
 def main(args):
-	log(args, str(sys.argv))
+	try:
+		log(args, str(sys.argv))
 
-	# load transforms from file
-	log(args, "Loading transforms")
-	transforms, fixed_transforms = get_transforms(args)
-	log(args, "Fixed Transforms: %s" % str(fixed_transforms))
+		# load transforms from file
+		log(args, "Loading transforms")
+		transforms, fixed_transforms = get_transforms(args)
+		log(args, "Fixed Transforms: %s" % str(fixed_transforms))
 
-	# get per-transform weights.  Can be none if transforms produce variable numbers of images, or
-	# no lmdb is provided to tune the weights
-	log(args, "Setting the transform weights...")
-	weights = set_transform_weights(args) 
-	weight_str = np.array_str(weights, max_line_width=80, precision=4) if weights is not None else str(weights)
-	log(args, "Weights: %s" % weight_str)
+		# get per-transform weights.  Can be none if transforms produce variable numbers of images, or
+		# no lmdb is provided to tune the weights
+		log(args, "Setting the transform weights...")
+		weights = set_transform_weights(args) 
+		weight_str = np.array_str(weights, max_line_width=80, precision=4) if weights is not None else str(weights)
+		log(args, "Weights: %s" % weight_str)
 
-	log(args, "Initializing network for testing")
-	caffenet = init_caffe(args)
-	log(args, "Opening test lmdbs")
-	test_dbs = open_dbs(args.test_lmdbs.split(args.delimiter))
+		log(args, "Initializing network for testing")
+		caffenet = init_caffe(args)
+		log(args, "Opening test lmdbs")
+		test_dbs = open_dbs(args.test_lmdbs.split(args.delimiter))
 
-	# set up the class confusion matrix
-	num_output = caffenet.blobs["prob"].data.shape[1]
-	conf_mat = np.zeros(shape=(num_output, num_output), dtype=np.int)
+		# set up the class confusion matrix
+		num_output = caffenet.blobs["prob"].data.shape[1]
+		conf_mat = np.zeros(shape=(num_output, num_output), dtype=np.int)
 
-	num_total = 0
-	num_correct = 0
-	all_num_correct = np.zeros(shape=(len(transforms),))
-	done = False
-	while not done:
-		if num_total % args.print_count == 0:
-			print "Processed %d images" % num_total
-		num_total += 1
+		num_total = 0
+		num_correct = 0
+		all_num_correct = np.zeros(shape=(len(transforms),))
+		done = False
+		while not done:
+			if num_total % args.print_count == 0:
+				print "Processed %d images" % num_total
+			num_total += 1
 
-		ims, label = prepare_images(test_dbs, transforms, args)
-		predicted_label, all_predictions = predict(ims, caffenet, args, weights)
+			ims, label = prepare_images(test_dbs, transforms, args)
+			predicted_label, all_predictions = predict(ims, caffenet, args, weights)
 
-		# keep track of correct predictions
-		if predicted_label == label:
-			num_correct += 1
-		conf_mat[label,predicted_label] += 1
+			# keep track of correct predictions
+			if predicted_label == label:
+				num_correct += 1
+			conf_mat[label,predicted_label] += 1
 
-		# compute per-transformation accuracy
-		if all_predictions.shape[0] == all_num_correct.shape[0]:
-			all_num_correct[all_predictions == label] += 1
+			# compute per-transformation accuracy
+			if all_predictions.shape[0] == all_num_correct.shape[0]:
+				all_num_correct[all_predictions == label] += 1
 
-		# check stopping criteria
-		done = (num_total == args.max_images)
-		for env, txn, cursor in test_dbs:
-			has_next = cursor.next() 
-			done |= (not has_next) # set done if there are no more elements
+			# check stopping criteria
+			done = (num_total == args.max_images)
+			for env, txn, cursor in test_dbs:
+				has_next = cursor.next() 
+				done |= (not has_next) # set done if there are no more elements
 
-	overall_acc = float(num_correct) / num_total
-	transform_accs = all_num_correct / num_total
+		overall_acc = float(num_correct) / num_total
+		transform_accs = all_num_correct / num_total
 
-	log(args, "Done")
-	log(args, "Conf Mat:\n %r" % conf_mat)
-	log(args, "\nTransform Accuracy:\n %r" % transform_accs)
-	log(args, "\nOverall Accuracy: %f" % overall_acc)
-
-	close_dbs(test_dbs)
-	args.log.close()
+		log(args, "Done")
+		log(args, "Conf Mat:\n %r" % conf_mat)
+		log(args, "\nTransform Accuracy:\n %r" % transform_accs)
+		log(args, "\nOverall Accuracy: %f" % overall_acc)
+	
+	finally:
+		close_dbs(test_dbs)
+		args.log.close()
 		
 
 def check_args(args):
