@@ -40,14 +40,21 @@ def apply_elastic_deformation(im, tokens):
 	# the backwards mapping function, which assures that all coords are in
 	# the range of the input
 	if im.ndim == 3:
-		def mapping_func(coords):
-			return (coords_y[coords[:2]], coords_x[coords[:2]], coords[2])
+		coords_y = coords_y[:,:,np.newaxis]
+		coords_y = np.concatenate(3 * [coords_y], axis=2)[np.newaxis,:,:,:]
+
+		coords_x = coords_x[:,:,np.newaxis]
+		coords_x = np.concatenate(3 * [coords_x], axis=2)[np.newaxis,:,:,:]
+
+		coords_d = np.zeros_like(coords_x)
+		coords_d[:,:,:,1] = 1
+		coords_d[:,:,:,2] = 2
+		coords = np.concatenate( (coords_y, coords_x, coords_d), axis=0)
 	else:
-		def mapping_func(coords):
-			return (coords_y[coords], coords_x[coords])
+		coords = np.concatenate( (coords_y[np.newaxis,:,:], coords_x[np.newaxis,:,:]), axis=0)
 
 	## first order spline interpoloation (bilinear?) using the backwards mapping
-	output = scipy.ndimage.geometric_transform(im, mapping=mapping_func, order=1, mode='reflect')
+	output = scipy.ndimage.map_coordinates(im, coords, order=1, mode='reflect')
 
 	return output
 
