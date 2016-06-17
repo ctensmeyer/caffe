@@ -26,9 +26,7 @@ DATASET_TAGS={"andoc_1m": ["binary_227", "color_150", "color_256", "color_384", 
 						   "gray_100", "gray_227_invert", "gray_32", "gray_512"]
 			  } 
 
-SPLITS=["1","2","3"]
 SIZES=[512,384,256,150,100,64,32]
-EXPERIMENT_GROUPS = ["augmentation", "resolution", "channel", "padding"]
 
 OUTPUT_SIZES = {"andoc_1m": 974, "rvl_cdip": 16}
 
@@ -185,8 +183,12 @@ def createUnsharpParam(params):
 def createPerspectiveParam(sig):
 	return dict(max_sigma=sig)
 
+def createElasticDeformationParam(elastic_sigma, elastic_max_alpha):
+	return dict(sigma=elastic_sigma, max_alpha=elastic_max_alpha)
 
-def createTransformParam(phase, seed=None, test_transforms = [10,50,100], deploy=False, **kwargs):
+
+#def createTransformParam(phase, seed=None, test_transforms = [10,50,100], deploy=False, **kwargs):
+def createTransformParam(phase, seed=None, test_transforms = [], deploy=False, **kwargs):
 	params = []
 
 	if deploy:
@@ -194,7 +196,8 @@ def createTransformParam(phase, seed=None, test_transforms = [10,50,100], deploy
 		transforms = {}
 		for t in tt:
 			transforms[t] = []
-		transforms[1] = ['none']
+		if not kwargs.get('crop'):
+			transforms[1] = ['none']
 
 	#noise
 	if (phase == caffe.TRAIN or deploy) and 'noise_std' in kwargs:
@@ -229,19 +232,13 @@ def createTransformParam(phase, seed=None, test_transforms = [10,50,100], deploy
 		if 'hmirror' in kwargs or 'vmirror' in kwargs:
 			params.append(dict(reflect_params = createReflectParam(**kwargs)))
 			if deploy:
-				if 'hmirror' in kwargs:
-					h = kwargs['hmirror']
-				else:
-					h = 0
+				h = kwargs.get('hmirror', 0)
+				v = kwargs.get('vmirror', 0)
 
-				if 'vmirror' in kwargs:
-					v = kwargs['vmirror']
-				else:
-					v = 0
-
-				for t in tt:
-					transforms[t].extend(make_transforms.make_mirror_transforms(h,v))
-					break
+				if 'shear' not in kwargs and 'crop' not in kwargs:
+					for t in tt:
+						transforms[t].extend(make_transforms.make_mirror_transforms(h,v))
+						break
 
 
 		#Perspective
@@ -251,6 +248,14 @@ def createTransformParam(phase, seed=None, test_transforms = [10,50,100], deploy
 			if deploy:
 				for t in tt:
 					transforms[t].extend(make_transforms.make_perspective_transforms(kwargs['perspective'], t))
+
+		#Elastic
+		if 'elastic_sigma' in kwargs:
+			params.append(dict(elastic_deformation_params = createElasticDeformationParam(kwargs['elastic_sigma'], kwargs['elastic_max_alpha'])))
+			
+			if deploy:
+				for t in tt:
+					transforms[t].extend(make_transforms.make_elastic_deformation_transforms(kwargs['elastic_sigma'], kwargs['elastic_max_alpha'], t))
 
 		#rotate
 		if 'rotation' in kwargs:
@@ -262,7 +267,7 @@ def createTransformParam(phase, seed=None, test_transforms = [10,50,100], deploy
 		if 'shear' in kwargs:
 			params.append(dict(shear_params = createShearParam(kwargs['shear']))) 
 		
-			if deploy:
+			if deploy and 'hmirror' not in kwargs and 'vmirror' not in kwargs and 'crop' not in kwargs:
 				for t in tt:
 					transforms[t].extend(make_transforms.make_shear_transforms(kwargs['shear'], t))
 
@@ -295,10 +300,35 @@ def createTransformParam(phase, seed=None, test_transforms = [10,50,100], deploy
 	if 'crop' in kwargs and kwargs['crop']:
 		params.append(dict(crop_params = createCropParam(phase)))
  
-		if deploy:
+		if deploy and 'hmirror' not in kwargs and 'vmirror' not in kwargs and 'shear' not in kwargs:
 			for t in tt:
 				im_size = kwargs['im_size']
 				transforms[t].extend(make_transforms.make_crop_transforms(im_size, 227, int(round(np.sqrt(t)))))
+
+	if deploy:
+		h = kwargs.get('hmirror', 0)
+		v = kwargs.get('vmirror', 0)
+		im_size = kwargs.get('im_size', None)
+		angle = kwargs.get('shear', None)
+		repeats = kwargs.get('shear_repeats', 1)
+		if 'crop' in kwargs and 'shear' in kwargs and ('hmirror' in kwargs or 'vmirror' in kwargs):
+			transforms['crop_shear_mirror'] = make_transforms.make_crop_shear_mirror_transforms(im_size, 227, h, v, angle, repeats)
+
+		if 'crop' in kwargs and 'shear' in kwargs:
+			transforms['crop_shear'] = make_transforms.make_crop_shear_transforms(im_size, 227, angle, repeats)
+			transforms['crop'] = make_transforms.make_crop_transforms(im_size, 227, 3)
+			transforms['shear'] = make_transforms.make_shear_transforms(angle, 10) 
+
+		if 'crop' in kwargs and ('hmirror' in kwargs or 'vmirror' in kwargs):
+			transforms['crop_mirror'] = make_transforms.make_crop_mirror_transforms(im_size, 227, h, v)
+			transforms['crop'] = make_transforms.make_crop_transforms(im_size, 227, 3)
+			transforms['mirror'] = make_transforms.make_mirror_transforms(h, v)
+
+		if 'shear' in kwargs and ('hmirror' in kwargs or 'vmirror' in kwargs):
+			transforms['shear_mirror'] = make_transforms.make_shear_mirror_transforms( h, v, angle, repeats)
+			transforms['mirror'] = make_transforms.make_mirror_transforms(h, v)
+			transforms['shear'] = make_transforms.make_shear_transforms(angle, 10) 
+
 
 	p = dict(params=params)
 
@@ -310,7 +340,7 @@ def createTransformParam(phase, seed=None, test_transforms = [10,50,100], deploy
 			if len(trans) == 0:
 				continue
 
-			filename = os.path.join(kwargs["transforms_folder"], "transforms_%d.txt" % (t))
+			filename = os.path.join(kwargs["transforms_folder"], "transforms_%s.txt" % (t))
 			#print trans
 			with open(filename, "w") as f:
 				f.write('\n'.join(trans))

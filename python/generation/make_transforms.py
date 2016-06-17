@@ -67,6 +67,9 @@ def make_perspective_transforms(max_sigma, num_transforms, seed=3141519, include
 		cur += step
 
 	return transforms
+
+def make_elastic_deformation_transforms(sigma, max_alpha, num_transforms, include_whole=True):
+	return make_param_random_transforms("elastic %f" % sigma, 0, max_alpha, num_transforms, include_whole)
 	
 def make_rotation_transforms(max_angle, num_transforms, include_whole=True):
 	return make_single_param_transforms("rotation", -1* max_angle, max_angle, num_transforms, include_whole)
@@ -118,4 +121,50 @@ def make_mirror_transforms(h,v, include_whole=True):
 
 
     return transforms
+
+def cross_mirror(transforms, h, v):
+	new_transforms = list()
+	new_transforms += transforms
+	if h:
+		new_transforms += [line + ";mirror h" for line in transforms]
+	if v:
+		new_transforms += [line + ";mirror v" for line in transforms]
+	if h and v:
+		new_transforms += [line + ";mirror hv" for line in transforms]
+
+	return new_transforms
+
+def cross_shear(transforms, max_angle, num_repeats=1):
+	new_transforms = list()
+	new_transforms += transforms
+
+	for line in transforms:
+		for _ in xrange(num_repeats):
+			angle = random.uniform(-max_angle, max_angle)
+			orien = 'h' if random.random() > 0.5 else 'v'
+			new_line = "shear %.3f %s;" % (angle, orien) + line
+			new_transforms.append(new_line)
+	return new_transforms
+
+
+def make_crop_shear_mirror_transforms(im_size, crop_size, h, v, max_angle, shear_repeats):
+	transforms = make_crop_transforms(im_size, crop_size, 3, include_whole=True)
+	transforms = cross_mirror(transforms, h, v)
+	transforms = cross_shear(transforms, max_angle, shear_repeats)
+	return transforms
+
+def make_crop_shear_transforms(im_size, crop_size, max_angle, shear_repeats):
+	transforms = make_crop_transforms(im_size, crop_size, 3, include_whole=True)
+	transforms = cross_shear(transforms, max_angle, shear_repeats)
+	return transforms
+
+def make_crop_mirror_transforms(im_size, crop_size, h, v):
+	transforms = make_crop_transforms(im_size, crop_size, 3, include_whole=True)
+	transforms = cross_mirror(transforms, h, v)
+	return transforms
+
+def make_shear_mirror_transforms(h, v, max_angle, shear_repeats):
+	transforms = make_mirror_transforms(h, v)
+	transforms = cross_shear(transforms, max_angle, shear_repeats)
+	return transforms
 
