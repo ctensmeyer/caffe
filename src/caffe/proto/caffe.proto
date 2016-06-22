@@ -383,7 +383,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 207 (last added: precision_recall_param)
+// LayerParameter next available layer-specific ID: 208 (last added: hvp_param)
 // LayerParameter next available layer-specific ID: 137 (last added: reduction_param)
 // The 2xx numbers are reservered for additional layers added by Chris, while 1xx are
 //   used by the official caffe release.
@@ -455,6 +455,7 @@ message LayerParameter {
   optional HDF5DataParameter hdf5_data_param = 112;
   optional HDF5OutputParameter hdf5_output_param = 113;
   optional HingeLossParameter hinge_loss_param = 114;
+  optional HVPParameter hvp_param = 208;
   optional ImageDataParameter image_data_param = 115;
   optional InfogainLossParameter infogain_loss_param = 116;
   optional InnerProductParameter inner_product_param = 117;
@@ -950,6 +951,23 @@ message HingeLossParameter {
   }
   // Specify the Norm to use L1 or L2
   optional Norm norm = 1 [default = L1];
+}
+
+message HVPParameter {
+  enum PoolMethod {
+    MAX = 0;
+    AVE = 1;
+    STOCHASTIC = 2;
+  }
+  optional uint32 num_horz_partitions = 1;
+  optional uint32 num_vert_partitions = 2;
+  optional PoolMethod pool = 3 [default = MAX]; // The pooling method
+  enum Engine {
+    DEFAULT = 0;
+    CAFFE = 1;
+    CUDNN = 2;
+  }
+  optional Engine engine = 6 [default = DEFAULT];
 }
 
 message ImageDataParameter {
