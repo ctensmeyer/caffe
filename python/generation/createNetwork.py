@@ -13,18 +13,7 @@ from caffe import params as P
 import numpy as np
 import random
 
-DEBUG=False
 ROOT="/fslgroup/fslg_nnml/compute"
-
-DATASET_NAMES=["andoc_1m", "rvl_cdip"]
-DATASET_TAGS={"andoc_1m": ["binary_227", "color_150", "color_256", "color_384", "color_64",
-						   "binary_227_invert", "color_227", "color_256_padded", "color_384_padded", 
-						   "gray_227", "color_100", "color_227_invert", "color_32", "color_512", "gray_227_invert"],
-			  
-			  "rvl_cdip": ["binary_227", "gray_150", "gray_256", "gray_384", "gray_64",
-						   "binary_227_invert", "gray_227", "gray_256_padded", "gray_384_padded", 
-						   "gray_100", "gray_227_invert", "gray_32", "gray_512"]
-			  } 
 
 SIZES=[512,384,256,150,100,64,32]
 
@@ -36,10 +25,7 @@ MEAN_VALUES = { "andoc_1m": {"binary": [194], "binary_invert": [61], "gray": [17
 
 
 def OUTPUT_FOLDER(dataset, group, experiment, split):
-	if DEBUG:
-		return os.path.join("debug" , dataset, group, experiment, split)
-	else:
-		return os.path.join("experiments/preprocessing/nets" , dataset, group, experiment, split)
+	return os.path.join("experiments/preprocessing/nets" , dataset, group, experiment, split)
 
 
 def TRANSFORMS_FOLDER(dataset, group, experiment, split):
@@ -87,7 +73,56 @@ def fcLayer(prev, **kwargs):
 	relu = L.ReLU(fc, in_place=True)
 	return relu
 	
-CONV_LAYERS = {227: [(convLayer, {"name": "conv1", "kernel_size": 11, "num_output": 96, "stride": 4}), 
+CONV_LAYERS = {
+			   32:  [(convLayer, {"name": "conv1", "kernel_size": 5, "num_output": 24, "stride": 1}), 
+					 (L.LRN,	 {"name": "norm1", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv2", "kernel_size": 5, "num_output":64, "pad": 2}),
+					 (L.LRN,	 {"name": "norm2", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv3", "kernel_size": 3, "num_output":96, "pad": 1}),
+					 (poolLayer, {"name": "pool3", "kernel_size": 3, "stride": 2}),
+					 (convLayer, {"name": "conv4", "kernel_size": 3, "num_output":96, "pad": 0}),
+					 (convLayer, {"name": "conv5", "kernel_size": 3, "num_output":64, "pad": 0}),
+					 (poolLayer, {"name": "pool5", "kernel_size": 3, "stride": 2})
+					],
+
+			   64:  [(convLayer, {"name": "conv1", "kernel_size": 7, "num_output": 32, "stride": 1}), 
+					 (poolLayer, {"name": "pool1", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm1", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv2", "kernel_size": 5, "num_output":96, "pad": 2}),
+					 (L.LRN,	 {"name": "norm2", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv3", "kernel_size": 3, "num_output":148, "pad": 1}),
+					 (poolLayer, {"name": "pool3", "kernel_size": 3, "stride": 2}),
+					 (convLayer, {"name": "conv4", "kernel_size": 3, "num_output":148, "pad": 0}),
+					 (convLayer, {"name": "conv5", "kernel_size": 3, "num_output":96, "pad": 0}),
+					 (poolLayer, {"name": "pool5", "kernel_size": 3, "stride": 2})
+					],
+
+			   100: [(convLayer, {"name": "conv1", "kernel_size": 9, "num_output": 48, "stride": 2}), 
+					 (poolLayer, {"name": "pool1", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm1", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv2", "kernel_size": 5, "num_output":128, "pad": 2}),
+					 (poolLayer, {"name": "pool2", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm2", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv3", "kernel_size": 3, "num_output":192, "pad": 1}),
+					 (convLayer, {"name": "conv4", "kernel_size": 3, "num_output":192, "pad": 1}),
+					 (convLayer, {"name": "conv5", "kernel_size": 3, "num_output":128, "pad": 1}),
+					 (poolLayer, {"name": "pool5", "kernel_size": 3, "stride": 2})
+					],
+
+			   150: [(convLayer, {"name": "conv1", "kernel_size": 11, "num_output": 64, "stride": 3}), 
+					 (poolLayer, {"name": "pool1", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm1", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv2", "kernel_size": 5, "num_output":192, "pad": 2}),
+					 (poolLayer, {"name": "pool2", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm2", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv3", "kernel_size": 3, "num_output":256, "pad": 1}),
+					 (convLayer, {"name": "conv4", "kernel_size": 3, "num_output":256, "pad": 1}),
+					 (convLayer, {"name": "conv5", "kernel_size": 3, "num_output":192, "pad": 1}),
+					 (poolLayer, {"name": "pool5", "kernel_size": 3, "stride": 2})
+					],
+
+
+			   227: [(convLayer, {"name": "conv1", "kernel_size": 11, "num_output": 96, "stride": 4}), 
 					 (poolLayer, {"name": "pool1", "kernel_size": 3, "stride": 2}),
 					 (L.LRN,	 {"name": "norm1", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
 					 (convLayer, {"name": "conv2", "kernel_size": 5, "num_output":256, "pad": 2}),
@@ -97,16 +132,92 @@ CONV_LAYERS = {227: [(convLayer, {"name": "conv1", "kernel_size": 11, "num_outpu
 					 (convLayer, {"name": "conv4", "kernel_size": 3, "num_output":384, "pad": 1}),
 					 (convLayer, {"name": "conv5", "kernel_size": 3, "num_output":256, "pad": 1}),
 					 (poolLayer, {"name": "pool5", "kernel_size": 3, "stride": 2})
-					]
-					 
+					],
+
+			   256: [(convLayer, {"name": "conv1", "kernel_size": 11, "num_output": 96, "stride": 4}), 
+					 (poolLayer, {"name": "pool1", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm1", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv2", "kernel_size": 5, "num_output":256, "pad": 2}),
+					 (poolLayer, {"name": "pool2", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm2", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv3", "kernel_size": 3, "num_output":384, "pad": 1}),
+					 (convLayer, {"name": "conv4", "kernel_size": 3, "num_output":384, "pad": 0}),
+					 (convLayer, {"name": "conv5", "kernel_size": 3, "num_output":256, "pad": 1}),
+					 (poolLayer, {"name": "pool5", "kernel_size": 3, "stride": 2})
+					],
+
+			   384: [(convLayer, {"name": "conv1", "kernel_size": 15, "num_output": 120, "stride": 3}), 
+					 (poolLayer, {"name": "pool1", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm1", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv2", "kernel_size": 7, "num_output":320, "pad": 2}),
+					 (poolLayer, {"name": "pool2", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm2", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv3", "kernel_size": 5, "num_output":448, "pad": 1}),
+					 (poolLayer, {"name": "pool3", "kernel_size": 3, "stride": 2}),
+					 (convLayer, {"name": "conv4", "kernel_size": 3, "num_output":448, "pad": 0}),
+					 (convLayer, {"name": "conv5", "kernel_size": 3, "num_output":320, "pad": 1}),
+					 (poolLayer, {"name": "pool5", "kernel_size": 3, "stride": 2})
+					],
+
+			   512: [(convLayer, {"name": "conv1", "kernel_size": 15, "num_output": 144, "stride": 4}), 
+					 (poolLayer, {"name": "pool1", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm1", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv2", "kernel_size": 7, "num_output":384, "pad": 2}),
+					 (poolLayer, {"name": "pool2", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm2", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv3", "kernel_size": 5, "num_output":512, "pad": 1}),
+					 (poolLayer, {"name": "pool3", "kernel_size": 3, "stride": 2}),
+					 (convLayer, {"name": "conv4", "kernel_size": 5, "num_output":512, "pad": 1}),
+					 (convLayer, {"name": "conv5", "kernel_size": 3, "num_output":384, "pad": 1}),
+					 (poolLayer, {"name": "pool5", "kernel_size": 3, "stride": 2})
+					],
 			  }
 
 
 
-FC_LAYERS = {227: [(fcLayer, {"name": "fc6", "num_output": 4096}),
+FC_LAYERS = {
+
+			 32:  [(fcLayer, {"name": "fc6", "num_output": 1024}),
+				   (L.Dropout, {"name": "dropout6", "dropout_ratio": 0.5, "in_place": True}),
+				   (fcLayer, {"name": "fc7", "num_output": 1024}),
+				   (L.Dropout, {"name": "dropout7", "dropout_ratio": 0.5, "in_place": True})],
+
+			 64:  [(fcLayer, {"name": "fc6", "num_output": 1536}),
+				   (L.Dropout, {"name": "dropout6", "dropout_ratio": 0.5, "in_place": True}),
+				   (fcLayer, {"name": "fc7", "num_output": 1536}),
+				   (L.Dropout, {"name": "dropout7", "dropout_ratio": 0.5, "in_place": True})],
+
+			 100: [(fcLayer, {"name": "fc6", "num_output": 2048}),
+				   (L.Dropout, {"name": "dropout6", "dropout_ratio": 0.5, "in_place": True}),
+				   (fcLayer, {"name": "fc7", "num_output": 2048}),
+				   (L.Dropout, {"name": "dropout7", "dropout_ratio": 0.5, "in_place": True})],
+
+			 150: [(fcLayer, {"name": "fc6", "num_output": 3072}),
+				   (L.Dropout, {"name": "dropout6", "dropout_ratio": 0.5, "in_place": True}),
+				   (fcLayer, {"name": "fc7", "num_output": 3072}),
+				   (L.Dropout, {"name": "dropout7", "dropout_ratio": 0.5, "in_place": True})],
+
+			 227: [(fcLayer, {"name": "fc6", "num_output": 4096}),
 				   (L.Dropout, {"name": "dropout6", "dropout_ratio": 0.5, "in_place": True}),
 				   (fcLayer, {"name": "fc7", "num_output": 4096}),
-				   (L.Dropout, {"name": "dropout7", "dropout_ratio": 0.5, "in_place": True})]}
+				   (L.Dropout, {"name": "dropout7", "dropout_ratio": 0.5, "in_place": True})],
+
+			 256: [(fcLayer, {"name": "fc6", "num_output": 4096}),
+				   (L.Dropout, {"name": "dropout6", "dropout_ratio": 0.5, "in_place": True}),
+				   (fcLayer, {"name": "fc7", "num_output": 4096}),
+				   (L.Dropout, {"name": "dropout7", "dropout_ratio": 0.5, "in_place": True})],
+				   
+			 384: [(fcLayer, {"name": "fc6", "num_output": 5120}),
+				   (L.Dropout, {"name": "dropout6", "dropout_ratio": 0.5, "in_place": True}),
+				   (fcLayer, {"name": "fc7", "num_output": 5120}),
+				   (L.Dropout, {"name": "dropout7", "dropout_ratio": 0.5, "in_place": True})],
+
+			 512: [(fcLayer, {"name": "fc6", "num_output": 6144}),
+				   (L.Dropout, {"name": "dropout6", "dropout_ratio": 0.5, "in_place": True}),
+				   (fcLayer, {"name": "fc7", "num_output": 6144}),
+				   (L.Dropout, {"name": "dropout7", "dropout_ratio": 0.5, "in_place": True})],
+				   
+			}
 
 
 VAL_BATCH_SIZE = 40
@@ -297,14 +408,16 @@ def createTransformParam(phase, seed=None, test_transforms = [], deploy=False, *
 			params.append(p)
 
 	#crop
-	if 'crop' in kwargs and kwargs['crop']:
+	if kwargs.get('crop'):
 		params.append(dict(crop_params = createCropParam(phase)))
  
 		if deploy and 'hmirror' not in kwargs and 'vmirror' not in kwargs and 'shear' not in kwargs:
 			for t in tt:
 				im_size = kwargs['im_size']
-				transforms[t].extend(make_transforms.make_crop_transforms(im_size, 227, int(round(np.sqrt(t)))))
+				crop_size = kwargs['crop']
+				transforms[t].extend(make_transforms.make_crop_transforms(im_size, crop_size, int(round(np.sqrt(t)))))
 
+	# For combined data augmentation. This is pretty messy
 	if deploy:
 		h = kwargs.get('hmirror', 0)
 		v = kwargs.get('vmirror', 0)
@@ -359,7 +472,6 @@ def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=Fals
 
 	if len(sources) == 1:
 		concat = False
-	
 	
 	#Helper function for checking transform params
 	def checkTransform(trans, default):
@@ -431,6 +543,12 @@ def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=Fals
 	layers = CONV_LAYERS[size]
 	layer = n.data
 	for t, kwargs in layers[:-1]:
+		if (tparams.get('width_mult') or tparams.get('conv_width_mult')) and kwargs.get('num_output'):
+			kwargs = kwargs.copy()
+			mult = tparams.get('width_mult')
+			if not mult:
+				mult = tparams.get('conv_width_mult')
+			kwargs['num_output'] = int(mult * kwargs['num_output'])
 		layer = t(layer, **kwargs)
 
 	#If SPP and if last layer is pooling dont add pooling layer
@@ -445,6 +563,12 @@ def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=Fals
 	#FC layers
 	fc_layers = FC_LAYERS[size]
 	for t, kwargs in fc_layers:
+		if (tparams.get('width_mult') or tparams.get('fc_width_mult')) and kwargs.get('num_output'):
+			kwargs = kwargs.copy()
+			mult = tparams.get('width_mult')
+			if not mult:
+				mult = tparams.get('fc_width_mult')
+			kwargs['num_output'] = int(mult * kwargs['num_output'])
 		layer = t(layer, **kwargs)
 
 	#Output Layer
@@ -463,53 +587,51 @@ def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=Fals
 
 
 def createExperiment(ds, tags, group, experiment, num_experiments=1, spp = False, shift=None, scale=None, **tparams):
-	#Determine if the tags are the same size
-	#print tags
-	
+
+	# Check if tags are all the same size or not
+	# If they aren't we are doing multi-scale training, and need to stick them all
+	# in the same doc data layer and make sure we use SPP
+	# TODO: Pyramid input, HVP pooling
 	if not isinstance(tags, list):
 		tags = [tags]
-
 	sizes = map(getSizeFromTag, tags)
-	tags_noSize = map(getTagWithoutSize, tags)
+	size = sizes[0]
+	same_size = True
+	for s in sizes:
+		same_size = (same_size and s == size)
 
-	
+	im_size = size[0]
+	tags_noSize = map(getTagWithoutSize, tags)
 	if shift == "mean":
 		shift = map(lambda t: MEAN_VALUES[ds][t], tags_noSize)
 
-	size = min(sizes)
-	same = True
-
-	for s in sizes:
-		same = same and s == size
-
-	im_size = size[0]
-
-	if 'crop' in tparams and tparams['crop'] == True:
-		same = True
-		size = [227]
+	if tparams.get('crop'):
+		same_size = True
+		size = [tparams['crop']]
 	
 	#if sizes are different, spatial pyramid pooling is required.
-	if not same:
+	if not same_size:
 		spp = True
 
-	for s in range(1,num_experiments+1):
-		s = str(s)
+	for exp_num in range(1,num_experiments+1):
+		exp_num = str(exp_num)
 
-		out_dir = OUTPUT_FOLDER(ds, group, experiment, s)
+		out_dir = OUTPUT_FOLDER(ds, group, experiment, exp_num)
 		print out_dir
 
 		if not os.path.exists(out_dir):
 			print "Directory Not Found, Creating"
 			os.makedirs(out_dir)
-		tf = TRANSFORMS_FOLDER(ds, group, experiment, s)
+		tf = TRANSFORMS_FOLDER(ds, group, experiment, exp_num)
 		if not os.path.exists(tf):
 			os.makedirs(tf)
 		
+		# only 1 lmdb split is in current use
 		sources = map(lambda t: LMDB_PATH(ds, t, "1"), tags)
 		sources_tr, sources_val, sources_ts =  zip(*sources)
 
 		#common parameters
-		params = dict(sources=list(sources_tr), size=size[0], num_output=OUTPUT_SIZES[ds], concat=same, 
+		params = dict(sources=list(sources_tr), size=size[0], num_output=OUTPUT_SIZES[ds], concat=same_size, 
 					spp=spp, shift_channels=shift, scale_channels=scale, batch_size=BATCH_SIZE[ds], **tparams)
 	   
 		#create train_val file
@@ -544,7 +666,7 @@ def createExperiment(ds, tags, group, experiment, num_experiments=1, spp = False
 			os.makedirs(snapshot_out)
 
 
-		exp_folder = EXPERIMENTS_FOLDER(ds,group,experiment,s)
+		exp_folder = EXPERIMENTS_FOLDER(ds,group,experiment,exp_num)
 		snapshot_solver = os.path.join(exp_folder, SNAPSHOT_FOLDER, experiment)
 		train_val_solver = os.path.join(exp_folder, TRAIN_VAL)
 
@@ -560,18 +682,3 @@ def createExperiment(ds, tags, group, experiment, num_experiments=1, spp = False
 			f.write("snapshot_prefix: \"%s\"" % (snapshot_solver))
 		
 
-def main(args):
-	createExperiment(args.data_set, args.data_tags, args.experiment_group, args.experiment_tag, spp=args.spp, shift=args.shift, scale=args.scale)
-
-
-if __name__ == "__main__":
-	parser = argparse.ArgumentParser(description="Create Network Files and Solver Files.")
-	parser.add_argument("data_set", help="The dataset name", choices=DATASET_NAMES)
-	parser.add_argument("experiment_group", help="The group of the experiment")
-	parser.add_argument("experiment_tag", help="The tag of the experiment")
-	parser.add_argument("-dt", "--data_tags", help="The tag of the dataset", nargs="+", required=True)
-	parser.add_argument("-spp", help="Enable Spatial Pyramid Pooling", action="store_true")
-	parser.add_argument("--shift", help="Value by which to shift the data", type=float)
-	parser.add_argument("--scale", help="Value by which to scale the data", type=float)
-
-	main(parser.parse_args())

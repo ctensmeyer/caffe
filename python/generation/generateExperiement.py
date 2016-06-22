@@ -1,6 +1,12 @@
 import os
 import createNetwork
 
+DS = ["rvl_cdip", "andoc_1m"]
+
+########################
+ds = DS[1]
+#######################
+
 
 DATASET_TAGS={"andoc_1m": ["binary_227", "color_150", "color_256", "color_384", "color_64",
                            "binary_227_invert", "color_227", "color_256_padded", "color_384_padded",
@@ -36,19 +42,16 @@ def generateTag(T, size=227):
 #TAGS = { "b": "binary_227", "g": "gray_227", "B": "binary_227_invert", "G": "gray_227_invert", "c": "color_227", "C": "color_227_invert"}
 
 
-DS = ["rvl_cdip", "andoc_1m"]
-
-########################
-ds = DS[0]
-#######################
 
 def COMBO(ds=ds, size = 227):
     if ds == DS[0]:
         #tags = ['g', 'b', 'G', 'B']
-        tags = ['g', 'G']
+        #tags = ['g', 'G']
+        tags = ['g']
     else:
         #tags = ['c', 'g', 'b', 'C', 'G', 'B']
-        tags = ['c', 'C']
+        #tags = ['c', 'C']
+        tags = ['c']
 
 
     return map(lambda t: TAGS(t, size), tags)
@@ -57,7 +60,11 @@ def COMBO(ds=ds, size = 227):
 #COMBO = [TAGS['g'], TAGS['b'], TAGS['G'], TAGS['B']]
 
 
-default = dict(shift="mean", scale=(1.0/255))
+SIZES = [32, 64, 100, 150, 227, 256, 384, 512]
+WIDTHS = [0.1, 0.25, 0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 2]
+default = dict(shift="mean", scale=(1.0/255), num_experiments=3)
+width_default = dict(shift="mean", scale=(1.0/255), shear=10, num_experiments=2)
+size_default = dict(shift="mean", scale=(1.0/255), num_experiments=2)
 
 EXPERIMENTS = {"standard": {"h_mirror" : (COMBO(ds), dict(hmirror=0.5, **default)),
                             "v_mirror" : (COMBO(ds), dict(vmirror=0.5, **default)),
@@ -68,22 +75,23 @@ EXPERIMENTS = {"standard": {"h_mirror" : (COMBO(ds), dict(hmirror=0.5, **default
                             "gauss_noise_15" : (COMBO(ds), dict(noise_std=[0,15], **default)),
                             "gauss_noise_20" : (COMBO(ds), dict(noise_std=[0,20], **default)),
                    
-                            "crop_240" : (COMBO(ds,240), dict(crop=True, **default)),
-                            "crop_256" : (COMBO(ds,256), dict(crop=True, **default)),
-                            "crop_288" : (COMBO(ds,288), dict(crop=True, **default)),
-                            "crop_320" : (COMBO(ds,320), dict(crop=True, **default))
+                            "crop_240" : (COMBO(ds,240), dict(crop=227, **default)),
+                            "crop_256" : (COMBO(ds,256), dict(crop=227, **default)),
+                            "crop_288" : (COMBO(ds,288), dict(crop=227, **default)),
+                            "crop_320" : (COMBO(ds,320), dict(crop=227, **default))
                             },
                 
-                "rotate_shear":  {"rotation_5": (COMBO(ds), dict(rotation=5, **default)),
-                                  "rotation_10": (COMBO(ds), dict(rotation=10, **default)),
-                                  "rotation_15": (COMBO(ds), dict(rotation=15, **default)),
-                                  "rotation_20": (COMBO(ds), dict(rotation=20, **default)),
-                   
-                                  "shear_5": (COMBO(ds), dict(shear=5, **default)),
-                                  "shear_10": (COMBO(ds), dict(shear=10, **default)),
-                                  "shear_15": (COMBO(ds), dict(shear=15, **default)),
-                                  "shear_20": (COMBO(ds), dict(shear=20, **default)),
-                                 }, 
+                "rotate":  {"rotation_5":  (COMBO(ds), dict(rotation=5,  **default)),
+							"rotation_10": (COMBO(ds), dict(rotation=10, **default)),
+							"rotation_15": (COMBO(ds), dict(rotation=15, **default)),
+							"rotation_20": (COMBO(ds), dict(rotation=20, **default)),
+							},
+
+				"shear":   {"shear_5":  (COMBO(ds), dict(shear=5,  **default)),
+							"shear_10": (COMBO(ds), dict(shear=10, **default)),
+							"shear_15": (COMBO(ds), dict(shear=15, **default)),
+							"shear_20": (COMBO(ds), dict(shear=20, **default)),
+                            }, 
                 
                 "blur_sharp": {"gauss_blur_1_5": (COMBO(ds), dict(blur=1.5, **default)),
                                "gauss_blur_3":   (COMBO(ds), dict(blur=3, **default)),
@@ -110,25 +118,46 @@ EXPERIMENTS = {"standard": {"h_mirror" : (COMBO(ds), dict(hmirror=0.5, **default
 							 "elastic_3_5": (COMBO(ds), dict(elastic_sigma=3, elastic_max_alpha=5, **default)),
 							 "elastic_3_10": (COMBO(ds), dict(elastic_sigma=3, elastic_max_alpha=10, **default)),
 						   },
-				"combined": { "crop_mirror_shear": (COMBO(ds, 256), dict(crop=True, hmirror=0.0, vmirror=0.5, shear=10, num_experiments=2, **default)),
-							  "crop_mirror": (COMBO(ds, 256), dict(crop=True, hmirror=0.0, vmirror=0.5, num_experiments=2, **default)),
-				              "mirror_shear": (COMBO(ds), dict(hmirror=0.0, vmirror=0.5, shear=10, num_experiments=2, **default)),
-				              "crop_shear": (COMBO(ds, 256), dict(crop=True, shear=10, num_experiments=2, **default)),
+				"combined": { "crop_mirror_shear": (COMBO(ds, 256), dict(crop=227, hmirror=0.0, vmirror=0.5, shear=10, **default)),
+							  "crop_mirror": (COMBO(ds, 256), dict(crop=227, hmirror=0.0, vmirror=0.5, **default)),
+				              "mirror_shear": (COMBO(ds), dict(hmirror=0.0, vmirror=0.5, shear=10, **default)),
+				              "crop_shear": (COMBO(ds, 256), dict(crop=227, shear=10, **default)),
 						   },
+
+				"size": { "size_%d" % size: (COMBO(ds, size), dict(**size_default)) for size in SIZES },
+				"width": { "width_%d" % int(width * 100): (COMBO(ds), dict(width_mult=width, **width_default)) for width in WIDTHS },
                 }
 
+def widthExperiments():
+    group = "width"
+
+    experiments = EXPERIMENTS["width"]
+
+    for name, (tags, tr) in experiments.items():
+        print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
+        createNetwork.createExperiment(ds, tags, group, name, **tr)
+
+def sizeExperiments():
+    group = "size"
+
+    experiments = EXPERIMENTS["size"]
+
+    for name, (tags, tr) in experiments.items():
+        print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
+        createNetwork.createExperiment(ds, tags, group, name, **tr)
+	
+
 def augmentationExperiments():
-    group = "augmentation_combined"
-    ds = DS[1]
+    group = "augmentation_cC"
     
     #experiments = EXPERIMENTS['standard']
     #experiments = EXPERIMENTS['standard'].copy()
-    #experiments.update(EXPERIMENTS["rotate_shear"])
+    experiments = (EXPERIMENTS["shear"])
     #experiments.update(EXPERIMENTS["blur_sharp"])
     #experiments.update(EXPERIMENTS["perspective"])
-    #experiments.update(EXPERIMENTS["color_jitter"])
-    #experiments = EXPERIMENTS["elastic"]
-    experiments = EXPERIMENTS["combined"]
+    #experiments = (EXPERIMENTS["color_jitter"])
+    #experiments.update(EXPERIMENTS["elastic"])
+    #experiments = EXPERIMENTS["combined"]
 
     for name, (tags, tr) in experiments.items():
         print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
@@ -168,6 +197,7 @@ def channelExperiments():
 
 
 if __name__ == "__main__":
-    augmentationExperiments()
+	widthExperiments()
+    #augmentationExperiments()
     #channelExperiments()
     #variantExperiments()

@@ -30,12 +30,15 @@ def main(in_db, out_db):
 
 	out_env = lmdb.open(out_db, readonly=False, map_size=int(2 ** 42), writemap=True)
 	out_txn = out_env.begin(write=True)
+	count = 0
 	for key, value in in_cursor:
 		doc_datum = caffe.proto.caffe_pb2.DocumentDatum()
 		doc_datum.ParseFromString(value)	
 		datum = convert(doc_datum)
 		out_txn.put(key, datum.SerializeToString())
-		print key
+		count += 1
+		if count % 100 == 0:
+			print "Copied ", count
 
 	out_txn.commit()
 	out_env.sync()
