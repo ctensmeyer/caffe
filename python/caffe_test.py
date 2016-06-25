@@ -10,6 +10,7 @@ import argparse
 import numpy as np
 import caffe.proto.caffe_pb2
 import scipy.ndimage
+import traceback
 
 def init_caffe(args):
 	if args.gpu >= 0:
@@ -327,6 +328,10 @@ def set_transform_weights(args):
 
 		normalized = (weights / num_total)[:,np.newaxis]
 		return normalized
+	except Exception as e:
+		traceback.print_exc()
+		print e
+		raise
 	finally:
 		close_dbs(tune_dbs)
 
@@ -453,26 +458,26 @@ def prepare_images(test_dbs, transforms, args):
 
 
 def main(args):
+	log(args, str(sys.argv))
+
+	# load transforms from file
+	log(args, "Loading transforms")
+	transforms, fixed_transforms = get_transforms(args)
+	log(args, "Fixed Transforms: %s" % str(fixed_transforms))
+
+	# get per-transform weights.  Can be none if transforms produce variable numbers of images, or
+	# no lmdb is provided to tune the weights
+	log(args, "Setting the transform weights...")
+	weights = set_transform_weights(args) 
+	weight_str = np.array_str(weights, max_line_width=80, precision=4) if weights is not None else str(weights)
+	log(args, "Weights: %s" % weight_str)
+
+	log(args, "Initializing network for testing")
+	caffenet = init_caffe(args)
+	log(args, "Opening test lmdbs")
+	test_dbs = open_dbs(args.test_lmdbs.split(args.delimiter))
+
 	try:
-		log(args, str(sys.argv))
-
-		# load transforms from file
-		log(args, "Loading transforms")
-		transforms, fixed_transforms = get_transforms(args)
-		log(args, "Fixed Transforms: %s" % str(fixed_transforms))
-
-		# get per-transform weights.  Can be none if transforms produce variable numbers of images, or
-		# no lmdb is provided to tune the weights
-		log(args, "Setting the transform weights...")
-		weights = set_transform_weights(args) 
-		weight_str = np.array_str(weights, max_line_width=80, precision=4) if weights is not None else str(weights)
-		log(args, "Weights: %s" % weight_str)
-
-		log(args, "Initializing network for testing")
-		caffenet = init_caffe(args)
-		log(args, "Opening test lmdbs")
-		test_dbs = open_dbs(args.test_lmdbs.split(args.delimiter))
-
 		# set up the class confusion matrix
 		num_output = caffenet.blobs["prob"].data.shape[1]
 		conf_mat = np.zeros(shape=(num_output, num_output), dtype=np.int)
@@ -511,7 +516,10 @@ def main(args):
 		log(args, "Conf Mat:\n %r" % conf_mat)
 		log(args, "\nTransform Accuracy:\n %r" % transform_accs)
 		log(args, "\nOverall Accuracy: %f" % overall_acc)
-	
+	except Exception as e:
+		traceback.print_exc()
+		print e
+		raise
 	finally:
 		close_dbs(test_dbs)
 		args.log.close()

@@ -69,7 +69,7 @@ def make_perspective_transforms(max_sigma, num_transforms, seed=3141519, include
 	return transforms
 
 def make_elastic_deformation_transforms(sigma, max_alpha, num_transforms, include_whole=True):
-	return make_param_random_transforms("elastic %f" % sigma, 0, max_alpha, num_transforms, include_whole)
+	return make_param_random_transforms("elastic %f" % sigma, max_alpha, num_transforms, include_whole)
 	
 def make_rotation_transforms(max_angle, num_transforms, include_whole=True):
 	return make_single_param_transforms("rotation", -1* max_angle, max_angle, num_transforms, include_whole)

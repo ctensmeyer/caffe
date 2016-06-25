@@ -17,11 +17,15 @@ ROOT="/fslgroup/fslg_nnml/compute"
 
 SIZES=[512,384,256,150,100,64,32]
 
-OUTPUT_SIZES = {"andoc_1m": 974, "rvl_cdip": 16}
+OUTPUT_SIZES = {"andoc_1m": 974, "andoc_1m_10": 974, "andoc_1m_50": 974, "rvl_cdip": 16, "rvl_cdip_10": 16, "rvl_cdip_100": 16}
 
 MEAN_VALUES = { "andoc_1m": {"binary": [194], "binary_invert": [61], "gray": [175], "gray_invert": [80], "gray_padded": [None], "color": [178,175,166], "color_invert": [77,80,89], "color_padded": [126,124,118]},
 				"rvl_cdip": {"binary": [233], "binary_invert": [22], "gray": [234], "gray_padded": [180], "gray_invert": [21]}
 			  }
+MEAN_VALUES['rvl_cdip_10'] = MEAN_VALUES['rvl_cdip']
+MEAN_VALUES['rvl_cdip_100'] = MEAN_VALUES['rvl_cdip']
+MEAN_VALUES['andoc_1m_10'] = MEAN_VALUES['andoc_1m']
+MEAN_VALUES['andoc_1m_50'] = MEAN_VALUES['andoc_1m']
 
 
 def OUTPUT_FOLDER(dataset, group, experiment, split):
@@ -35,7 +39,16 @@ def EXPERIMENTS_FOLDER(dataset, group, experiment, split):
 	return os.path.join(ROOT, OUTPUT_FOLDER(dataset, group, experiment, split))
 
 def LMDB_PATH(dataset, tag, split):
-	return map(lambda s: os.path.join(ROOT, "lmdb", dataset, tag, split, s), ["train_lmdb", "val_lmdb", "test_lmdb"])
+	#return map(lambda s: os.path.join(ROOT, "lmdb", dataset, tag, split, s), ["train_lmdb", "val_lmdb", "test_lmdb"])
+	lmdbs = list()
+	lmdbs.append(os.path.join(ROOT, "lmdb", dataset, tag, split, "train_lmdb"))
+	if dataset == 'rvl_cdip_10' or dataset == 'rvl_cdip_100':
+		dataset = 'rvl_cdip'
+	if dataset == 'andoc_1m_10' or dataset == 'andoc_1m_50':
+		dataset = 'andoc_1m'
+	for s in ['val_lmdb', 'test_lmdb']:
+		lmdbs.append(os.path.join(ROOT, "lmdb", dataset, tag, split, s))
+	return lmdbs
 
 def getSizeFromTag(t):
 	return map(int, re.sub("(_?[^0-9_]+_?)","", t).split("_"))
@@ -229,8 +242,14 @@ SNAPSHOT_FOLDER = "snapshots"
 
 LEARNING_RATES = {"andoc_1m": 0.005, "rvl_cdip": 0.003}
 BATCH_SIZE = {"andoc_1m": 128, "rvl_cdip": 32}
-MAX_ITER = {"andoc_1m": 250000, "rvl_cdip": 650000}
+MAX_ITER = {"andoc_1m": 250000, "rvl_cdip": 500000}
 STEP_SIZE = {"andoc_1m": 100000, "rvl_cdip": 150000}
+
+for d in [LEARNING_RATES, BATCH_SIZE, MAX_ITER, STEP_SIZE]:
+	d['rvl_cdip_10'] = d['rvl_cdip']
+	d['rvl_cdip_100'] = d['rvl_cdip']
+	d['andoc_1m_10'] = d['andoc_1m']
+	d['andoc_1m_50'] = d['andoc_1m']
 
 SOLVER_PARAM = {"test_iter": 1000, 
 				"test_interval": 1000, 
@@ -298,8 +317,8 @@ def createElasticDeformationParam(elastic_sigma, elastic_max_alpha):
 	return dict(sigma=elastic_sigma, max_alpha=elastic_max_alpha)
 
 
-#def createTransformParam(phase, seed=None, test_transforms = [10,50,100], deploy=False, **kwargs):
-def createTransformParam(phase, seed=None, test_transforms = [], deploy=False, **kwargs):
+def createTransformParam(phase, seed=None, test_transforms = [10], deploy=False, **kwargs):
+#def createTransformParam(phase, seed=None, test_transforms = [], deploy=False, **kwargs):
 	params = []
 
 	if deploy:

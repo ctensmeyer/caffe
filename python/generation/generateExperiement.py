@@ -1,22 +1,11 @@
 import os
 import createNetwork
 
-DS = ["rvl_cdip", "andoc_1m"]
+DS = ["rvl_cdip", "andoc_1m", "rvl_cdip_10", "rvl_cdip_100", "andoc_1m_10", "andoc_1m_50"]
 
 ########################
-ds = DS[1]
+ds = 'rvl_cdip_100'
 #######################
-
-
-DATASET_TAGS={"andoc_1m": ["binary_227", "color_150", "color_256", "color_384", "color_64",
-                           "binary_227_invert", "color_227", "color_256_padded", "color_384_padded",
-                           "gray_227", "color_100", "color_227_invert", "color_32", "color_512", "gray_227_invert"],
-
-              "rvl_cdip":  ["binary_227", "gray_150", "gray_256", "gray_384", "gray_64",
-                           "binary_227_invert", "gray_227", "gray_256_padded", "gray_384_padded",
-                           "gray_100", "gray_227_invert", "gray_32", "gray_512"]
-            }
-
 
 
 def TAGS(T, size=227):
@@ -39,19 +28,16 @@ def TAGS(T, size=227):
 def generateTag(T, size=227):
     return map(lambda t: TAGS(t, size), T)
 
-#TAGS = { "b": "binary_227", "g": "gray_227", "B": "binary_227_invert", "G": "gray_227_invert", "c": "color_227", "C": "color_227_invert"}
-
-
 
 def COMBO(ds=ds, size = 227):
-    if ds == DS[0]:
+    if ds.startswith(DS[0]):
         #tags = ['g', 'b', 'G', 'B']
-        #tags = ['g', 'G']
-        tags = ['g']
+        tags = ['g', 'G']
+        #tags = ['g']
     else:
         #tags = ['c', 'g', 'b', 'C', 'G', 'B']
-        #tags = ['c', 'C']
-        tags = ['c']
+        tags = ['c', 'C']
+        #tags = ['c']
 
 
     return map(lambda t: TAGS(t, size), tags)
@@ -62,7 +48,7 @@ def COMBO(ds=ds, size = 227):
 
 SIZES = [32, 64, 100, 150, 227, 256, 384, 512]
 WIDTHS = [0.1, 0.25, 0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 2]
-default = dict(shift="mean", scale=(1.0/255), num_experiments=3)
+default = dict(shift="mean", scale=(1.0/255))#, num_experiments=3)
 width_default = dict(shift="mean", scale=(1.0/255), shear=10, num_experiments=2)
 size_default = dict(shift="mean", scale=(1.0/255), num_experiments=2)
 
@@ -148,15 +134,16 @@ def sizeExperiments():
 	
 
 def augmentationExperiments():
-    group = "augmentation_cC"
+    group = "augmentation"
     
-    #experiments = EXPERIMENTS['standard']
-    #experiments = EXPERIMENTS['standard'].copy()
-    experiments = (EXPERIMENTS["shear"])
-    #experiments.update(EXPERIMENTS["blur_sharp"])
-    #experiments.update(EXPERIMENTS["perspective"])
-    #experiments = (EXPERIMENTS["color_jitter"])
-    #experiments.update(EXPERIMENTS["elastic"])
+    experiments = EXPERIMENTS['standard']
+    experiments.update(EXPERIMENTS["shear"])
+    experiments.update(EXPERIMENTS["blur_sharp"])
+    experiments.update(EXPERIMENTS["rotate"])
+    experiments.update(EXPERIMENTS["shear"])
+    experiments.update(EXPERIMENTS["perspective"])
+    experiments.update(EXPERIMENTS["color_jitter"])
+    experiments.update(EXPERIMENTS["elastic"])
     #experiments = EXPERIMENTS["combined"]
 
     for name, (tags, tr) in experiments.items():
@@ -193,11 +180,12 @@ def channelExperiments():
 
 
     #transforms = [("mean_shifted",dict(shift="mean", scale=(1.0/255)))]
+
     #transforms = [("mean_shifted",dict(shift="mean", scale=(1.0/255))), ("zero_centered", dict(shift=127, scale=(1.0/255))), ("scaled", dict(scale=(1.0/255)))]
 
 
 if __name__ == "__main__":
-	widthExperiments()
-    #augmentationExperiments()
+	#widthExperiments()
+    augmentationExperiments()
     #channelExperiments()
     #variantExperiments()

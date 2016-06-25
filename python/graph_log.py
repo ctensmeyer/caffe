@@ -209,6 +209,23 @@ def main(args):
 		print tup
 		print tup[0]
 
+	if 'precision_raw' in sequences['Test_Losses'] and 'recall_raw' in sequences['Test_Losses']:
+		precisions = sequences['Test_Losses']['precision_raw']
+		recalls = sequences['Test_Losses']['recall_raw']
+		f_measures = list()
+		for precision, recall in zip(precisions, recalls):
+			_iter, p = precision
+			_iter, r = recall
+			try:
+				f = 2 * p * r / (p + r)
+			except:
+				f = 0
+			f_measures.append( (_iter, f) )
+		f_measures.sort(key=lambda tup: tup[1])
+		tup = f_measures[-1]
+		print "f_meature", tup
+		print tup[0]
+
 
 def get_args():
 	parser = argparse.ArgumentParser(description="Creates an LMDB of DocumentDatums")
