@@ -374,6 +374,38 @@ class LRNLayer : public Layer<Dtype> {
 };
 
 
+template <typename Dtype>
+class PaddingLayer : public Layer<Dtype> {
+public:
+  explicit PaddingLayer(const LayerParameter& param) : Layer<Dtype>(param) {}
+  virtual void SetUp(const vector<Blob<Dtype>*>& bottom, 
+      const vector<Blob<Dtype>*>& top);
+  virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+
+protected:
+  virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom, 
+      const vector<Blob<Dtype>*>& top);
+  virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom, 
+      const vector<Blob<Dtype>*>& top);
+  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  unsigned int pad_h_top_;
+  unsigned int pad_h_bottom_;
+  unsigned int pad_w_left_;
+  unsigned int pad_w_right_;
+  int num_;
+  int channel_;
+  int height_in_;
+  int width_in_;
+  int height_out_;
+  int width_out_;
+};
+
+
+
 /**
  * @brief Pools the input image by taking the max, average, etc. within regions.
  *

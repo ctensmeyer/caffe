@@ -383,7 +383,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 208 (last added: hvp_param)
+// LayerParameter next available layer-specific ID: 210 (last added: padding_param)
 // LayerParameter next available layer-specific ID: 137 (last added: reduction_param)
 // The 2xx numbers are reservered for additional layers added by Chris, while 1xx are
 //   used by the official caffe release.
@@ -463,6 +463,7 @@ message LayerParameter {
   optional LRNParameter lrn_param = 118;
   optional MemoryDataParameter memory_data_param = 119;
   optional MVNParameter mvn_param = 120;
+  optional PaddingParameter padding_param = 209;
   optional PoolingParameter pooling_param = 121;
   optional PowerParameter power_param = 122;
   optional PReLUParameter prelu_param = 131;
@@ -1057,6 +1058,17 @@ message MVNParameter {
 
   // Epsilon for not dividing by zero while normalizing variance
   optional float eps = 3 [default = 1e-9];
+}
+
+message PaddingParameter {
+  optional uint32 pad = 1 [default = 0]; // The padding size (equal in Y, X)
+  optional uint32 pad_h = 2 [default = 0]; // The padding height
+  optional uint32 pad_w = 3 [default = 0]; // The padding width
+  optional uint32 pad_h_top = 4 [default = 0]; // The padding height
+  optional uint32 pad_h_bottom = 5 [default = 0]; // The padding height
+  optional uint32 pad_w_left = 6 [default = 0]; // The padding width
+  optional uint32 pad_w_right = 7 [default = 0]; // The padding width
+  optional bool pad_to_power_of_2 = 8 [default = false]; // pad height/width to the next power of 2
 }
 
 message PoolingParameter {

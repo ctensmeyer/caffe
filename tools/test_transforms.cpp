@@ -1,5 +1,6 @@
 
 #include <cstring>
+#include <sstream>
 #include <fstream>  // NOLINT(readability/streams)
 #include <iostream>  // NOLINT(readability/streams)
 #include <string>
@@ -14,6 +15,14 @@
 using std::ofstream;
 
 using namespace caffe;  // NOLINT(build/namespaces)
+
+template <typename T>
+string N2S ( T Number )
+{
+	ostringstream ss;
+	ss << Number;
+	return ss.str();
+}
 
 int main(int argc, char** argv) {
   ::google::InitGoogleLogging(argv[0]);
@@ -55,12 +64,12 @@ int main(int argc, char** argv) {
     transformer->SampleTransformParams(in_shape);
 	cv::Mat pretransform_img = ImageToCVMat(doc.image(), doc.image().channels() == 3);
 	for (int j = 0; j < num_transforms; j++) {
-	  string out_file = out_dir + "/" + std::to_string(i) + "_" + std::to_string(j) + ".png";
+	  string out_file = out_dir + "/" + N2S(i) + "_" + N2S(j) + ".png";
 	  cv::Mat posttransform_img;
 	  transformer->Transform(pretransform_img, posttransform_img);
 	  cv::imwrite(out_file.c_str(), posttransform_img);
 	}
-	string out_file = out_dir + "/" + std::to_string(i) + ".png";
+	string out_file = out_dir + "/" + N2S(i) + ".png";
 	cv::imwrite(out_file.c_str(), pretransform_img);
 	cursor->Next();
   }

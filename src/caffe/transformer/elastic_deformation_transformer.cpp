@@ -16,7 +16,6 @@ namespace caffe {
 
 template <typename Dtype>
 void ElasticDeformationImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
-  const int in_channels = in.channels();
   const int in_height = in.rows;
   const int in_width = in.cols;
 
@@ -59,7 +58,6 @@ void ElasticDeformationImageTransformer<Dtype>::Transform(const cv::Mat& in, cv:
 
   // default bilinear interpoloation
   cv::remap(in, out, mat_dis_x, mat_dis_y, cv::INTER_LINEAR);
-
 }
 
 INSTANTIATE_CLASS(ElasticDeformationImageTransformer);
