@@ -12,6 +12,7 @@ from caffe import params as P
 
 import numpy as np
 import random
+import collections
 
 ROOT="/fslgroup/fslg_nnml/compute"
 
@@ -19,8 +20,8 @@ SIZES=[512,384,256,150,100,64,32]
 
 OUTPUT_SIZES = {"andoc_1m": 974, "andoc_1m_10": 974, "andoc_1m_50": 974, "rvl_cdip": 16, "rvl_cdip_10": 16, "rvl_cdip_100": 16}
 
-MEAN_VALUES = { "andoc_1m": {"binary": [194], "binary_invert": [61], "gray": [175], "gray_invert": [80], "gray_padded": [None], "color": [178,175,166], "color_invert": [77,80,89], "color_padded": [126,124,118]},
-				"rvl_cdip": {"binary": [233], "binary_invert": [22], "gray": [234], "gray_padded": [180], "gray_invert": [21]}
+MEAN_VALUES = { "andoc_1m": {"binary": [194], "binary_invert": [61], "gray": [175], "gray_invert": [80], "gray_padded": [None], "color": [178,175,166], "color_invert": [77,80,89], "color_padded": [126,124,118], "color_multiple": [178,175,166]},
+				"rvl_cdip": {"binary": [233], "binary_invert": [22], "gray": [234], "gray_padded": [239], "gray_invert": [21], "gray_multiple": [234]}
 			  }
 MEAN_VALUES['rvl_cdip_10'] = MEAN_VALUES['rvl_cdip']
 MEAN_VALUES['rvl_cdip_100'] = MEAN_VALUES['rvl_cdip']
@@ -37,6 +38,23 @@ def TRANSFORMS_FOLDER(dataset, group, experiment, split):
 
 def EXPERIMENTS_FOLDER(dataset, group, experiment, split):
 	return os.path.join(ROOT, OUTPUT_FOLDER(dataset, group, experiment, split))
+
+def LMDB_MULTIPLE_PATH(dataset, tag, split):
+	lmdbs = collections.defaultdict(list)
+	for s in 'train_lmdb', 'val_lmdb', 'test_lmdb':
+		par_dir = os.path.join(ROOT, "lmdb", dataset, tag, split, s)
+		for s_dir in os.listdir(par_dir):
+			r_dir = os.path.join(par_dir, s_dir)
+			lmdbs[s].append(r_dir)
+		
+		if dataset == 'rvl_cdip_10' or dataset == 'rvl_cdip_100':
+			dataset = 'rvl_cdip'
+		if dataset == 'andoc_1m_10' or dataset == 'andoc_1m_50':
+			dataset = 'andoc_1m'
+
+	return lmdbs['train_lmdb'], lmdbs['val_lmdb'], lmdbs['test_lmdb']
+	
+	
 
 def LMDB_PATH(dataset, tag, split):
 	#return map(lambda s: os.path.join(ROOT, "lmdb", dataset, tag, split, s), ["train_lmdb", "val_lmdb", "test_lmdb"])
@@ -251,7 +269,7 @@ for d in [LEARNING_RATES, BATCH_SIZE, MAX_ITER, STEP_SIZE]:
 	d['andoc_1m_10'] = d['andoc_1m']
 	d['andoc_1m_50'] = d['andoc_1m']
 
-SOLVER_PARAM = {"test_iter": 1000, 
+SOLVER_PARAM = {#"test_iter": 1000, 
 				"test_interval": 1000, 
 				"lr_policy": '"step"',
 				"gamma": 0.1,
@@ -260,6 +278,11 @@ SOLVER_PARAM = {"test_iter": 1000,
 				"weight_decay": 0.0005,
 				"snapshot": 1000,
 				"solver_mode": "GPU"}
+
+# this is for validation sets, not test sets.  Test set iterations are specified in train.sh
+MULTIPLE_TEST_ITERS  = { "andoc_1m" : { "color_227_multiple": 1007, "color_384_multiple": 1013},
+						 "rvl_cdip" : { "gray_227_multiple":  1006, "gray_384_multiple": 1008}
+                       }
 
 def createLinearParam(shift=0.0, scale=1.0, **kwargs):
 	return dict(shift=shift, scale=scale)
@@ -483,8 +506,8 @@ def createTransformParam(phase, seed=None, test_transforms = [10], deploy=False,
 
 
 #Assume caffe net for a moment
-def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=False, spp=False, batch_size=32, deploy=False, 
-					seed=None, shift_channels=None, scale_channels=None, **tparams):
+def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=False, pool=None, batch_size=32, deploy=False, 
+					seed=None, shift_channels=None, scale_channels=None, multiple=False, **tparams):
 	n = caffe.NetSpec()	
 	#data
 	data_param = dict(backend=P.Data.LMDB)
@@ -545,12 +568,26 @@ def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=Fals
 			data_param['ntop'] = 2
 			data_param['label_names'] = ["dbid"]
 
-			n.data, n.labels = L.DocData(sources = sources, batch_size=batch_size, include=dict(phase=caffe.TRAIN), 
+			if multiple:
+				# enable weight by size because we have multiple lmdbs to read from
+				n.data, n.labels = L.DocData(sources = sources, batch_size=batch_size, include=dict(phase=caffe.TRAIN), 
+					image_transform_param=createTransformParam(caffe.TRAIN, seed=seed, shift=shift_channels[0], scale=scale_channels[0], **tparams), 
+					weights_by_size=True, **data_param)
+			else:
+				n.data, n.labels = L.DocData(sources = sources, batch_size=batch_size, include=dict(phase=caffe.TRAIN), 
 					image_transform_param=createTransformParam(caffe.TRAIN, seed=seed, shift=shift_channels[0], scale=scale_channels[0], **tparams), 
 					**data_param)
 
+
 			if val_sources:
-				n.VAL_data, n.VAL_labels = L.DocData(sources=val_sources, name="validation", batch_size=VAL_BATCH_SIZE, 
+				if multiple:
+					# make sure in_order and no_wrap are true so we can iterate the whole validation set through multiple lmdbs
+					n.VAL_data, n.VAL_labels = L.DocData(sources=val_sources, name="validation", batch_size=VAL_BATCH_SIZE, 
+						include=dict(phase=caffe.TEST),  
+						image_transform_param=createTransformParam(caffe.TEST, shift=shift_channels[0], scale=scale_channels[0], **tparams), 
+						in_order=True, no_wrap=True, **data_param) 
+				else:
+					n.VAL_data, n.VAL_labels = L.DocData(sources=val_sources, name="validation", batch_size=VAL_BATCH_SIZE, 
 						include=dict(phase=caffe.TEST), 
 						image_transform_param=createTransformParam(caffe.TEST, shift=shift_channels[0], scale=scale_channels[0], **tparams), 
 						**data_param) 
@@ -570,14 +607,18 @@ def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=Fals
 			kwargs['num_output'] = int(mult * kwargs['num_output'])
 		layer = t(layer, **kwargs)
 
-	#If SPP and if last layer is pooling dont add pooling layer
-	if not (spp and layers[-1][0] == poolLayer):
+	if pool is not None:
+		#print "ADDING PADDING"
+		# add in a padding to powers of 2 so that we guarentee the same size output
+		layer = L.Padding(layer, pad_to_power_of_2=True, name="padding")
+		if pool == 'spp':
+			layer = L.SPP(layer, pyramid_height=4, name="spp")
+		elif pool == 'hvp':
+			layer = L.HVP(layer, num_horz_partitions=3, num_vert_partitions=3, name="hvp")
+	else:
 		layer = layers[-1][0](layer, **layers[-1][1])
 
-	#add SPP
-	if spp:
-		#print "ADDING SPP"
-		layer = L.SPP(layer,pyramid_height=4, name="spp")
+			
 	
 	#FC layers
 	fc_layers = FC_LAYERS[size]
@@ -605,17 +646,17 @@ def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=Fals
 	return n.to_proto()
 
 
-def createExperiment(ds, tags, group, experiment, num_experiments=1, spp = False, shift=None, scale=None, **tparams):
+def createExperiment(ds, tags, group, experiment, num_experiments=1, pool=None, multiple=False, shift=None, scale=None, **tparams):
 
 	# Check if tags are all the same size or not
 	# If they aren't we are doing multi-scale training, and need to stick them all
-	# in the same doc data layer and make sure we use SPP
-	# TODO: Pyramid input, HVP pooling
+	# in the same doc data layer 
+	# TODO: Pyramid input
 	if not isinstance(tags, list):
 		tags = [tags]
 	sizes = map(getSizeFromTag, tags)
 	size = sizes[0]
-	same_size = True
+	same_size = (not multiple)  # multiple AR training defaults to not the same size
 	for s in sizes:
 		same_size = (same_size and s == size)
 
@@ -629,8 +670,8 @@ def createExperiment(ds, tags, group, experiment, num_experiments=1, spp = False
 		size = [tparams['crop']]
 	
 	#if sizes are different, spatial pyramid pooling is required.
-	if not same_size:
-		spp = True
+	if not same_size and pool is None:
+		raise Exception("Input DBs are not the same size and regular pooling is enabled")
 
 	for exp_num in range(1,num_experiments+1):
 		exp_num = str(exp_num)
@@ -645,13 +686,22 @@ def createExperiment(ds, tags, group, experiment, num_experiments=1, spp = False
 		if not os.path.exists(tf):
 			os.makedirs(tf)
 		
-		# only 1 lmdb split is in current use
-		sources = map(lambda t: LMDB_PATH(ds, t, "1"), tags)
-		sources_tr, sources_val, sources_ts =  zip(*sources)
+		if multiple:
+			sources_tr, sources_val, sources_ts = [], [], []
+			for tag in tags:
+				tr, val, ts = LMDB_MULTIPLE_PATH(ds, tag, "1")
+				sources_tr += tr
+				sources_val += val
+				sources_ts += ts
+		else:
+			# only 1 lmdb split is in current use
+			sources = map(lambda t: LMDB_PATH(ds, t, "1"), tags)
+			sources_tr, sources_val, sources_ts =  zip(*sources)
 
 		#common parameters
 		params = dict(sources=list(sources_tr), size=size[0], num_output=OUTPUT_SIZES[ds], concat=same_size, 
-					spp=spp, shift_channels=shift, scale_channels=scale, batch_size=BATCH_SIZE[ds], **tparams)
+					pool=pool, shift_channels=shift, scale_channels=scale, batch_size=BATCH_SIZE[ds], 
+					multiple=multiple, **tparams)
 	   
 		#create train_val file
 		train_val = os.path.join(out_dir, TRAIN_VAL)
@@ -695,6 +745,10 @@ def createExperiment(ds, tags, group, experiment, num_experiments=1, spp = False
 			f.write("base_lr: %f\n" % (LEARNING_RATES[ds]))
 			f.write("max_iter: %d\n" % (MAX_ITER[ds]))
 			f.write("stepsize: %d\n" % (STEP_SIZE[ds]))
+			if multiple:
+				f.write("test_iter: %d\n" % MULTIPLE_TEST_ITERS[ds][tag]) 
+			else:
+				f.write("test_iter: %d\n" % 1000)  # for all non-multiple datasets
 			for param, val in SOLVER_PARAM.items():
 				f.write("%s: %s\n" % (param, str(val)))
 

@@ -34,6 +34,13 @@ LayerParameter SPPLayer<Dtype>::GetPoolingParam(const int pyramid_level,
   int remainder_w = kernel_w * num_bins - bottom_w;
   int pad_w = (remainder_w + 1) / 2;
 
+  if (pad_w >= kernel_w) {
+  	pad_w = kernel_w - 1;
+  }
+  if (pad_h >= kernel_h) {
+  	pad_h = kernel_h - 1;
+  }
+
   pooling_param.mutable_pooling_param()->set_pad_h(pad_h);
   pooling_param.mutable_pooling_param()->set_pad_w(pad_w);
   pooling_param.mutable_pooling_param()->set_kernel_h(kernel_h);
