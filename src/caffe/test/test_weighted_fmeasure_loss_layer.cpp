@@ -17,15 +17,20 @@ namespace caffe {
 
 template <typename TypeParam>
 class WeightedFMeasureLossLayerTest : public MultiDeviceTest<TypeParam> {
-//class WeightedFMeasureLossLayerTest : public CPUDeviceTest<TypeParam> {
   typedef typename TypeParam::Dtype Dtype;
 
  protected:
-  WeightedFMeasureLossLayerTest()
-      : blob_bottom_data_(new Blob<Dtype>(1, 1, 1, 2)),
+  WeightedFMeasureLossLayerTest() : 
+  /*
+  	    blob_bottom_data_(new Blob<Dtype>(1, 1, 1, 2)),
         blob_bottom_label_(new Blob<Dtype>(1, 1, 1, 2)),
         blob_bottom_recall_weight_(new Blob<Dtype>(1, 1, 1, 2)),
         blob_bottom_precision_weight_(new Blob<Dtype>(1, 1, 1, 2)),
+  */
+  	    blob_bottom_data_(new Blob<Dtype>(10, 1, 10, 10)),
+        blob_bottom_label_(new Blob<Dtype>(10, 1, 10, 10)),
+        blob_bottom_recall_weight_(new Blob<Dtype>(10, 1, 10, 10)),
+        blob_bottom_precision_weight_(new Blob<Dtype>(10, 1, 10, 10)),
         blob_top_loss_(new Blob<Dtype>()) {
     // fill the values
     FillerParameter filler_param;
@@ -33,10 +38,12 @@ class WeightedFMeasureLossLayerTest : public MultiDeviceTest<TypeParam> {
     filler_param.set_max(1.0);
     UniformFiller<Dtype> filler(filler_param);
 
-    //filler.Fill(this->blob_bottom_data_);
+    filler.Fill(this->blob_bottom_data_);
+	/*
 	Dtype* input = blob_bottom_data_->mutable_cpu_data();
 	input[0] = 0.3;
 	input[1] = 0.8;
+	*/
     blob_bottom_vec_.push_back(blob_bottom_data_);
 
     // Assume binary targets
@@ -47,16 +54,20 @@ class WeightedFMeasureLossLayerTest : public MultiDeviceTest<TypeParam> {
 	}
     blob_bottom_vec_.push_back(blob_bottom_label_);
 
-    //filler.Fill(this->blob_bottom_recall_weight_);
+    filler.Fill(this->blob_bottom_recall_weight_);
+	/*
 	Dtype* recall_weight = blob_bottom_recall_weight_->mutable_cpu_data();
 	recall_weight[0] = 1.0;
 	recall_weight[1] = 1.0;
+	*/
     blob_bottom_vec_.push_back(blob_bottom_recall_weight_);
 
-    //filler.Fill(this->blob_bottom_precision_weight_);
+    filler.Fill(this->blob_bottom_precision_weight_);
+	/*
 	Dtype* precision_weight = blob_bottom_precision_weight_->mutable_cpu_data();
 	precision_weight[0] = 1.0;
 	precision_weight[1] = 1.0;
+	*/
     blob_bottom_vec_.push_back(blob_bottom_precision_weight_);
 
     blob_top_vec_.push_back(blob_top_loss_);
