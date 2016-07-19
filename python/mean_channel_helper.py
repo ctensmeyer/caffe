@@ -13,20 +13,23 @@ num_sources = len(sources) / 2
 mean_idx = 0
 mean_strs = list()
 channel_strs = list()
-for x in xrange(num_sources):
-	source = sources[x]
-	if "color" in source:
-		source_means = means[mean_idx:mean_idx+3]
-		mean_idx += 3
-		mean_str = ",".join(map(str, source_means))
-		mean_strs.append(mean_str)
-		channel_strs.append('3')
-	elif ("gray" in source or "binary" in source):
-		mean_strs.append(str(means[mean_idx]))
-		mean_idx += 1
-		channel_strs.append("1")
-	else:
-		raise Exception("Unrecognized type of source: %s" % source)
+try:
+	for x in xrange(num_sources):
+		source = sources[x]
+		if "color" in source:
+			source_means = means[mean_idx:mean_idx+3]
+			mean_idx += 3
+			mean_str = ",".join(map(str, source_means))
+			mean_strs.append(mean_str)
+			channel_strs.append('3')
+		elif ("gray" in source or "binary" in source):
+			mean_strs.append(str(means[mean_idx]))
+			mean_idx += 1
+			channel_strs.append("1")
+		else:
+			raise Exception("Unrecognized type of source: %s" % source)
+except IndexError as e:
+	pass
 		
 if output_type == 'mean':
 	print delim.join(mean_strs)

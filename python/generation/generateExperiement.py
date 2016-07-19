@@ -4,8 +4,8 @@ import createNetwork
 DS = ["rvl_cdip", "andoc_1m", "rvl_cdip_10", "rvl_cdip_100", "andoc_1m_10", "andoc_1m_50"]
 
 ########################
-#ds = 'rvl_cdip'
-ds = 'andoc_1m'
+#ds = 'rvl_cdip_100'
+ds = 'andoc_1m_50'
 #######################
 
 
@@ -52,6 +52,7 @@ def COMBO(ds=ds, size = 227, pad=False, multiple=False):
 
 SIZES = [32, 64, 100, 150, 227, 256, 384, 512]
 WIDTHS = [0.1, 0.25, 0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 2]
+DEPTHS = [0, 1, 2, 3, 4, 5, 6]
 default = dict(shift="mean", scale=(1.0/255))
 width_default = dict(shift="mean", scale=(1.0/255), shear=10, num_experiments=2)
 size_default = dict(shift="mean", scale=(1.0/255), num_experiments=2)
@@ -146,7 +147,18 @@ EXPERIMENTS = {"baseline": {"baseline" : (COMBO(ds), dict(num_experiments=3, **d
                              "hvp_multiple_227": (COMBO(ds, 227, multiple=True), dict(pool='hvp', multiple=True, **pad_default)),
                              "hvp_multiple_384": (COMBO(ds, 384, multiple=True), dict(pool='hvp', multiple=True, **pad_default)),
                             },
+                "depth": { "depth_%d" % depth: (COMBO(ds), dict(depth=depth, **width_default)) for depth in DEPTHS },
                 }
+
+def depthExperiments():
+    group = "depth"
+
+    experiments = EXPERIMENTS["depth"]
+
+    for name, (tags, tr) in experiments.items():
+        print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
+        createNetwork.createExperiment(ds, tags, group, name, **tr)
+
 
 def paddingExperiments():
     group = "padding"
@@ -162,7 +174,7 @@ def widthExperiments():
     group = "width"
 
     experiments = EXPERIMENTS["width"]
-    #experiments = EXPERIMENTS["width_2"]
+    experiments.update(EXPERIMENTS["width_2"])
 
     for name, (tags, tr) in experiments.items():
         print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
@@ -231,7 +243,8 @@ def channelExperiments():
 
 if __name__ == "__main__":
     #print COMBO(ds, 227, multiple=True)
-    paddingExperiments()
+    #paddingExperiments()
+    depthExperiments()
     #widthExperiments()
     #augmentationExperiments()
     #channelExperiments()

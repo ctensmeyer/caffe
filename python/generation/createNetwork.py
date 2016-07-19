@@ -28,6 +28,8 @@ MEAN_VALUES['rvl_cdip_100'] = MEAN_VALUES['rvl_cdip']
 MEAN_VALUES['andoc_1m_10'] = MEAN_VALUES['andoc_1m']
 MEAN_VALUES['andoc_1m_50'] = MEAN_VALUES['andoc_1m']
 
+DEFAULT_TEST_TRANSFORMS = []
+
 
 def OUTPUT_FOLDER(dataset, group, experiment, split):
 	return os.path.join("experiments/preprocessing/nets" , dataset, group, experiment, split)
@@ -104,6 +106,88 @@ def fcLayer(prev, **kwargs):
 	relu = L.ReLU(fc, in_place=True)
 	return relu
 	
+# all sized for 227x227
+DEPTH_LAYERS = { 0 : [(convLayer, {"name": "conv1", "kernel_size": 11, "num_output": 96, "stride": 4}), 
+					 (poolLayer, {"name": "pool1", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm1", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv2", "kernel_size": 5, "num_output":256, "pad": 2}),
+					 (poolLayer, {"name": "pool2", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm2", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (poolLayer, {"name": "pool5", "kernel_size": 3, "stride": 2})
+					],
+                 1 : [(convLayer, {"name": "conv1", "kernel_size": 11, "num_output": 96, "stride": 4}), 
+					 (poolLayer, {"name": "pool1", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm1", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv2", "kernel_size": 5, "num_output":256, "pad": 2}),
+					 (poolLayer, {"name": "pool2", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm2", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv5", "kernel_size": 3, "num_output":256, "pad": 1}),
+					 (poolLayer, {"name": "pool5", "kernel_size": 3, "stride": 2})
+					],
+                 2 : [(convLayer, {"name": "conv1", "kernel_size": 11, "num_output": 96, "stride": 4}), 
+					 (poolLayer, {"name": "pool1", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm1", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv2", "kernel_size": 5, "num_output":256, "pad": 2}),
+					 (poolLayer, {"name": "pool2", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm2", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv3", "kernel_size": 3, "num_output":384, "pad": 1}),
+					 (convLayer, {"name": "conv5", "kernel_size": 3, "num_output":256, "pad": 1}),
+					 (poolLayer, {"name": "pool5", "kernel_size": 3, "stride": 2})
+					],
+                 3 : [(convLayer, {"name": "conv1", "kernel_size": 11, "num_output": 96, "stride": 4}), 
+					 (poolLayer, {"name": "pool1", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm1", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv2", "kernel_size": 5, "num_output":256, "pad": 2}),
+					 (poolLayer, {"name": "pool2", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm2", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv3", "kernel_size": 3, "num_output":384, "pad": 1}),
+					 (convLayer, {"name": "conv4", "kernel_size": 3, "num_output":384, "pad": 1}),
+					 (convLayer, {"name": "conv5", "kernel_size": 3, "num_output":256, "pad": 1}),
+					 (poolLayer, {"name": "pool5", "kernel_size": 3, "stride": 2})
+					],
+                 4 : [(convLayer, {"name": "conv1", "kernel_size": 11, "num_output": 96, "stride": 4}), 
+					 (poolLayer, {"name": "pool1", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm1", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv2", "kernel_size": 5, "num_output":256, "pad": 2}),
+					 (poolLayer, {"name": "pool2", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm2", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv3", "kernel_size": 3, "num_output":384, "pad": 1}),
+					 (convLayer, {"name": "conv4", "kernel_size": 3, "num_output":384, "pad": 1}),
+					 (convLayer, {"name": "conv5", "kernel_size": 3, "num_output":384, "pad": 1}),
+					 (convLayer, {"name": "conv6", "kernel_size": 3, "num_output":256, "pad": 1}),
+					 (poolLayer, {"name": "pool5", "kernel_size": 3, "stride": 2})
+					],
+	
+                 5 : [(convLayer, {"name": "conv1", "kernel_size": 11, "num_output": 96, "stride": 4}), 
+					 (poolLayer, {"name": "pool1", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm1", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv2", "kernel_size": 5, "num_output":256, "pad": 2}),
+					 (poolLayer, {"name": "pool2", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm2", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv3", "kernel_size": 3, "num_output":384, "pad": 1}),
+					 (convLayer, {"name": "conv4", "kernel_size": 3, "num_output":384, "pad": 1}),
+					 (convLayer, {"name": "conv5", "kernel_size": 3, "num_output":384, "pad": 1}),
+					 (convLayer, {"name": "conv6", "kernel_size": 3, "num_output":384, "pad": 1}),
+					 (convLayer, {"name": "conv7", "kernel_size": 3, "num_output":256, "pad": 1}),
+					 (poolLayer, {"name": "pool5", "kernel_size": 3, "stride": 2})
+					],
+
+                 6 : [(convLayer, {"name": "conv1", "kernel_size": 11, "num_output": 96, "stride": 4}), 
+					 (poolLayer, {"name": "pool1", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm1", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv2", "kernel_size": 5, "num_output":256, "pad": 2}),
+					 (poolLayer, {"name": "pool2", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm2", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv3", "kernel_size": 3, "num_output":384, "pad": 1}),
+					 (convLayer, {"name": "conv4", "kernel_size": 3, "num_output":384, "pad": 1}),
+					 (convLayer, {"name": "conv5", "kernel_size": 3, "num_output":384, "pad": 1}),
+					 (convLayer, {"name": "conv6", "kernel_size": 3, "num_output":384, "pad": 1}),
+					 (convLayer, {"name": "conv7", "kernel_size": 3, "num_output":384, "pad": 1}),
+					 (convLayer, {"name": "conv8", "kernel_size": 3, "num_output":256, "pad": 1}),
+					 (poolLayer, {"name": "pool5", "kernel_size": 3, "stride": 2})
+					]
+				}
+				
 CONV_LAYERS = {
 			   32:  [(convLayer, {"name": "conv1", "kernel_size": 5, "num_output": 24, "stride": 1}), 
 					 (L.LRN,	 {"name": "norm1", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
@@ -269,6 +353,9 @@ for d in [LEARNING_RATES, BATCH_SIZE, MAX_ITER, STEP_SIZE]:
 	d['andoc_1m_10'] = d['andoc_1m']
 	d['andoc_1m_50'] = d['andoc_1m']
 
+MAX_ITER['rvl_cdip_100'] = 150000
+STEP_SIZE['rvl_cdip_100'] = 50000
+
 SOLVER_PARAM = {#"test_iter": 1000, 
 				"test_interval": 1000, 
 				"lr_policy": '"step"',
@@ -340,8 +427,7 @@ def createElasticDeformationParam(elastic_sigma, elastic_max_alpha):
 	return dict(sigma=elastic_sigma, max_alpha=elastic_max_alpha)
 
 
-def createTransformParam(phase, seed=None, test_transforms = [10], deploy=False, **kwargs):
-#def createTransformParam(phase, seed=None, test_transforms = [], deploy=False, **kwargs):
+def createTransformParam(phase, seed=None, test_transforms = DEFAULT_TEST_TRANSFORMS, deploy=False, **kwargs):
 	params = []
 
 	if deploy:
@@ -596,7 +682,10 @@ def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=Fals
 		n.data = L.Input()
 
 	#CONV layers
-	layers = CONV_LAYERS[size]
+	if 'depth' in tparams:
+		layers = DEPTH_LAYERS[tparams['depth']]
+	else:
+		layers = CONV_LAYERS[size]
 	layer = n.data
 	for t, kwargs in layers[:-1]:
 		if (tparams.get('width_mult') or tparams.get('conv_width_mult')) and kwargs.get('num_output'):
@@ -605,7 +694,8 @@ def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=Fals
 			if not mult:
 				mult = tparams.get('conv_width_mult')
 			kwargs['num_output'] = int(mult * kwargs['num_output'])
-		layer = t(layer, **kwargs)
+		else:
+			layer = t(layer, **kwargs)
 
 	if pool is not None:
 		#print "ADDING PADDING"

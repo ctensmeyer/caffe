@@ -19,7 +19,7 @@ def convert(doc_datum):
 	#print "%dx%dx%d with %d bytes of data with encoding: %s" % (
 	#	datum.channels, datum.height, datum.width, len(datum.data), datum.encoded)
 
-	datum.label = doc_datum.collection
+	datum.label = doc_datum.dbid
 	return datum
 
 
