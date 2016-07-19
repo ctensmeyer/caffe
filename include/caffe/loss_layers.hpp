@@ -601,6 +601,7 @@ class MultinomialLogisticLossLayer : public LossLayer<Dtype> {
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 };
 
+
 /**
  * @brief Computes the cross-entropy (logistic) loss @f$
  *          E = \frac{-1}{n} \sum\limits_{n=1}^N \left[
@@ -815,6 +816,38 @@ class SoftmaxWithLossLayer : public LossLayer<Dtype> {
   bool normalize_;
 
   int softmax_axis_, outer_num_, inner_num_;
+};
+
+template <typename Dtype>
+class WeightedFmeasureLossLayer : public LossLayer<Dtype> {
+ public:
+  explicit WeightedFmeasureLossLayer(const LayerParameter& param)
+      : LossLayer<Dtype>(param), work_buffer_(new Blob<Dtype>()) {}
+  virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+  virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+
+  virtual inline const char* type() const { return "WeightedFmeasureLossLoss"; }
+  virtual inline int ExactNumBottomBlobs() const { return 4; }
+  // predictions
+  // binary gt image
+  // recall weights
+  // precision weights
+
+ protected:
+
+  virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+  virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+
+  shared_ptr<Blob<Dtype> > work_buffer_;
+  Dtype recall_, precision_, precision_num_, precision_denum_, recall_num_, recall_denum_;
 };
 
 }  // namespace caffe
