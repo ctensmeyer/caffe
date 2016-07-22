@@ -111,6 +111,35 @@ class BaseConvolutionLayer : public Layer<Dtype> {
   Blob<Dtype> bias_multiplier_;
 };
 
+template <typename Dtype>
+class BilinearInterpolationLayer : public Layer<Dtype> {
+public:
+  explicit BilinearInterpolationLayer(const LayerParameter& param) : 
+  	Layer<Dtype>(param) {}
+  virtual void SetUp(const vector<Blob<Dtype>*>& bottom, 
+      const vector<Blob<Dtype>*>& top);
+  virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+  virtual inline int ExactNumBottomBlobs() const { return 2; }
+  virtual inline int ExactNumTopBlobs() const { return 1; }
+
+protected:
+  virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom, 
+      const vector<Blob<Dtype>*>& top);
+  virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom, 
+      const vector<Blob<Dtype>*>& top);
+  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  int num_;
+  int channel_;
+  int height_in_;
+  int width_in_;
+  int height_out_;
+  int width_out_;
+};
+
 /**
  * @brief Convolves the input image with a bank of learned filters,
  *        and (optionally) adds biases.
