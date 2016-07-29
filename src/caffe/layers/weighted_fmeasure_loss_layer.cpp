@@ -145,7 +145,7 @@ void WeightedFmeasureLossLayer<Dtype>::Backward_cpu(
 }
 
 #ifdef CPU_ONLY
-STUB_GPU(EuclideanLossLayer);
+STUB_GPU(WeightedFmeasureLossLayer);
 #endif
 
 INSTANTIATE_CLASS(WeightedFmeasureLossLayer);
