@@ -42,6 +42,11 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   LOG(INFO) << "Solver scaffolding done.";
   iter_ = 0;
   current_step_ = 0;
+  stop_early_ = false;
+  if (param_.monitor_test()) {
+    best_loss_so_far_ = 100000;  // init to very large value
+	steps_no_improvement_ = 0;
+  }
 }
 
 template <typename Dtype>
@@ -173,6 +178,10 @@ void Solver<Dtype>::Step(int iters) {
   }
 
   while (iter_ < stop_iter) {
+    if (stop_early_) {
+	  LOG(INFO) << "Stopping Training Early";
+      break;
+	}
     // zero-init the params
     for (int i = 0; i < net_->params().size(); ++i) {
       shared_ptr<Blob<Dtype> > blob = net_->params()[i];
@@ -339,6 +348,14 @@ void Solver<Dtype>::Test(const int test_net_id) {
     loss /= param_.test_iter(test_net_id);
     LOG(INFO) << "Test loss: " << loss;
   }
+  if (param_.monitor_test() && param_.monitor_test_id() == test_net_id) {
+    if (loss < best_loss_so_far_) {
+	  best_loss_so_far_ = loss;
+	  steps_no_improvement_ = 0;
+	} else {
+	  steps_no_improvement_++;
+	}
+  }
   for (int i = 0; i < test_score.size(); ++i) {
     const int output_blob_index =
         test_net->output_blob_indices()[test_score_output_id[i]];
@@ -443,8 +460,22 @@ Dtype SGDSolver<Dtype>::GetLearningRate() {
     rate = this->param_.base_lr() * (Dtype(1.) /
         (Dtype(1.) + exp(-this->param_.gamma() * (Dtype(this->iter_) -
           Dtype(this->param_.stepsize())))));
+  } else if (this->param_.monitor_test()) {
+    if (this->steps_no_improvement_ >= this->param_.max_steps_without_improvement()) {
+	  periods_no_improvement_++;
+	  this->steps_no_improvement_ = 0;
+	  if (periods_no_improvement_ >= this->param_.max_periods_without_improvement()) {
+	    this->stop_early_ = true;
+	  }
+	}
+    rate = this->param_.base_lr() *
+        pow(this->param_.gamma(), periods_no_improvement_);
   } else {
     LOG(FATAL) << "Unknown learning rate policy: " << lr_policy;
+  }
+
+  if (rate < this->param_.min_lr()) {
+    rate = this->param_.min_lr();
   }
   return rate;
 }

@@ -58,6 +58,9 @@ class Solver {
   int current_step_;
   shared_ptr<Net<Dtype> > net_;
   vector<shared_ptr<Net<Dtype> > > test_nets_;
+  Dtype best_loss_so_far_;
+  int steps_no_improvement_;
+  bool stop_early_;
 
   DISABLE_COPY_AND_ASSIGN(Solver);
 };
@@ -71,9 +74,9 @@ template <typename Dtype>
 class SGDSolver : public Solver<Dtype> {
  public:
   explicit SGDSolver(const SolverParameter& param)
-      : Solver<Dtype>(param) { PreSolve(); }
+      : Solver<Dtype>(param), periods_no_improvement_(0) { PreSolve(); }
   explicit SGDSolver(const string& param_file)
-      : Solver<Dtype>(param_file) { PreSolve(); }
+      : Solver<Dtype>(param_file), periods_no_improvement_(0) { PreSolve(); }
 
   const vector<shared_ptr<Blob<Dtype> > >& history() { return history_; }
 
@@ -92,6 +95,7 @@ class SGDSolver : public Solver<Dtype> {
   // temp maintains other information that might be needed in computation
   //   of gradients/updates and is not needed in snapshots
   vector<shared_ptr<Blob<Dtype> > > history_, update_, temp_;
+  int periods_no_improvement_;
 
   DISABLE_COPY_AND_ASSIGN(SGDSolver);
 };
