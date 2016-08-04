@@ -828,7 +828,7 @@ class WeightedFmeasureLossLayer : public LossLayer<Dtype> {
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
 
-  virtual inline const char* type() const { return "WeightedFmeasureLossLoss"; }
+  virtual inline const char* type() const { return "WeightedFmeasureLoss"; }
   virtual inline int ExactNumBottomBlobs() const { return 4; }
   // predictions
   // binary gt image
