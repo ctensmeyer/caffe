@@ -13,33 +13,47 @@ from caffe import params as P
 import numpy as np
 import random
 import collections
+import lmdb
 
 ROOT="/fslgroup/fslg_nnml/compute"
 
 SIZES=[512,384,256,150,100,64,32]
 
-OUTPUT_SIZES = {"andoc_1m": 974, "andoc_1m_10": 974, "andoc_1m_50": 974, "rvl_cdip": 16, "rvl_cdip_10": 16, "rvl_cdip_100": 16}
+OUTPUT_SIZES = {"andoc_1m": 974, "andoc_1m_10": 974, "andoc_1m_50": 974, "rvl_cdip": 16, "rvl_cdip_10": 16, "rvl_cdip_100": 16, "imagenet": 1000}
 
 MEAN_VALUES = { "andoc_1m": {"binary": [194], "binary_invert": [61], "gray": [175], "gray_invert": [80], "gray_padded": [None], "color": [178,175,166], "color_invert": [77,80,89], "color_padded": [126,124,118], "color_multiple": [178,175,166]},
-				"rvl_cdip": {"binary": [233], "binary_invert": [22], "gray": [234], "gray_padded": [239], "gray_invert": [21], "gray_multiple": [234]}
+				"rvl_cdip": {"binary": [233], "binary_invert": [22], "gray": [234], "gray_padded": [239], "gray_invert": [21], "gray_multiple": [234]},
+				"imagenet": {"color": [104,117,123]},
 			  }
 MEAN_VALUES['rvl_cdip_10'] = MEAN_VALUES['rvl_cdip']
 MEAN_VALUES['rvl_cdip_100'] = MEAN_VALUES['rvl_cdip']
 MEAN_VALUES['andoc_1m_10'] = MEAN_VALUES['andoc_1m']
 MEAN_VALUES['andoc_1m_50'] = MEAN_VALUES['andoc_1m']
 
-DEFAULT_TEST_TRANSFORMS = []
+DEFAULT_TEST_TRANSFORMS = [10]
 
+def lmdb_num_entries(db_path):
+	env = lmdb.open(db_path, readonly=True)
+	stats = env.stat()
+	num_entries = stats['entries']
+	env.close()
+	return num_entries
+	
 
 def OUTPUT_FOLDER(dataset, group, experiment, split):
 	return os.path.join("experiments/preprocessing/nets" , dataset, group, experiment, split)
 
+def OUTPUT_FOLDER_BINARIZE(dataset, group, experiment, split):
+	return os.path.join("experiments/binarize/nets" , dataset, group, experiment, split)
 
 def TRANSFORMS_FOLDER(dataset, group, experiment, split):
 	return os.path.join(OUTPUT_FOLDER(dataset,group,experiment,split), "transforms")
 
 def EXPERIMENTS_FOLDER(dataset, group, experiment, split):
 	return os.path.join(ROOT, OUTPUT_FOLDER(dataset, group, experiment, split))
+
+def EXPERIMENTS_FOLDER_BINARIZE(dataset, group, experiment, split):
+	return os.path.join(ROOT, OUTPUT_FOLDER_BINARIZE(dataset, group, experiment, split))
 
 def LMDB_MULTIPLE_PATH(dataset, tag, split):
 	lmdbs = collections.defaultdict(list)
@@ -56,7 +70,6 @@ def LMDB_MULTIPLE_PATH(dataset, tag, split):
 
 	return lmdbs['train_lmdb'], lmdbs['val_lmdb'], lmdbs['test_lmdb']
 	
-	
 
 def LMDB_PATH(dataset, tag, split):
 	#return map(lambda s: os.path.join(ROOT, "lmdb", dataset, tag, split, s), ["train_lmdb", "val_lmdb", "test_lmdb"])
@@ -70,8 +83,18 @@ def LMDB_PATH(dataset, tag, split):
 		lmdbs.append(os.path.join(ROOT, "lmdb", dataset, tag, split, s))
 	return lmdbs
 
+def LMDB_PATH_BINARIZE(dataset, tag, data_partition='train'):
+	if not isinstance(tag, basestring):
+		path = os.path.join(ROOT, "lmdb", dataset, tag[0], "%s_%s_lmdb" % (tag[1], data_partition))
+	else:
+		path = os.path.join(ROOT, "lmdb", dataset, tag, "%s_%s_lmdb" % (tag, data_partition))
+	return path
+	
+
 def getSizeFromTag(t):
-	return map(int, re.sub("(_?[^0-9_]+_?)","", t).split("_"))
+	tokens = t.split("_")
+	return int(tokens[1])
+	#return map(int, re.sub("(_?[^0-9_]+_?)","", t).split("_"))
 
 def getTagWithoutSize(t):
 	return re.sub("_*[0-9]+","", t)
@@ -97,6 +120,15 @@ def convLayer(prev, **kwargs):
 	conv = L.Convolution(prev, param=[dict(lr_mult=1), dict(lr_mult=2)], weight_filler=dict(type='msra'), **kwargs)
 	relu = L.ReLU(conv, in_place=True)
 	return relu
+
+def convLayerSigmoid(prev, **kwargs):
+	conv = L.Convolution(prev, param=[dict(lr_mult=1), dict(lr_mult=2)], weight_filler=dict(type='msra'), **kwargs)
+	sigmoid = L.Sigmoid(conv, in_place=True)
+	return sigmoid
+
+def convLayerOnly(prev, **kwargs):
+	conv = L.Convolution(prev, param=[dict(lr_mult=1), dict(lr_mult=2)], weight_filler=dict(type='msra'), **kwargs)
+	return conv
 
 def ipLayer(prev, **kwargs):
    return L.InnerProduct(prev, param=[dict(lr_mult=1), dict(lr_mult=2)], weight_filler=dict(type='msra'), bias_filler=dict(type='constant'), **kwargs) 
@@ -261,6 +293,18 @@ CONV_LAYERS = {
 					 (poolLayer, {"name": "pool5", "kernel_size": 3, "stride": 2})
 					],
 
+			   320: [(convLayer, {"name": "conv1", "kernel_size": 15, "num_output": 96, "stride": 5}), 
+					 (poolLayer, {"name": "pool1", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm1", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv2", "kernel_size": 5, "num_output":256, "pad": 2}),
+					 (poolLayer, {"name": "pool2", "kernel_size": 3, "stride": 2}),
+					 (L.LRN,	 {"name": "norm2", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
+					 (convLayer, {"name": "conv3", "kernel_size": 3, "num_output":384, "pad": 1}),
+					 (convLayer, {"name": "conv4", "kernel_size": 3, "num_output":384, "pad": 0}),
+					 (convLayer, {"name": "conv5", "kernel_size": 3, "num_output":256, "pad": 1}),
+					 (poolLayer, {"name": "pool5", "kernel_size": 3, "stride": 2})
+					],
+
 			   384: [(convLayer, {"name": "conv1", "kernel_size": 15, "num_output": 120, "stride": 3}), 
 					 (poolLayer, {"name": "pool1", "kernel_size": 3, "stride": 2}),
 					 (L.LRN,	 {"name": "norm1", "local_size": 5, "alpha": 0.0001, "beta": 0.75}),
@@ -321,6 +365,11 @@ FC_LAYERS = {
 				   (L.Dropout, {"name": "dropout6", "dropout_ratio": 0.5, "in_place": True}),
 				   (fcLayer, {"name": "fc7", "num_output": 4096}),
 				   (L.Dropout, {"name": "dropout7", "dropout_ratio": 0.5, "in_place": True})],
+
+			 320: [(fcLayer, {"name": "fc6", "num_output": 4096}),
+				   (L.Dropout, {"name": "dropout6", "dropout_ratio": 0.5, "in_place": True}),
+				   (fcLayer, {"name": "fc7", "num_output": 4096}),
+				   (L.Dropout, {"name": "dropout7", "dropout_ratio": 0.5, "in_place": True})],
 				   
 			 384: [(fcLayer, {"name": "fc6", "num_output": 5120}),
 				   (L.Dropout, {"name": "dropout6", "dropout_ratio": 0.5, "in_place": True}),
@@ -338,14 +387,15 @@ FC_LAYERS = {
 VAL_BATCH_SIZE = 40
 TRAIN_VAL = "train_val.prototxt"
 TRAIN_TEST = "train_test.prototxt"
+TRAIN_TEST2 = "train_test2.prototxt"
 DEPLOY_FILE = "deploy.prototxt"
 SOLVER = "solver.prototxt"
 SNAPSHOT_FOLDER = "snapshots"
 
-LEARNING_RATES = {"andoc_1m": 0.005, "rvl_cdip": 0.003}
-BATCH_SIZE = {"andoc_1m": 128, "rvl_cdip": 32}
-MAX_ITER = {"andoc_1m": 250000, "rvl_cdip": 500000}
-STEP_SIZE = {"andoc_1m": 100000, "rvl_cdip": 150000}
+LEARNING_RATES = {"andoc_1m": 0.005, "rvl_cdip": 0.003, "imagenet": 0.01}
+BATCH_SIZE = {"andoc_1m": 128, "rvl_cdip": 32, "imagenet": 256}
+MAX_ITER = {"andoc_1m": 250000, "rvl_cdip": 500000, "imagenet": 450000}
+STEP_SIZE = {"andoc_1m": 100000, "rvl_cdip": 150000, "imagenet": 100000}
 
 for d in [LEARNING_RATES, BATCH_SIZE, MAX_ITER, STEP_SIZE]:
 	d['rvl_cdip_10'] = d['rvl_cdip']
@@ -367,8 +417,10 @@ SOLVER_PARAM = {#"test_iter": 1000,
 				"solver_mode": "GPU"}
 
 # this is for validation sets, not test sets.  Test set iterations are specified in train.sh
-MULTIPLE_TEST_ITERS  = { "andoc_1m" : { "color_227_multiple": 1007, "color_384_multiple": 1013},
-						 "rvl_cdip" : { "gray_227_multiple":  1006, "gray_384_multiple": 1008}
+MULTIPLE_TEST_ITERS  = { "andoc_1m" : { "color_227_multiple": 1007, "color_384_multiple": 1013, 
+									    "color_227_multiple2": 1005, "color_384_multiple2": 1005},
+						 "rvl_cdip" : { "gray_227_multiple":  1006, "gray_384_multiple": 1008, 
+						 			    "gray_227_multiple2": 1005, "gray_384_multiple2": 1005}
                        }
 
 def createLinearParam(shift=0.0, scale=1.0, **kwargs):
@@ -425,6 +477,18 @@ def createPerspectiveParam(sig):
 
 def createElasticDeformationParam(elastic_sigma, elastic_max_alpha):
 	return dict(sigma=elastic_sigma, max_alpha=elastic_max_alpha)
+
+
+def createTransformParam2(scale, shift,  seed):
+	params = []
+	if scale is not None and shift is not None:
+		params.append({'linear_params': {'scale': scale, 'shift': shift}})
+	elif scale is not None:
+		params.append({'linear_params': {'scale': scale, 'shift': 0}})
+	elif shift is not None:
+		params.append({'linear_params': {'scale': 1.0, 'shift': shift}})
+	return {'params': params, 'rng_seed': seed}
+		
 
 
 def createTransformParam(phase, seed=None, test_transforms = DEFAULT_TEST_TRANSFORMS, deploy=False, **kwargs):
@@ -589,11 +653,144 @@ def createTransformParam(phase, seed=None, test_transforms = DEFAULT_TEST_TRANSF
 	return p
 
 
+def createBinarizeNetwork(train_input_sources=[], train_label_sources=[], val_input_sources=[], val_label_sources=[], depth=3,
+						  kernel_size=3, num_filters=24, num_scales=1, wfm_loss=True, global_features=0, deploy=False, seed=None):
+	assert deploy or len(train_input_sources) == len(val_input_sources)
+	assert deploy or len(train_label_sources) == len(val_label_sources)
+	assert deploy or train_input_sources
+	if seed == None:
+		seed = random.randint(0, 2147483647)
+	n = caffe.NetSpec()	
+	data_param = dict(backend=P.Data.LMDB)
+
+	if deploy:
+		n.data = L.Input()
+	else:
+		# training inputs
+		inputs = list()
+
+		if num_scales > 1:
+			first_input, height, width = L.DocData(sources=[train_input_sources[0]], include=dict(phase=caffe.TRAIN), 
+				ntop=3, label_names=['height', 'width'], backend=P.Data.LMDB, batch_size=1, 
+				image_transform_param=createTransformParam2(scale=(1./255), shift=127, seed=seed))
+			inputs.append(first_input)
+			n.dims = L.Concat(height, width, include=dict(phase=caffe.TRAIN))
+		else:
+			first_input = L.DocData(sources=[train_input_sources[0]], include=dict(phase=caffe.TRAIN), batch_size=1, backend=P.Data.LMDB,
+				image_transform_param=createTransformParam2(scale=(1./255), shift=127, seed=seed))
+			inputs.append(first_input)
+
+		for source in train_input_sources[1:]:
+			input = L.DocData(sources=[source], include=dict(phase=caffe.TRAIN), batch_size=1, backend=P.Data.LMDB,
+				image_transform_param=createTransformParam2(scale=(1./255), shift=127, seed=seed))
+			inputs.append(input)
+
+		if len(inputs) == 1:
+			n.data = inputs[0]
+		else:
+			n.data = L.Concat(*inputs, include=dict(phase=caffe.TRAIN))
+
+		# training labels
+		n.gt = L.DocData(sources=[train_label_sources[0]], include=dict(phase=caffe.TRAIN), batch_size=1, backend=P.Data.LMDB)
+			
+
+		if wfm_loss:
+			n.recall_weights = L.DocData(sources=[train_label_sources[1]], include=dict(phase=caffe.TRAIN), batch_size=1, backend=P.Data.LMDB,
+				image_transform_param=createTransformParam2(scale=(1./128), shift=None, seed=seed))
+			n.precision_weights = L.DocData(sources=[train_label_sources[2]], include=dict(phase=caffe.TRAIN), batch_size=1, backend=P.Data.LMDB,
+				image_transform_param=createTransformParam2(scale=(1./128), shift=None, seed=seed))
+
+		# val inputs
+		inputs = list()
+
+		if num_scales > 1:
+			first_input, height, width = L.DocData(sources=[val_input_sources[0]], include=dict(phase=caffe.TEST), 
+				ntop=3, label_names=['height', 'width'], batch_size=1, backend=P.Data.LMDB,
+				image_transform_param=createTransformParam2(scale=(1./255), shift=127, seed=seed))
+			inputs.append(first_input)
+			n.VAL_dims = L.Concat(height, width, include=dict(phase=caffe.TEST))
+		else:
+			first_input = L.DocData(sources=[val_input_sources[0]], include=dict(phase=caffe.TEST), batch_size=1, backend=P.Data.LMDB,
+				image_transform_param=createTransformParam2(scale=(1./255), shift=127, seed=seed))
+			inputs.append(first_input)
+
+		for source in val_input_sources[1:]:
+			input = L.DocData(sources=[source], include=dict(phase=caffe.TEST), batch_size=1, backend=P.Data.LMDB,
+				image_transform_param=createTransformParam2(scale=(1./255), shift=127, seed=seed))
+			inputs.append(input)
+
+		if len(inputs) == 1:
+			n.VAL_data = inputs[0]
+		else:
+			n.VAL_data = L.Concat(*inputs, include=dict(phase=caffe.TRAIN))
+			
+		# val labels
+		n.VAL_gt = L.DocData(sources=[val_label_sources[0]], include=dict(phase=caffe.TEST), batch_size=1, backend=P.Data.LMDB)
+			
+
+		if wfm_loss:
+			n.VAL_recall_weights = L.DocData(sources=[val_label_sources[1]], include=dict(phase=caffe.TEST), batch_size=1, backend=P.Data.LMDB,
+				image_transform_param=createTransformParam2(scale=(1./128), shift=None, seed=seed))
+			n.VAL_precision_weights = L.DocData(sources=[val_label_sources[2]], include=dict(phase=caffe.TEST), batch_size=1, backend=P.Data.LMDB,
+				image_transform_param=createTransformParam2(scale=(1./128), shift=None, seed=seed))
+
+	# middle layers
+	prev_layer = n.data
+	pad_size = (kernel_size - 1) / 2
+	layers = collections.defaultdict(list)
+	for scale in xrange(num_scales):
+		for conv_idx in xrange(depth - scale):  # is depth - scale the right thing to do?
+			prev_layer = convLayer(prev_layer, kernel_size=kernel_size, pad=pad_size, num_output=num_filters, stride=1)
+			layers[scale].append(prev_layer)
+		if scale < (num_scales - 1):
+			# not last scale
+			prev_layer = poolLayer(layers[scale][0], kernel_size=2, stride=2)
+
+	if global_features > 0:
+		prev_layer = convLayer(layers[num_scales-1][0], kernel_size=3, pad=1, num_output=num_filters, stride=2)
+		prev_layer = L.Pooling(prev_layer, pool=P.Pooling.AVE, global_pooling=True)
+		for conv_idx in xrange(global_features): 
+			prev_layer = convLayer(prev_layer, kernel_size=1, pad=0, num_output=num_filters, stride=1)
+			layers[num_scales].append(prev_layer)
+
+	last_layers = []
+	for scale in xrange(num_scales):
+		scale_layers = layers[scale]
+		if scale_layers:
+			last_layers.append(scale_layers[-1])
+	
+	if len(last_layers) > 1:
+		# resize smaller scales to original size
+		for idx in xrange(len(last_layers)):
+			if idx == 0:
+				continue
+			last_layers[idx] = L.BilinearInterpolation(last_layers[idx], n.dims)
+		n.merged = L.Merge(*last_layers)
+		prev_layer = convLayer(n.merged, kernel_size=1, pad=0, num_output=num_filters, stride=1)
+
+	# output/loss layer
+	if wfm_loss:
+		prev_layer = convLayerSigmoid(prev_layer, kernel_size=kernel_size, pad=pad_size, num_output=1, stride=1)
+		if not deploy: 
+			n.weighted_fmeasure = L.WeightedFmeasureLoss(prev_layer, n.gt, n.recall_weights, n.precision_weights)
+			n.precision, n.recall, n.accuracy, n.nmr = L.PR(prev_layer, n.gt, ntop=4, include=dict(phase=caffe.TEST))
+		else:
+			output = prev_layer
+	else:
+		prev_layer = convLayerOnly(prev_layer, kernel_size=kernel_size, pad=pad_size, num_output=1, stride=1)
+		if not deploy:
+			n.class_loss = L.SigmoidCrossEntropyLoss(prev_layer, n.gt)
+			prev_layer = L.Sigmoid(prev_layer, include=dict(phase=caffe.TEST))
+			n.precision, n.recall, n.accuracy, n.nmr = L.PR(prev_layer, n.gt, ntop=4, include=dict(phase=caffe.TEST))
+		else:
+			output = L.Sigmoid(prev_layer)
 
 
-#Assume caffe net for a moment
+	return n.to_proto()
+
+
 def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=False, pool=None, batch_size=32, deploy=False, 
-					seed=None, shift_channels=None, scale_channels=None, multiple=False, **tparams):
+					seed=None, shift_channels=None, scale_channels=None, multiple=False, val_batch_size=VAL_BATCH_SIZE, **tparams):
 	n = caffe.NetSpec()	
 	#data
 	data_param = dict(backend=P.Data.LMDB)
@@ -638,11 +835,11 @@ def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=Fals
 			n.labels = targets
 		
 			if val_sources:
-				val_first, val_targets = L.DocData(sources = [val_sources[0]], include=dict(phase=caffe.TEST), batch_size=VAL_BATCH_SIZE,
+				val_first, val_targets = L.DocData(sources = [val_sources[0]], include=dict(phase=caffe.TEST), batch_size=val_batch_size,
 						image_transform_param=createTransformParam(caffe.TEST, shift=shift_channels[0], scale=scale_channels[0], **tparams), 
 						label_names=["dbid"], ntop=2, **data_param)
 
-				val_inputs = map(lambda s, t: L.DocData(sources=[s], include=dict(phase=caffe.TEST), batch_size=VAL_BATCH_SIZE, 
+				val_inputs = map(lambda s, t: L.DocData(sources=[s], include=dict(phase=caffe.TEST), batch_size=val_batch_size, 
 					image_transform_param=createTransformParam(caffe.TEST, shift=t[0], scale=t[1], **tparams), **data_param), 
 					val_sources[1:], zip(shift_channels[1:],scale_channels[1:]))
 		
@@ -668,12 +865,12 @@ def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=Fals
 			if val_sources:
 				if multiple:
 					# make sure in_order and no_wrap are true so we can iterate the whole validation set through multiple lmdbs
-					n.VAL_data, n.VAL_labels = L.DocData(sources=val_sources, name="validation", batch_size=VAL_BATCH_SIZE, 
+					n.VAL_data, n.VAL_labels = L.DocData(sources=val_sources, name="validation", batch_size=val_batch_size, 
 						include=dict(phase=caffe.TEST),  
 						image_transform_param=createTransformParam(caffe.TEST, shift=shift_channels[0], scale=scale_channels[0], **tparams), 
 						in_order=True, no_wrap=True, **data_param) 
 				else:
-					n.VAL_data, n.VAL_labels = L.DocData(sources=val_sources, name="validation", batch_size=VAL_BATCH_SIZE, 
+					n.VAL_data, n.VAL_labels = L.DocData(sources=val_sources, name="validation", batch_size=val_batch_size, 
 						include=dict(phase=caffe.TEST), 
 						image_transform_param=createTransformParam(caffe.TEST, shift=shift_channels[0], scale=scale_channels[0], **tparams), 
 						**data_param) 
@@ -694,8 +891,7 @@ def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=Fals
 			if not mult:
 				mult = tparams.get('conv_width_mult')
 			kwargs['num_output'] = int(mult * kwargs['num_output'])
-		else:
-			layer = t(layer, **kwargs)
+		layer = t(layer, **kwargs)
 
 	if pool is not None:
 		#print "ADDING PADDING"
@@ -735,6 +931,89 @@ def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=Fals
 	
 	return n.to_proto()
 
+def createBinarizeExperiment(ds, tags, group, experiment, num_experiments=1, wfm_loss=True, lr=0.01, **kwargs):
+
+	sources_input_train = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, data_partition='train'), tags)
+	sources_input_val1 = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, data_partition='val1'), tags)
+	sources_input_val2 = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, data_partition='val2'), tags)
+	sources_input_test = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, data_partition='test'), tags)
+
+	label_tags = ['processed_gt', 'recall_weights', 'precision_weights']
+	sources_label_train = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, data_partition='train'), label_tags)
+	sources_label_val1 = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, data_partition='val1'), label_tags)
+	sources_label_val2 = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, data_partition='val2'), label_tags)
+	sources_label_test = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, data_partition='test'), label_tags)
+
+	params = {'train_input_sources': sources_input_train, 'train_label_sources': sources_label_train, 'wfm_loss': wfm_loss}
+	params.update(kwargs)
+	
+	for exp_num in range(1,num_experiments+1):
+		exp_num = str(exp_num)
+
+		out_dir = OUTPUT_FOLDER_BINARIZE(ds, group, experiment, exp_num)
+		print out_dir
+
+		if not os.path.exists(out_dir):
+			print "Directory Not Found, Creating"
+			os.makedirs(out_dir)
+
+		#create train_val file
+		train_val = os.path.join(out_dir, TRAIN_VAL)
+		with open(train_val, "w") as f:
+			n = str(createBinarizeNetwork(val_input_sources=sources_input_val1, val_label_sources=sources_label_val1, **params))
+			f.write(re.sub("VAL_", "", n))
+	
+		#Create train_test file
+		train_test = os.path.join(out_dir, TRAIN_TEST)
+		with open(train_test, "w") as f:
+			n = str(createBinarizeNetwork(val_input_sources=sources_input_val2, val_label_sources=sources_label_val2, **params))
+			f.write(re.sub("VAL_", "", n))
+
+		train_test = os.path.join(out_dir, TRAIN_TEST2)
+		with open(train_test, "w") as f:
+			n = str(createBinarizeNetwork(val_input_sources=sources_input_test, val_label_sources=sources_label_test, **params))
+			f.write(re.sub("VAL_", "", n))
+
+		#Create Deploy File
+		deploy_file = os.path.join(out_dir, DEPLOY_FILE)
+		with open(deploy_file, "w") as f:
+			n = createBinarizeNetwork(deploy=True, **params)
+			for i, l in enumerate(n.layer):
+				if l.type == "Input":
+					del n.layer[i]
+					break
+
+			n.input.extend(['data'])
+			n.input_dim.extend([1, 3 * len(sources_input_train),1024,1024])
+			f.write(str(n))
+
+		exp_folder = EXPERIMENTS_FOLDER_BINARIZE(ds,group,experiment,exp_num)
+		snapshot_solver = os.path.join(exp_folder, SNAPSHOT_FOLDER, experiment)
+		train_val_solver = os.path.join(exp_folder, TRAIN_VAL)
+
+
+		solver = os.path.join(out_dir, SOLVER)
+		with open(solver, "w") as f:
+			f.write("net: \"%s\"\n" % (train_val_solver))
+			f.write("base_lr: %f\n" % lr)
+			f.write("gamma: %f\n" % 0.1)
+			f.write("monitor_test: true\n")
+			f.write("monitor_test_id: 0\n")
+			f.write("max_steps_without_improvement: %d\n" % 5)
+			f.write("max_periods_without_improvement: %d\n" % 6)
+			f.write("min_lr: %f\n" % 1e-8)
+			f.write("max_iter: %d\n" % 100000)
+
+			f.write("test_iter: %d\n" % lmdb_num_entries(sources_label_val1[0]))
+			f.write("test_interval: %d\n" % 100)
+			f.write("snapshot: %d\n" % 100)
+			f.write("momentum: %f\n" % 0.9)
+			f.write("weight_decay: %f\n" % 0.0005)
+
+			f.write("display: %d\n" % 1)
+			f.write("solver_mode: GPU\n")
+			f.write("snapshot_prefix: \"%s\"" % (snapshot_solver))
+	
 
 def createExperiment(ds, tags, group, experiment, num_experiments=1, pool=None, multiple=False, shift=None, scale=None, **tparams):
 
@@ -750,14 +1029,14 @@ def createExperiment(ds, tags, group, experiment, num_experiments=1, pool=None, 
 	for s in sizes:
 		same_size = (same_size and s == size)
 
-	im_size = size[0]
+	im_size = size
 	tags_noSize = map(getTagWithoutSize, tags)
 	if shift == "mean":
 		shift = map(lambda t: MEAN_VALUES[ds][t], tags_noSize)
 
 	if tparams.get('crop'):
 		same_size = True
-		size = [tparams['crop']]
+		size = tparams['crop']
 	
 	#if sizes are different, spatial pyramid pooling is required.
 	if not same_size and pool is None:
@@ -789,9 +1068,10 @@ def createExperiment(ds, tags, group, experiment, num_experiments=1, pool=None, 
 			sources_tr, sources_val, sources_ts =  zip(*sources)
 
 		#common parameters
-		params = dict(sources=list(sources_tr), size=size[0], num_output=OUTPUT_SIZES[ds], concat=same_size, 
+		params = dict(sources=list(sources_tr), size=size, num_output=OUTPUT_SIZES[ds], concat=same_size, 
 					pool=pool, shift_channels=shift, scale_channels=scale, batch_size=BATCH_SIZE[ds], 
 					multiple=multiple, **tparams)
+		params['val_batch_size'] = VAL_BATCH_SIZE if ds != 'imagenet' else 50
 	   
 		#create train_val file
 		train_val = os.path.join(out_dir, TRAIN_VAL)
@@ -815,7 +1095,7 @@ def createExperiment(ds, tags, group, experiment, num_experiments=1, pool=None, 
 					break
 
 			n.input.extend(['data'])
-			n.input_dim.extend([1,getNumChannels(tags_noSize),size[0],size[0]])
+			n.input_dim.extend([1,getNumChannels(tags_noSize),size,size])
 			f.write(str(n))
 
 		#Create snapshot directory
