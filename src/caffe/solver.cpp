@@ -46,6 +46,8 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   if (param_.monitor_test()) {
     best_loss_so_far_ = 100000;  // init to very large value
 	steps_no_improvement_ = 0;
+    periods_no_improvement_ = 0;
+	train_iters_since_lr_adjust_ = 0;
   }
 }
 
@@ -182,6 +184,7 @@ void Solver<Dtype>::Step(int iters) {
 	  LOG(INFO) << "Stopping Training Early";
       break;
 	}
+    train_iters_since_lr_adjust_++;
     // zero-init the params
     for (int i = 0; i < net_->params().size(); ++i) {
       shared_ptr<Blob<Dtype> > blob = net_->params()[i];
@@ -392,6 +395,13 @@ void Solver<Dtype>::Snapshot() {
   state.set_iter(iter_);
   state.set_learned_net(model_filename);
   state.set_current_step(current_step_);
+
+  state.set_best_loss(best_loss_so_far_);
+  state.set_steps_no_improvement(steps_no_improvement_);
+  state.set_train_iters_since_lr_adjust(train_iters_since_lr_adjust_);
+  state.set_stop_early(stop_early_);
+  state.set_periods_no_improvement(periods_no_improvement_);
+
   snapshot_filename = filename + ".solverstate";
   LOG(INFO) << "Snapshotting solver state to " << snapshot_filename;
   WriteProtoToBinaryFile(state, snapshot_filename.c_str());
@@ -408,6 +418,11 @@ void Solver<Dtype>::Restore(const char* state_file) {
   }
   iter_ = state.iter();
   current_step_ = state.current_step();
+  best_loss_so_far_ = state.best_loss();
+  steps_no_improvement_ = state.steps_no_improvement();
+  train_iters_since_lr_adjust_ = state.train_iters_since_lr_adjust();
+  stop_early_ = state.stop_early();
+  periods_no_improvement_ = state.periods_no_improvement();
   RestoreSolverState(state);
 }
 
@@ -462,14 +477,29 @@ Dtype SGDSolver<Dtype>::GetLearningRate() {
           Dtype(this->param_.stepsize())))));
   } else if (this->param_.monitor_test()) {
     if (this->steps_no_improvement_ >= this->param_.max_steps_without_improvement()) {
-	  periods_no_improvement_++;
-	  this->steps_no_improvement_ = 0;
-	  if (periods_no_improvement_ >= this->param_.max_periods_without_improvement()) {
-	    this->stop_early_ = true;
+	  int min_iters_this_period = 0;
+	  if (this->param_.min_iters_per_period_size() != 0) {
+	    int idx = 0;
+	    if (this->periods_no_improvement_ < this->param_.min_iters_per_period_size() - 1) {
+	  	  idx = this->periods_no_improvement_;
+		}
+		else {
+	  	  idx = this->param_.min_iters_per_period_size() - 1;
+		}
+		min_iters_this_period = this->param_.min_iters_per_period(idx);
+	  }
+	
+	  if( this->train_iters_since_lr_adjust_ >= min_iters_this_period) {
+	    this->periods_no_improvement_++;
+	    this->steps_no_improvement_ = 0;
+	    this->train_iters_since_lr_adjust_ = 0;
+	    if (this->periods_no_improvement_ >= this->param_.max_periods_without_improvement()) {
+	      this->stop_early_ = true;
+	    }
 	  }
 	}
     rate = this->param_.base_lr() *
-        pow(this->param_.gamma(), periods_no_improvement_);
+        pow(this->param_.gamma(), this->periods_no_improvement_);
   } else {
     LOG(FATAL) << "Unknown learning rate policy: " << lr_policy;
   }

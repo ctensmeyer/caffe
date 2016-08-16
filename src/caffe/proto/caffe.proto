@@ -194,7 +194,7 @@ message NetParameter {
 // NOTE
 // Update the next available ID when you add a new SolverParameter field.
 //
-// SolverParameter next available ID: 110 (last added: min_lr)
+// SolverParameter next available ID: 111 (last added: min_iters_per_period)
 // SolverParameter next available ID: 38 (last added: clip_gradients)
 message SolverParameter {
   //////////////////////////////////////////////////////////////////////////////
@@ -321,6 +321,7 @@ message SolverParameter {
   optional int32 max_steps_without_improvement = 107 [default = 5]; 
   optional int32 max_periods_without_improvement = 108 [default = 5]; 
   optional float min_lr = 109 [default = 0];
+  repeated int32 min_iters_per_period = 110;
 }
 
 // A message that stores the solver snapshots
@@ -329,6 +330,11 @@ message SolverState {
   optional string learned_net = 2; // The file that stores the learned net.
   repeated BlobProto history = 3; // The history for sgd solvers
   optional int32 current_step = 4 [default = 0]; // The current step for learning rate
+  optional float best_loss = 5 [default = 10000];
+  optional int32 steps_no_improvement = 6 [default = 0];
+  optional int32 train_iters_since_lr_adjust = 7 [default = 0];
+  optional bool stop_early = 8 [default = false];
+  optional int32 periods_no_improvement = 9 [default = 0];
 }
 
 enum Phase {
