@@ -11,20 +11,21 @@ namespace caffe {
 template <typename Dtype>
 void BilinearInterpolationLayer<Dtype>::SetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-  this->Reshape(bottom, top);
+  //this->Reshape(bottom, top);
+  //CHECK_EQ(bottom[1]->count(), 2) << "BilinearInterpolationLayer requires the output height/width";
 }
 
 template <typename Dtype>
 void BilinearInterpolationLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
-  CHECK_EQ(bottom[1]->count(), 2) << "BilinearInterpolationLayer requires the output height/width";
+  //CHECK_EQ(bottom[1]->count(), 2) << "BilinearInterpolationLayer requires the output height/width";
 
   num_ = bottom[0]->num();
   channel_ = bottom[0]->channels();
   height_in_ = bottom[0]->height();
   width_in_ = bottom[0]->width();
-  height_out_ = (int) bottom[1]->cpu_data()[0];
-  width_out_ = (int) bottom[1]->cpu_data()[1];
+  height_out_ = (int) bottom[1]->shape()[2];
+  width_out_ = (int) bottom[1]->shape()[3];
   /*
   DLOG(ERROR) << num_ << " " << channel_ << " " << height_in_ << " " <<
   	width_in_ << " " <<  height_out_ << " " << width_out_;
