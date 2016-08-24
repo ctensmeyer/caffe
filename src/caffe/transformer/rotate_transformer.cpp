@@ -24,10 +24,11 @@ void RotateImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
   const int in_width = in.cols;
   cv::Point2f pt(in_height / 2., in_width / 2.);
   int interpolation = this->GetInterpolation(param_.interpolation());
+  int border_mode = this->GetBorderMode(param_.border_mode());
   cv::Scalar border_val(param_.border_val());
 
   cv::Mat rotate = cv::getRotationMatrix2D(pt, (float)angle, 1.0);
-  cv::warpAffine(in, out, rotate, in.size(), interpolation, cv::BORDER_CONSTANT, border_val);
+  cv::warpAffine(in, out, rotate, in.size(), interpolation, border_mode, border_val);
 }
 
 INSTANTIATE_CLASS(RotateImageTransformer);

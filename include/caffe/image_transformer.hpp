@@ -21,6 +21,7 @@ class ImageTransformer {
   void InitRand(unsigned int seed);
   int RandInt(int n);
   int GetInterpolation(Interpolation inter);
+  int GetBorderMode(BorderMode mode);
   void RandFloat(const int n, const float min, const float max, float* out);
   void RandFloat(const int n, const double min, const double max, double* out);
   void RandGauss(const int n, const Dtype mean, const Dtype std_dev, Dtype* out);

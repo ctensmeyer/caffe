@@ -531,6 +531,14 @@ enum Interpolation {
   INTER_LANCZOS4 = 4;
 }
 
+enum BorderMode {
+  BORDER_CONSTANT = 0;
+  BORDER_REFLECT = 1;
+  BORDER_REFLECT_101 = 2;
+  BORDER_WRAP = 3;
+  BORDER_REPLICATE = 4;
+}
+
 message ImageTransformationParameter {
   repeated ProbImageTransformParameter params = 1;
   optional uint32 rng_seed = 2;
@@ -649,13 +657,15 @@ message GaussNoiseTransformParameter {
 message RotateTransformParameter {
   optional float max_angle = 1 [default = 0];
   optional Interpolation interpolation = 2 [default = INTER_LINEAR];
-  optional float border_val = 3 [default = 0];
+  optional BorderMode border_mode = 3 [default = BORDER_CONSTANT];
+  optional float border_val = 4 [default = 0];
 }
 
 message ShearTransformParameter {
   optional float max_shear_angle = 1 [default = 0];
   optional Interpolation interpolation = 2 [default = INTER_LINEAR];
-  optional float border_val = 3 [default = 0];
+  optional BorderMode border_mode = 3 [default = BORDER_CONSTANT];
+  optional float border_val = 4 [default = 0];
 }
 
 message GaussBlurTransformParameter {
@@ -670,7 +680,8 @@ message UnsharpMaskTransformParameter {
 message PerspectiveTransformParameter {
   optional float max_sigma = 1 [default = 1];
   optional Interpolation interpolation = 2 [default = INTER_LINEAR];
-  optional float border_val = 3 [default = 0];
+  optional BorderMode border_mode = 3 [default = BORDER_CONSTANT];
+  optional float border_val = 4 [default = 0];
 }
 
 message ColorJitterTransformParameter {
@@ -681,7 +692,8 @@ message ElasticDeformationTransformParameter {
   optional float sigma = 1 [default = 3];
   optional float max_alpha = 2 [default = 10];
   optional Interpolation interpolation = 3 [default = INTER_LINEAR];
-  optional float border_val = 4 [default = 0];
+  optional BorderMode border_mode = 4 [default = BORDER_CONSTANT];
+  optional float border_val = 5 [default = 0];
 }
 
 // Message that stores parameters shared by loss layers

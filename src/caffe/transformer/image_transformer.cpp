@@ -282,6 +282,32 @@ int ImageTransformer<Dtype>::GetInterpolation(Interpolation inter) {
 }
 
 template <typename Dtype>
+int ImageTransformer<Dtype>::GetBorderMode(BorderMode mode) {
+  int border_mode = -1;
+  switch (mode) {
+    case BORDER_CONSTANT:
+	  border_mode = cv::BORDER_CONSTANT;
+	  break;
+    case BORDER_REFLECT:
+	  border_mode = cv::BORDER_REFLECT;
+	  break;
+    case BORDER_REFLECT_101:
+	  border_mode = cv::BORDER_REFLECT_101;
+	  break;
+    case BORDER_WRAP:
+	  border_mode = cv::BORDER_WRAP;
+	  break;
+    case BORDER_REPLICATE:
+	  border_mode = cv::BORDER_REPLICATE;
+	  break;
+	default:
+	  border_mode = cv::BORDER_CONSTANT;
+	  break;
+  }
+  return border_mode;
+}
+
+template <typename Dtype>
 void ImageTransformer<Dtype>::CVMatToArray(const cv::Mat& cv_img, Dtype* out) {
   int cv_channels = cv_img.channels();
   int cv_height = cv_img.rows;
