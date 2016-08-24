@@ -523,6 +523,14 @@ message TransformationParameter {
   optional bool square_resize = 10 [default = true];
 }
 
+enum Interpolation {
+  INTER_NEAREST = 0;
+  INTER_LINEAR = 1;
+  INTER_AREA = 2;
+  INTER_CUBIC = 3;
+  INTER_LANCZOS4 = 4;
+}
+
 message ImageTransformationParameter {
   repeated ProbImageTransformParameter params = 1;
   optional uint32 rng_seed = 2;
@@ -581,13 +589,6 @@ message ResizeTransformParameter {
 
   // as specified in OpenCV.  
   // See http://docs.opencv.org/modules/imgproc/doc/geometric_transformations.html
-  enum Interpolation {
-    INTER_NEAREST = 0;
-    INTER_LINEAR = 1;
-    INTER_AREA = 2;
-    INTER_CUBIC = 3;
-    INTER_LANCZOS4 = 4;
-  }
   optional Interpolation interpolation = 7 [default = INTER_LINEAR];
 }
 
@@ -625,20 +626,20 @@ message LinearTransformParameter {
   repeated float scale = 2;
 
   // paths to files containing Image messages containing the shift/scale values
-  optional string shift_file = 3;
+  //optional string shift_file = 3;
   // if shift_file or scale_file does not match the dimensions of the input image
   // exactly, which interpolation to use when resizing shift or scale image
-  enum Interpolation {
-    INTER_NEAREST = 0;
-    INTER_LINEAR = 1;
-    INTER_AREA = 2;
-    INTER_CUBIC = 3;
-    INTER_LANCZOS4 = 4;
-  }
-  optional Interpolation interpolation = 5 [default = INTER_LINEAR];
+  //enum Interpolation {
+  //  INTER_NEAREST = 0;
+  //  INTER_LINEAR = 1;
+  //  INTER_AREA = 2;
+  //  INTER_CUBIC = 3;
+  //  INTER_LANCZOS4 = 4;
+  //}
+  //optional Interpolation interpolation = 5 [default = INTER_LINEAR];
   // If shift_file or scale_file contain images that do not match the dimensions
   // of the input image, then an error should occur (causes iterpolation to be ignored)
-  optional bool error_on_size_mismatch = 6 [default = false];
+  //optional bool error_on_size_mismatch = 6 [default = false];
 }
 
 message GaussNoiseTransformParameter {
@@ -647,10 +648,14 @@ message GaussNoiseTransformParameter {
 
 message RotateTransformParameter {
   optional float max_angle = 1 [default = 0];
+  optional Interpolation interpolation = 2 [default = INTER_LINEAR];
+  optional float border_val = 3 [default = 0];
 }
 
 message ShearTransformParameter {
   optional float max_shear_angle = 1 [default = 0];
+  optional Interpolation interpolation = 2 [default = INTER_LINEAR];
+  optional float border_val = 3 [default = 0];
 }
 
 message GaussBlurTransformParameter {
@@ -664,6 +669,8 @@ message UnsharpMaskTransformParameter {
 
 message PerspectiveTransformParameter {
   optional float max_sigma = 1 [default = 1];
+  optional Interpolation interpolation = 2 [default = INTER_LINEAR];
+  optional float border_val = 3 [default = 0];
 }
 
 message ColorJitterTransformParameter {
@@ -673,6 +680,8 @@ message ColorJitterTransformParameter {
 message ElasticDeformationTransformParameter {
   optional float sigma = 1 [default = 3];
   optional float max_alpha = 2 [default = 10];
+  optional Interpolation interpolation = 3 [default = INTER_LINEAR];
+  optional float border_val = 4 [default = 0];
 }
 
 // Message that stores parameters shared by loss layers

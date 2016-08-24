@@ -13,6 +13,7 @@
 
 namespace caffe {
 
+/*
 template <typename Dtype>
 void LinearImageTransformer<Dtype>::LoadShiftFile() {
   // load in the shift image from disk
@@ -24,7 +25,6 @@ void LinearImageTransformer<Dtype>::ResizeShiftImage(const vector<int>& in_shape
   // reshape the shift image to match the current input size
   CHECK_GE(in_shape.size(), 2);
   CHECK_LE(in_shape.size(), 4);
-  /*
   const int cur_height = shift_image_current_.rows;
   const int cur_width = shift_image_current_.height;
   const int cur_channels = shift_image_current.channels();
@@ -36,9 +36,8 @@ void LinearImageTransformer<Dtype>::ResizeShiftImage(const vector<int>& in_shape
     CHECK_EQ(in_width, cur_width) << "Shift Image File width does not match input size";
 	CHECK_EQ(in_height, cur_height) << "Shift Image File height does not match input size";
   }
-  */
-
 }
+  */
 
 // assume out is the proper size...
 // assume out is CV_32F
@@ -100,14 +99,9 @@ template <typename Dtype>
 vector<int> LinearImageTransformer<Dtype>::InferOutputShape(const vector<int>& in_shape) {
   CHECK_GE(in_shape.size(), 3) << "Must know the number of channels";
   int in_channels = in_shape[in_shape.size() - 3];
-  if (param_.has_shift_file()) {
-  	// do nothing
-
-  } else {
-	  if (param_.shift_size() != 1 && param_.shift_size() != in_channels) {
-		CHECK(0) << "Number of shifts is " << param_.shift_size() << " but number of channels is " <<
-		  in_channels;
-	  }
+  if (param_.shift_size() != 1 && param_.shift_size() != in_channels) {
+	CHECK(0) << "Number of shifts is " << param_.shift_size() << " but number of channels is " <<
+	  in_channels;
   }
   if (param_.scale_size() != 1 && param_.scale_size() != in_channels) {
     CHECK(0) << "Number of scales is " << param_.scale_size() << " but number of channels is " <<

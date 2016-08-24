@@ -21,6 +21,8 @@ void PerspectiveImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& o
   this->RandFloat(1, 0, param_.max_sigma(), &sigma); 
   // out uses the same number of channels as in, but uses floats
   out.create(in.size(), CV_32F | (0x18 & in.type()));
+  int interpolation = this->GetInterpolation(param_.interpolation());
+  cv::Scalar border_val(param_.border_val());
 
   cv::Point2f src[4];
   src[0] = cv::Point2f(0,0);
@@ -37,7 +39,7 @@ void PerspectiveImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& o
   dst[3] = cv::Point2f(0 + random[6], 1 + random[7]);
 
   cv::Mat perspective = cv::getPerspectiveTransform(src, dst);
-  cv::warpPerspective(in, out, perspective, in.size());
+  cv::warpPerspective(in, out, perspective, in.size(), interpolation, cv::BORDER_CONSTANT, border_val);
 }
 
 INSTANTIATE_CLASS(PerspectiveImageTransformer);
