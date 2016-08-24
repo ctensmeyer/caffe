@@ -172,11 +172,9 @@ void BilinearInterpolationLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>&
   DLOG(ERROR) << bottom_diff[6] << " " << bottom_diff[7] << " " << bottom_diff[8];
 */
 }
-/*
 #ifdef CPU_ONLY
 STUB_GPU(BilinearInterpolationLayer);
 #endif
-*/
 
 INSTANTIATE_CLASS(BilinearInterpolationLayer);
 REGISTER_LAYER_CLASS(BilinearInterpolation);
