@@ -2,9 +2,14 @@
 
 import os
 import sys
+import matplotlib
+matplotlib.use('AGG')
+import matplotlib.pyplot as plt
+plt.ioff()
 import numpy as np
 import caffe
 import cv2
+import scipy.ndimage.morphology
 
 
 # acceptable image suffixes
@@ -58,7 +63,7 @@ def predict(network, ims):
 	high_indices = all_outputs >= 0.5
 	predictions = np.zeros_like(all_outputs)
 	predictions[high_indices] = 1
-	return predictions
+	return all_outputs, predictions
 
 
 def get_subwindows(im):
@@ -93,8 +98,8 @@ def get_subwindows(im):
 	return locations, ims
 
 
-def stich_together(locations, subwindows, size):
-	output = np.zeros(size, dtype=np.uint8)
+def stich_together(locations, subwindows, size, dtype):
+	output = np.zeros(size, dtype=dtype)
 	for location, subwindow in zip(locations, subwindows):
 		outer_bounding_box, inner_bounding_box, y_type, x_type = location
 		y_paste, x_paste, y_cut, x_cut, height_paste, width_paste = -1, -1, -1, -1, -1, -1
@@ -128,34 +133,65 @@ def stich_together(locations, subwindows, size):
 		output[y_paste:y_paste+height_paste, x_paste:x_paste+width_paste] = subwindow[y_cut:y_cut+height_paste, x_cut:x_cut+width_paste]
 
 	return output
+
+
+def save_histo(data, fname, title, weights=None):
+	if weights is not None:
+		weights = weights.flatten()
+		
+	n, bins, patches = plt.hist(data.flatten(), bins=100, weights=weights, log=True)
+	plt.title(title)
+	plt.xlabel('Predicted Probability of Foreground')
+	plt.ylabel('Pixel Count')
+	plt.tick_params(axis='y', which='minor', left='off', right='off')
+
+	plt.savefig(fname)
+	plt.clf()
 	
 
-def main(network, weights, in_image, out_image):
+def main(network, weights, in_image, out_prefix):
 	image = cv2.imread(in_image, cv2.IMREAD_COLOR)
 	image = 0.0039 * (image - 127.)
 
 	network = setup_network(network, weights)
 	locations, subwindows = get_subwindows(image)
-	binarized_subwindows = predict(network, subwindows)
+	raw_subwindows, binarized_subwindows = predict(network, subwindows)
 	
-	result = stich_together(locations, binarized_subwindows, tuple(image.shape[0:2]))
-	result = 255 * (1 - result)
-	cv2.imwrite(out_image, result)
+	binary_result = stich_together(locations, binarized_subwindows, tuple(image.shape[0:2]), dtype=np.uint8)
+	binary_result = 255 * (1 - binary_result)
+	binary_out_file = out_prefix + "_pred.png"
+	cv2.imwrite(binary_out_file, binary_result)
 
+	raw_result = stich_together(locations, raw_subwindows, tuple(image.shape[0:2]), dtype=np.float)
+	raw_out_file = out_prefix + "_raw.png"
+	cv2.imwrite(raw_out_file, 255 * (1 - raw_result))
+
+	save_histo(raw_result, out_prefix + "_histo_global.png", "Global")
+
+	if len(sys.argv) > 6:
+		gt_file = sys.argv[6]
+		gt_im = cv2.imread(gt_file, -1) / 255.
+
+		save_histo(raw_result, out_prefix + "_histo_background.png", "Background Pixels", gt_im)
+
+		for x in xrange(3):
+			save_histo(raw_result, out_prefix + "_histo_foreground_%d.png" % x, "Foreground Pixels (within %d)" % x, 1 - gt_im)
+			gt_im = scipy.ndimage.morphology.binary_erosion(gt_im)
+			
 
 if __name__ == "__main__":
 	if len(sys.argv) < 4:
-		print "USAGE: python binarize.py network weights in_image out_image [gpu#]"
+		print "USAGE: python binarize.py network weights in_image out_image [gpu#] [gt_file]"
 		print "\tnetwork is the deploy.prototxt file"
 		print "\tweights is the weights.caffemodel file"
 		print "\tin_image is the input image to be binarized"
-		print "\tout_image is where the binarized image will be written to"
+		print "\tout_prefix is a prefix where the output images will be written"
 		print "\tgpu is an integer device ID to run networks on the specified GPU.  If ommitted, CPU mode is used"
 		exit(1)
 	network = sys.argv[1]
 	weights = sys.argv[2]
 	in_image = sys.argv[3]
-	out_image = sys.argv[4]
+	out_prefix = sys.argv[4]
 
 	# use gpu if specified
 	try:
@@ -166,5 +202,5 @@ if __name__ == "__main__":
 	except:
 		caffe.set_mode_cpu()
 
-	main(network, weights, in_image, out_image)
+	main(network, weights, in_image, out_prefix)
 	

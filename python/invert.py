@@ -147,8 +147,8 @@ if __name__ == "__main__":
 		print "USAGE: python invert.py network weights in_image out_image [gpu#]"
 		print "\tnetwork is the deploy.prototxt file"
 		print "\tweights is the weights.caffemodel file"
-		print "\tin_image is the input image to be binarized"
-		print "\tout_image is where the binarized image will be written to"
+		print "\tin_image is the input image to be inverted"
+		print "\tout_image is where the inverted image will be written to"
 		print "\tgpu is an integer device ID to run networks on the specified GPU.  If ommitted, CPU mode is used"
 		exit(1)
 	network = sys.argv[1]
