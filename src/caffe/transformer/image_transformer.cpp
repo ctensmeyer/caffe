@@ -255,6 +255,57 @@ void ImageTransformer<Dtype>::RandGauss(const int n, const Dtype mean, const Dty
   }
 }
 
+template <typename Dtype>
+int ImageTransformer<Dtype>::GetInterpolation(Interpolation inter) {
+  int interpolation = -1;
+  switch (inter) {
+    case INTER_NEAREST:
+	  interpolation = cv::INTER_NEAREST;
+	  break;
+    case INTER_LINEAR:
+	  interpolation = cv::INTER_LINEAR;
+	  break;
+    case INTER_AREA:
+	  interpolation = cv::INTER_AREA;
+	  break;
+    case INTER_CUBIC:
+	  interpolation = cv::INTER_CUBIC;
+	  break;
+    case INTER_LANCZOS4:
+	  interpolation = cv::INTER_LANCZOS4;
+	  break;
+	default:
+	  interpolation = cv::INTER_LINEAR;
+	  break;
+  }
+  return interpolation;
+}
+
+template <typename Dtype>
+int ImageTransformer<Dtype>::GetBorderMode(BorderMode mode) {
+  int border_mode = -1;
+  switch (mode) {
+    case BORDER_CONSTANT:
+	  border_mode = cv::BORDER_CONSTANT;
+	  break;
+    case BORDER_REFLECT:
+	  border_mode = cv::BORDER_REFLECT;
+	  break;
+    case BORDER_REFLECT_101:
+	  border_mode = cv::BORDER_REFLECT_101;
+	  break;
+    case BORDER_WRAP:
+	  border_mode = cv::BORDER_WRAP;
+	  break;
+    case BORDER_REPLICATE:
+	  border_mode = cv::BORDER_REPLICATE;
+	  break;
+	default:
+	  border_mode = cv::BORDER_CONSTANT;
+	  break;
+  }
+  return border_mode;
+}
 
 template <typename Dtype>
 void ImageTransformer<Dtype>::CVMatToArray(const cv::Mat& cv_img, Dtype* out) {

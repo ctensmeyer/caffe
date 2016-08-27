@@ -194,7 +194,7 @@ message NetParameter {
 // NOTE
 // Update the next available ID when you add a new SolverParameter field.
 //
-// SolverParameter next available ID: 105 (last added: do_everything)
+// SolverParameter next available ID: 111 (last added: min_iters_per_period)
 // SolverParameter next available ID: 38 (last added: clip_gradients)
 message SolverParameter {
   //////////////////////////////////////////////////////////////////////////////
@@ -316,6 +316,12 @@ message SolverParameter {
   optional bool snapshot_before_train = 100 [default = false];
 
   optional int32 do_everything = 104 [default = -1];
+  optional bool monitor_test = 105 [default = false];  // adapt LR based on test set performance
+  optional int32 monitor_test_id = 106 [default = 0]; 
+  optional int32 max_steps_without_improvement = 107 [default = 5]; 
+  optional int32 max_periods_without_improvement = 108 [default = 5]; 
+  optional float min_lr = 109 [default = 0];
+  repeated int32 min_iters_per_period = 110;
 }
 
 // A message that stores the solver snapshots
@@ -324,6 +330,11 @@ message SolverState {
   optional string learned_net = 2; // The file that stores the learned net.
   repeated BlobProto history = 3; // The history for sgd solvers
   optional int32 current_step = 4 [default = 0]; // The current step for learning rate
+  optional float best_loss = 5 [default = 10000];
+  optional int32 steps_no_improvement = 6 [default = 0];
+  optional int32 train_iters_since_lr_adjust = 7 [default = 0];
+  optional bool stop_early = 8 [default = false];
+  optional int32 periods_no_improvement = 9 [default = 0];
 }
 
 enum Phase {
@@ -512,6 +523,22 @@ message TransformationParameter {
   optional bool square_resize = 10 [default = true];
 }
 
+enum Interpolation {
+  INTER_NEAREST = 0;
+  INTER_LINEAR = 1;
+  INTER_AREA = 2;
+  INTER_CUBIC = 3;
+  INTER_LANCZOS4 = 4;
+}
+
+enum BorderMode {
+  BORDER_CONSTANT = 0;
+  BORDER_REFLECT = 1;
+  BORDER_REFLECT_101 = 2;
+  BORDER_WRAP = 3;
+  BORDER_REPLICATE = 4;
+}
+
 message ImageTransformationParameter {
   repeated ProbImageTransformParameter params = 1;
   optional uint32 rng_seed = 2;
@@ -570,13 +597,6 @@ message ResizeTransformParameter {
 
   // as specified in OpenCV.  
   // See http://docs.opencv.org/modules/imgproc/doc/geometric_transformations.html
-  enum Interpolation {
-    INTER_NEAREST = 0;
-    INTER_LINEAR = 1;
-    INTER_AREA = 2;
-    INTER_CUBIC = 3;
-    INTER_LANCZOS4 = 4;
-  }
   optional Interpolation interpolation = 7 [default = INTER_LINEAR];
 }
 
@@ -614,20 +634,20 @@ message LinearTransformParameter {
   repeated float scale = 2;
 
   // paths to files containing Image messages containing the shift/scale values
-  optional string shift_file = 3;
+  //optional string shift_file = 3;
   // if shift_file or scale_file does not match the dimensions of the input image
   // exactly, which interpolation to use when resizing shift or scale image
-  enum Interpolation {
-    INTER_NEAREST = 0;
-    INTER_LINEAR = 1;
-    INTER_AREA = 2;
-    INTER_CUBIC = 3;
-    INTER_LANCZOS4 = 4;
-  }
-  optional Interpolation interpolation = 5 [default = INTER_LINEAR];
+  //enum Interpolation {
+  //  INTER_NEAREST = 0;
+  //  INTER_LINEAR = 1;
+  //  INTER_AREA = 2;
+  //  INTER_CUBIC = 3;
+  //  INTER_LANCZOS4 = 4;
+  //}
+  //optional Interpolation interpolation = 5 [default = INTER_LINEAR];
   // If shift_file or scale_file contain images that do not match the dimensions
   // of the input image, then an error should occur (causes iterpolation to be ignored)
-  optional bool error_on_size_mismatch = 6 [default = false];
+  //optional bool error_on_size_mismatch = 6 [default = false];
 }
 
 message GaussNoiseTransformParameter {
@@ -636,10 +656,16 @@ message GaussNoiseTransformParameter {
 
 message RotateTransformParameter {
   optional float max_angle = 1 [default = 0];
+  optional Interpolation interpolation = 2 [default = INTER_LINEAR];
+  optional BorderMode border_mode = 3 [default = BORDER_CONSTANT];
+  optional float border_val = 4 [default = 0];
 }
 
 message ShearTransformParameter {
   optional float max_shear_angle = 1 [default = 0];
+  optional Interpolation interpolation = 2 [default = INTER_LINEAR];
+  optional BorderMode border_mode = 3 [default = BORDER_CONSTANT];
+  optional float border_val = 4 [default = 0];
 }
 
 message GaussBlurTransformParameter {
@@ -653,6 +679,9 @@ message UnsharpMaskTransformParameter {
 
 message PerspectiveTransformParameter {
   optional float max_sigma = 1 [default = 1];
+  optional Interpolation interpolation = 2 [default = INTER_LINEAR];
+  optional BorderMode border_mode = 3 [default = BORDER_CONSTANT];
+  optional float border_val = 4 [default = 0];
 }
 
 message ColorJitterTransformParameter {
@@ -662,6 +691,9 @@ message ColorJitterTransformParameter {
 message ElasticDeformationTransformParameter {
   optional float sigma = 1 [default = 3];
   optional float max_alpha = 2 [default = 10];
+  optional Interpolation interpolation = 3 [default = INTER_LINEAR];
+  optional BorderMode border_mode = 4 [default = BORDER_CONSTANT];
+  optional float border_val = 5 [default = 0];
 }
 
 // Message that stores parameters shared by loss layers

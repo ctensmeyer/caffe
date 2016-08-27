@@ -53,7 +53,7 @@ void WeightedFmeasureLossLayer<Dtype>::Forward_cpu(
   precision_num_ = caffe_cpu_dot(count, target_mult_input, precision_weight);
   precision_denum_ = caffe_cpu_dot(count, input, precision_weight);
 
-  /*
+/*
   // Loop version
   for (int i = 0; i < count; ++i) {
     // Equation 1 from Performance evaluation methodology for 
@@ -71,14 +71,15 @@ void WeightedFmeasureLossLayer<Dtype>::Forward_cpu(
 	precision_num_ += target[i] * (input[i] * precision_weight[i]);  // G(x,y) * B_W(x,y)
 	precision_denum_ += (input[i] * precision_weight[i]);  // B_W(x,y)
   }
-  */
+*/
 
-  recall_ = recall_num_ / recall_denum_;
-  precision_ = precision_num_ / precision_denum_;
-  Dtype f_measure = 2 * recall_ * precision_ / (recall_ + precision_);
-  //DLOG(ERROR) << "F/P/R:" << f_measure << " " << precision_ << " " <<  recall_;
-  //DLOG(ERROR) << "P_num/P_denum:" << precision_num_ << " " << precision_denum_;
-  //DLOG(ERROR) << "R_num/R_denum:" << recall_num_ << " " << recall_denum_;
+  // check for 0 denominators to avoid nans
+  recall_ = (recall_denum_ != 0) ? recall_num_ / recall_denum_ : 0;
+  precision_ = (precision_denum_ != 0) ? precision_num_ / precision_denum_ : 0;
+  Dtype f_measure = ((recall_ + precision_) != 0) ? 2 * recall_ * precision_ / (recall_ + precision_) : 0;
+  //LOG(INFO) << "F/P/R:" << f_measure << " " << precision_ << " " <<  recall_;
+  //LOG(INFO) << "P_num/P_denum:" << precision_num_ << " " << precision_denum_;
+  //LOG(INFO) << "R_num/R_denum:" << recall_num_ << " " << recall_denum_;
   top[0]->mutable_cpu_data()[0] = 1 - f_measure;  // loss should be lower is better
 }
 
@@ -105,27 +106,31 @@ void WeightedFmeasureLossLayer<Dtype>::Backward_cpu(
     //DLOG(ERROR) << "-F/P/R:" << top[0]->cpu_data()[0] << " " << precision_ << " " <<  recall_;
     //DLOG(ERROR) << "P_num/P_denum:" << precision_num_ << " " << precision_denum_;
     //DLOG(ERROR) << "R_num/R_denum:" << recall_num_ << " " << recall_denum_;
-	Dtype sum_squared = recall_ + precision_;
-	sum_squared = sum_squared * sum_squared;
-	Dtype dF_dR = 2 * precision_ * precision_ / sum_squared; 
-	Dtype dF_dP = 2 * recall_ * recall_ / sum_squared;
-    //DLOG(ERROR) << "dF_dR/dF_dP:" << dF_dR << " " << dF_dP;
+	if (precision_ != 0 && recall_ != 0) {
+	  Dtype sum_squared = recall_ + precision_;
+	  sum_squared = sum_squared * sum_squared;
+	  Dtype dF_dR = 2 * precision_ * precision_ / sum_squared; 
+	  Dtype dF_dP = 2 * recall_ * recall_ / sum_squared;
+      //DLOG(ERROR) << "dF_dR/dF_dP:" << dF_dR << " " << dF_dP;
 
-	// BLAS Version, overwritting input buffers for space saving
-	// dF_dR * dR_dB  
-	Dtype* dR_dB = work_buffer_->mutable_cpu_data();
-	caffe_mul(count, target, recall_weight, dR_dB);
-	caffe_scal(count, (Dtype)(-2. * dF_dR / recall_denum_), dR_dB); 
+	  // BLAS Version, overwritting input buffers for space saving
+	  // dF_dR * dR_dB  
+	  Dtype* dR_dB = work_buffer_->mutable_cpu_data();
+	  caffe_mul(count, target, recall_weight, dR_dB);
+	  caffe_scal(count, (Dtype)(-2. * dF_dR / recall_denum_), dR_dB); 
 
-	// dF_dP * dP_dB 
-	Dtype* dP_dB = work_buffer_->mutable_cpu_diff();
-	caffe_copy(count, target, dP_dB);
-	caffe_scal(count, precision_denum_, dP_dB); // scale target by precision_denum_
-	caffe_add_scalar(count, -1 * precision_num_, dP_dB); // subtract precision_num_
-	caffe_mul(count, dP_dB, precision_weight, dP_dB);
-	caffe_scal(count, (Dtype)(-2. * dF_dP / (precision_denum_ * precision_denum_)), dP_dB);
+	  // dF_dP * dP_dB 
+	  Dtype* dP_dB = work_buffer_->mutable_cpu_diff();
+	  caffe_copy(count, target, dP_dB);
+	  caffe_scal(count, precision_denum_, dP_dB); // scale target by precision_denum_
+	  caffe_add_scalar(count, -1 * precision_num_, dP_dB); // subtract precision_num_
+	  caffe_mul(count, dP_dB, precision_weight, dP_dB);
+	  caffe_scal(count, (Dtype)(-2. * dF_dP / (precision_denum_ * precision_denum_)), dP_dB);
 
-	caffe_add(count, dR_dB, dP_dB, diff);
+	  caffe_add(count, dR_dB, dP_dB, diff);
+	} else {
+	  // fmeasure is actually undefined in this case, so just leave gradient = 0
+	}
 
 /*
 	// LOOP Version

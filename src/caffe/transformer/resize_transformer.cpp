@@ -166,27 +166,7 @@ vector<int> ResizeImageTransformer<Dtype>::InferOutputShape(const vector<int>& i
 
 template <typename Dtype>
 void ResizeImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
-  int interpolation;
-  switch (param_.interpolation()) {
-    case ResizeTransformParameter::INTER_NEAREST:
-	  interpolation = cv::INTER_NEAREST;
-	  break;
-    case ResizeTransformParameter::INTER_LINEAR:
-	  interpolation = cv::INTER_LINEAR;
-	  break;
-    case ResizeTransformParameter::INTER_AREA:
-	  interpolation = cv::INTER_AREA;
-	  break;
-    case ResizeTransformParameter::INTER_CUBIC:
-	  interpolation = cv::INTER_CUBIC;
-	  break;
-    case ResizeTransformParameter::INTER_LANCZOS4:
-	  interpolation = cv::INTER_LANCZOS4;
-	  break;
-	default:
-	  interpolation = cv::INTER_NEAREST;
-	  break;
-  }
+  int interpolation = this->GetInterpolation(param_.interpolation());
   cv::Size size(cur_width_, cur_height_);
   cv::resize(in, out, size, 0, 0, interpolation);
 }

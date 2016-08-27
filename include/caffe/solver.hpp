@@ -58,6 +58,11 @@ class Solver {
   int current_step_;
   shared_ptr<Net<Dtype> > net_;
   vector<shared_ptr<Net<Dtype> > > test_nets_;
+  Dtype best_loss_so_far_;
+  int steps_no_improvement_;
+  int train_iters_since_lr_adjust_;
+  int periods_no_improvement_;
+  bool stop_early_;
 
   DISABLE_COPY_AND_ASSIGN(Solver);
 };

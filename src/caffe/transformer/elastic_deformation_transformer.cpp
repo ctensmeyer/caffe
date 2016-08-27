@@ -25,6 +25,9 @@ void ElasticDeformationImageTransformer<Dtype>::Transform(const cv::Mat& in, cv:
 
   // out is same dims as in, but must be float
   out.create(in.size(), CV_32F | (0x18 & in.type()));
+  int interpolation = this->GetInterpolation(param_.interpolation());
+  int border_mode = this->GetBorderMode(param_.border_mode());
+  cv::Scalar border_val(param_.border_val());
 
   vector<int> shape;
   shape.push_back(in_height);
@@ -57,7 +60,7 @@ void ElasticDeformationImageTransformer<Dtype>::Transform(const cv::Mat& in, cv:
   cv::normalize(mat_dis_y, mat_dis_y, 0, in_height, cv::NORM_MINMAX);
 
   // default bilinear interpoloation
-  cv::remap(in, out, mat_dis_x, mat_dis_y, cv::INTER_LINEAR);
+  cv::remap(in, out, mat_dis_x, mat_dis_y, interpolation, border_mode, border_val);
 }
 
 INSTANTIATE_CLASS(ElasticDeformationImageTransformer);

@@ -1,15 +1,16 @@
 import os
 import createNetwork
 
-DS = ["rvl_cdip", "andoc_1m", "rvl_cdip_10", "rvl_cdip_100", "andoc_1m_10", "andoc_1m_50"]
+DS = ["rvl_cdip", "andoc_1m", "rvl_cdip_10", "rvl_cdip_100", "andoc_1m_10", "andoc_1m_50", "imagenet"]
 
 ########################
-#ds = 'rvl_cdip'
-ds = 'andoc_1m'
+#ds = 'rvl_cdip_100'
+#ds = 'andoc_1m_50'
+ds = 'imagenet'
 #######################
 
 
-def TAGS(T, size=227, pad=False, multiple=False):
+def TAGS(T, size=227, pad=False, multiple=False, multiple2=False):
     t = T.lower()
     if t == 'b':
         tag = 'binary'
@@ -29,6 +30,9 @@ def TAGS(T, size=227, pad=False, multiple=False):
     if multiple:
         tag += "_multiple"
 
+    if multiple2:
+        tag += "_multiple2"
+
     return tag
 
 
@@ -36,7 +40,7 @@ def generateTag(T, size=227):
     return map(lambda t: TAGS(t, size), T)
 
 
-def COMBO(ds=ds, size = 227, pad=False, multiple=False):
+def COMBO(ds=ds, size = 227, pad=False, multiple=False, multiple2=False):
     #print multiple
     if ds.startswith(DS[0]):
         #tags = ['g', 'b', 'G', 'B']
@@ -47,14 +51,16 @@ def COMBO(ds=ds, size = 227, pad=False, multiple=False):
         #tags = ['c', 'C']
         tags = ['c']
 
-    return map(lambda t: TAGS(t, size, pad=pad, multiple=multiple), tags)
+    return map(lambda t: TAGS(t, size, pad=pad, multiple=multiple, multiple2=multiple2), tags)
 
 
 SIZES = [32, 64, 100, 150, 227, 256, 384, 512]
+MULTISCALE_SIZES = [(150, 227, 256), (227, 256, 320), (256, 320, 384), (320, 384, 512), (227, 256, 320, 384, 512)]
 WIDTHS = [0.1, 0.25, 0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 2]
+DEPTHS = [0, 1, 2, 3, 4, 5, 6]
 default = dict(shift="mean", scale=(1.0/255))
 width_default = dict(shift="mean", scale=(1.0/255), shear=10, num_experiments=2)
-size_default = dict(shift="mean", scale=(1.0/255), num_experiments=2)
+size_default = dict(shift="mean", scale=(1.0/255), shear=10, num_experiments=2)
 pad_default = dict(shift="mean", scale=(1.0/255), shear=10, num_experiments=2)
 
 EXPERIMENTS = {"baseline": {"baseline" : (COMBO(ds), dict(num_experiments=3, **default))},
@@ -117,6 +123,8 @@ EXPERIMENTS = {"baseline": {"baseline" : (COMBO(ds), dict(num_experiments=3, **d
                            },
 
                 "size": { "size_%d" % size: (COMBO(ds, size), dict(**size_default)) for size in SIZES },
+                "size2": { "size_320": (COMBO(ds, 320), dict(**size_default))},
+                "multiscale": { "multiscale_%d_%d" % (sizes[0], sizes[-1]): (COMBO(ds, sizes[-1]), dict(pool='spp', **size_default)) for sizes in MULTISCALE_SIZES },
 
                 "width": { "width_%d" % int(width * 100): (COMBO(ds), dict(width_mult=width, **width_default)) for width in WIDTHS },
                 "width_2": { "width_conv_50" : (COMBO(ds), dict(conv_width_mult=0.50, **width_default)),
@@ -146,13 +154,41 @@ EXPERIMENTS = {"baseline": {"baseline" : (COMBO(ds), dict(num_experiments=3, **d
                              "hvp_multiple_227": (COMBO(ds, 227, multiple=True), dict(pool='hvp', multiple=True, **pad_default)),
                              "hvp_multiple_384": (COMBO(ds, 384, multiple=True), dict(pool='hvp', multiple=True, **pad_default)),
                             },
+                "multiple2": {
+                             "spp_multiple2_227": (COMBO(ds, 227, multiple2=True), dict(pool='spp', multiple=True, **pad_default)),
+                             "spp_multiple2_384": (COMBO(ds, 384, multiple2=True), dict(pool='spp', multiple=True, **pad_default)),
+                             "hvp_multiple2_227": (COMBO(ds, 227, multiple2=True), dict(pool='hvp', multiple=True, **pad_default)),
+                             "hvp_multiple2_384": (COMBO(ds, 384, multiple2=True), dict(pool='hvp', multiple=True, **pad_default)),
+                            },
+                "depth": { "depth_%d" % depth: (COMBO(ds), dict(depth=depth, width_mult=0.25, **width_default)) for depth in DEPTHS },
                 }
+
+
+def sizeExperiments():
+    group = "size"
+
+    experiments = EXPERIMENTS["multiscale"]
+
+    for name, (tags, tr) in experiments.items():
+        print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
+        createNetwork.createExperiment(ds, tags, group, name, **tr)
+
+def depthExperiments():
+    group = "depth2"
+
+    experiments = EXPERIMENTS["depth"]
+
+    for name, (tags, tr) in experiments.items():
+        print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
+        createNetwork.createExperiment(ds, tags, group, name, **tr)
+
 
 def paddingExperiments():
     group = "padding"
 
-    experiments = EXPERIMENTS["padding"]
-    experiments.update(EXPERIMENTS["multiple"])
+    #experiments = EXPERIMENTS["padding"]
+    experiments = EXPERIMENTS["multiple2"]
+    #experiments.update(EXPERIMENTS["multiple"])
 
     for name, (tags, tr) in experiments.items():
         print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
@@ -162,33 +198,25 @@ def widthExperiments():
     group = "width"
 
     experiments = EXPERIMENTS["width"]
-    #experiments = EXPERIMENTS["width_2"]
+    experiments.update(EXPERIMENTS["width_2"])
 
     for name, (tags, tr) in experiments.items():
         print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
         createNetwork.createExperiment(ds, tags, group, name, **tr)
-
-def sizeExperiments():
-    group = "size"
-
-    experiments = EXPERIMENTS["size"]
-
-    for name, (tags, tr) in experiments.items():
-        print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
-        createNetwork.createExperiment(ds, tags, group, name, **tr)
-    
 
 def augmentationExperiments():
     group = "augmentation"
     
-    experiments = EXPERIMENTS['baseline']
-    #experiments.update(EXPERIMENTS["shear"])
-    #experiments.update(EXPERIMENTS["blur_sharp"])
-    #experiments.update(EXPERIMENTS["rotate"])
-    #experiments.update(EXPERIMENTS["shear"])
-    #experiments.update(EXPERIMENTS["perspective"])
-    #experiments.update(EXPERIMENTS["color_jitter"])
-    #experiments.update(EXPERIMENTS["elastic"])
+    experiments = EXPERIMENTS["standard"]
+    #experiments = EXPERIMENTS['baseline']
+    #experiments.update(EXPERIMENTS["standard"])
+    experiments.update(EXPERIMENTS["shear"])
+    experiments.update(EXPERIMENTS["blur_sharp"])
+    experiments.update(EXPERIMENTS["rotate"])
+    experiments.update(EXPERIMENTS["shear"])
+    experiments.update(EXPERIMENTS["perspective"])
+    experiments.update(EXPERIMENTS["color_jitter"])
+    experiments.update(EXPERIMENTS["elastic"])
     #experiments = EXPERIMENTS["combined"]
 
     for name, (tags, tr) in experiments.items():
@@ -231,8 +259,10 @@ def channelExperiments():
 
 if __name__ == "__main__":
     #print COMBO(ds, 227, multiple=True)
-    paddingExperiments()
+    #sizeExperiments()
+    #paddingExperiments()
+    #depthExperiments()
     #widthExperiments()
-    #augmentationExperiments()
+    augmentationExperiments()
     #channelExperiments()
     #variantExperiments()

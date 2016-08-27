@@ -20,6 +20,9 @@ void ShearImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
   Dtype shear_angle;
   this->RandFloat(1, -param_.max_shear_angle(), param_.max_shear_angle(), &shear_angle); 
   float shear_factor = (float) tan(shear_angle * 3.14159265 / 180.0);
+  int interpolation = this->GetInterpolation(param_.interpolation());
+  int border_mode = this->GetBorderMode(param_.border_mode());
+  cv::Scalar border_val(param_.border_val());
   // out uses the same number of channels as in, but uses floats
   out.create(in.size(), CV_32F | (0x18 & in.type()));
 
@@ -42,7 +45,7 @@ void ShearImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
   // no translation
   shear.at<float>(0,2) = 0;
   shear.at<float>(1,2) = 0;
-  cv::warpAffine(in, out, shear, in.size());
+  cv::warpAffine(in, out, shear, in.size(), interpolation, border_mode, border_val);
 }
 
 INSTANTIATE_CLASS(ShearImageTransformer);

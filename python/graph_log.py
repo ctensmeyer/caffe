@@ -209,6 +209,7 @@ def main(args):
 		print tup
 		print tup[0]
 
+
 	if 'precision_raw' in sequences['Test_Losses'] and 'recall_raw' in sequences['Test_Losses']:
 		precisions = sequences['Test_Losses']['precision_raw']
 		recalls = sequences['Test_Losses']['recall_raw']
@@ -223,7 +224,14 @@ def main(args):
 			f_measures.append( (_iter, f) )
 		f_measures.sort(key=lambda tup: tup[1])
 		tup = f_measures[-1]
-		print "f_meature", tup
+		print "f_measure", tup
+		print tup[0]
+
+	if 'weighted_fmeasure_raw' in sequences['Test_Losses']:
+		fmeasures = sequences['Test_Losses']['weighted_fmeasure_raw']
+		fmeasures.sort(key=lambda tup: tup[1])
+		tup = fmeasures[-1]
+		print tup
 		print tup[0]
 
 

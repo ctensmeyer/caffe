@@ -29,9 +29,10 @@ void WeightedFmeasureLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& b
   caffe_gpu_dot(count, target_mult_input, precision_weight, &precision_num_);
   caffe_gpu_dot(count, input, precision_weight, &precision_denum_);
 
-  recall_ = recall_num_ / recall_denum_;
-  precision_ = precision_num_ / precision_denum_;
-  Dtype f_measure = 2 * recall_ * precision_ / (recall_ + precision_);
+  // check for 0 denominators to avoid nans
+  recall_ = (recall_denum_ != 0) ? recall_num_ / recall_denum_ : 0;
+  precision_ = (precision_denum_ != 0) ? precision_num_ / precision_denum_ : 0;
+  Dtype f_measure = ((recall_ + precision_) != 0) ? 2 * recall_ * precision_ / (recall_ + precision_) : 0;
   top[0]->mutable_cpu_data()[0] = 1 - f_measure;  // loss should be lower is better
 }
 
@@ -53,25 +54,29 @@ void WeightedFmeasureLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& 
 	// dF/dR and dF/dP are fixed for all pixels
 	// dF/dR = 2 * p^2 / (p + r)^2
 	// dF/dP = 2 * r^2 / (p + r)^2
-	Dtype sum_squared = recall_ + precision_;
-	sum_squared = sum_squared * sum_squared;
-	Dtype dF_dR = 2 * precision_ * precision_ / sum_squared; 
-	Dtype dF_dP = 2 * recall_ * recall_ / sum_squared;
+	if (precision_ != 0 && recall_ != 0) {
+	  Dtype sum_squared = recall_ + precision_;
+	  sum_squared = sum_squared * sum_squared;
+	  Dtype dF_dR = 2 * precision_ * precision_ / sum_squared; 
+	  Dtype dF_dP = 2 * recall_ * recall_ / sum_squared;
 
-	// dF_dR * dR_dB  
-	Dtype* dR_dB = work_buffer_->mutable_gpu_data();
-	caffe_gpu_mul(count, target, recall_weight, dR_dB);
-	caffe_gpu_scal(count, (Dtype)(-2. * dF_dR / recall_denum_), dR_dB); 
+	  // dF_dR * dR_dB  
+	  Dtype* dR_dB = work_buffer_->mutable_gpu_data();
+	  caffe_gpu_mul(count, target, recall_weight, dR_dB);
+	  caffe_gpu_scal(count, (Dtype)(-2. * dF_dR / recall_denum_), dR_dB); 
 
-	// dF_dP * dP_dB 
-	Dtype* dP_dB = work_buffer_->mutable_gpu_diff();
-	caffe_gpu_memcpy(sizeof(Dtype) * count, target, dP_dB);
-	caffe_gpu_scal(count, precision_denum_, dP_dB); // scale target by precision_denum_
-	caffe_gpu_add_scalar(count, -1 * precision_num_, dP_dB); // subtract precision_num_
-	caffe_gpu_mul(count, dP_dB, precision_weight, dP_dB);
-	caffe_gpu_scal(count, (Dtype)(-2. * dF_dP / (precision_denum_ * precision_denum_)), dP_dB);
+	  // dF_dP * dP_dB 
+	  Dtype* dP_dB = work_buffer_->mutable_gpu_diff();
+	  caffe_gpu_memcpy(sizeof(Dtype) * count, target, dP_dB);
+	  caffe_gpu_scal(count, precision_denum_, dP_dB); // scale target by precision_denum_
+	  caffe_gpu_add_scalar(count, -1 * precision_num_, dP_dB); // subtract precision_num_
+	  caffe_gpu_mul(count, dP_dB, precision_weight, dP_dB);
+	  caffe_gpu_scal(count, (Dtype)(-2. * dF_dP / (precision_denum_ * precision_denum_)), dP_dB);
 
-	caffe_gpu_add(count, dR_dB, dP_dB, diff);
+	  caffe_gpu_add(count, dR_dB, dP_dB, diff);
+	} else {
+	  // fmeasure is actually undefined in this case, so just leave gradient = 0
+	}
   }
 }
 

@@ -20,6 +20,8 @@ class ImageTransformer {
   void InitRand();
   void InitRand(unsigned int seed);
   int RandInt(int n);
+  int GetInterpolation(Interpolation inter);
+  int GetBorderMode(BorderMode mode);
   void RandFloat(const int n, const float min, const float max, float* out);
   void RandFloat(const int n, const double min, const double max, double* out);
   void RandGauss(const int n, const Dtype mean, const Dtype std_dev, Dtype* out);
@@ -107,11 +109,11 @@ class LinearImageTransformer : public ImageTransformer<Dtype> {
   virtual void SampleTransformParams(const vector<int>& in_shape) {}
 
  protected:
-  virtual void LoadShiftFile();
-  virtual void ResizeShiftImage(const vector<int>& in_shape);
+  //virtual void LoadShiftFile();
+  //virtual void ResizeShiftImage(const vector<int>& in_shape);
   LinearTransformParameter param_;
-  cv::Mat* shift_image_original_;
-  cv::Mat* shift_image_current_;
+  //cv::Mat* shift_image_original_;
+  //cv::Mat* shift_image_current_;
 };
 
 template <typename Dtype>

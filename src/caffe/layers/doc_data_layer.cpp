@@ -99,6 +99,10 @@ Dtype DocDataLayer<Dtype>::GetLabelValue(DocumentDatum& doc, const std::string& 
     return doc.has_original_aspect_ratio() ? doc.original_aspect_ratio() : missing_value_;
   } else if (label_name == "num") {
     return doc.has_num() ? doc.num() : missing_value_;
+  } else if (label_name == "height") {
+    return (Dtype) doc.image().height();
+  } else if (label_name == "width") {
+    return (Dtype) doc.image().width();
   } else {
     CHECK(0) << "Unrecognized label_name: " << label_name;
   }
