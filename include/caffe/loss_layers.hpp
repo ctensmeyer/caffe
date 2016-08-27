@@ -102,7 +102,7 @@ class PRLayer : public Layer<Dtype> {
 
   virtual inline const char* type() const { return "PR"; }
   virtual inline int ExactNumBottomBlobs() const { return 2; }
-  virtual inline int ExactNumTopBlobs() const { return 4; }
+  virtual inline int ExactNumTopBlobs() const { return 5; }
 
  protected:
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,

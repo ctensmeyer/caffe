@@ -32,6 +32,7 @@ void PRLayer<Dtype>::Reshape(
   top[1]->Reshape(top_shape);  // Recall
   top[2]->Reshape(top_shape);  // Accuracy
   top[3]->Reshape(top_shape);  // True Negative Rate
+  top[4]->Reshape(top_shape);  // F-measure
 }
 
 template <typename Dtype>
@@ -68,10 +69,18 @@ void PRLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 	}
   }
 
-  top[0]->mutable_cpu_data()[0] = true_positives / (true_positives + false_positives);  // precision
-  top[1]->mutable_cpu_data()[0] = true_positives / (true_positives + false_negatives);  // recall
+  Dtype precision = true_positives / (true_positives + false_positives);  // precision
+  Dtype recall = true_positives / (true_positives + false_negatives);  // recall
+  top[0]->mutable_cpu_data()[0] = precision;
+  top[1]->mutable_cpu_data()[0] = recall;
   top[2]->mutable_cpu_data()[0] = (true_positives + true_negatives) / (true_positives + false_positives + true_negatives + false_negatives);  // accuracy
   top[3]->mutable_cpu_data()[0] = true_negatives / (false_positives + true_negatives);  // true negative rate
+  if (precision + recall != 0) {
+    top[4]->mutable_cpu_data()[0] = (2 * precision * recall) / (precision + recall);
+  } else {
+    top[4]->mutable_cpu_data()[0] = 0;
+  }
+
   // PR layer should not be used as a loss function.
 }
 
