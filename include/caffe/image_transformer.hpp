@@ -261,6 +261,20 @@ class ElasticDeformationImageTransformer : public ImageTransformer<Dtype> {
   Blob<float>* dis_y_;
 };
 
+template <typename Dtype>
+class ZeroBorderImageTransformer : public ImageTransformer<Dtype> {
+ public:
+  explicit ZeroBorderImageTransformer(ZeroBorderTransformParameter param) :
+    param_(param) { zero_len_ = param_.zero_len(); };
+  virtual ~ZeroBorderImageTransformer() {};
+
+  virtual void Transform(const cv::Mat& in, cv::Mat& out);
+
+ protected:
+  ZeroBorderTransformParameter param_;
+  int zero_len_;
+};
+
 }  // namespace caffe
 
 #endif  // CAFFE_IMAGE_TRANSFORMER_HPP_

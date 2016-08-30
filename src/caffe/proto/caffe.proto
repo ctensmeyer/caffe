@@ -557,6 +557,7 @@ message ProbImageTransformParameter {
   repeated PerspectiveTransformParameter perspective_params = 10;
   repeated ColorJitterTransformParameter color_jitter_params = 21;
   repeated ElasticDeformationTransformParameter elastic_deformation_params = 22;
+  repeated ZeroBorderTransformParameter zero_border_params = 23;
 
   // the number of values for each of these fields should match the number
   // of values for the corresponding fields 1-5.  If left unspecificed,
@@ -573,6 +574,7 @@ message ProbImageTransformParameter {
   repeated float perspective_prob_weights = 20;
   repeated float color_jitter_prob_weights = 31;
   repeated float elastic_deformation_prob_weights = 32;
+  repeated float zero_border_prob_weights = 33;
 }
 
 message ResizeTransformParameter {
@@ -694,6 +696,10 @@ message ElasticDeformationTransformParameter {
   optional Interpolation interpolation = 3 [default = INTER_LINEAR];
   optional BorderMode border_mode = 4 [default = BORDER_CONSTANT];
   optional float border_val = 5 [default = 0];
+}
+
+message ZeroBorderTransformParameter {
+  optional int32 zero_len = 1 [default = 0];
 }
 
 // Message that stores parameters shared by loss layers
