@@ -181,6 +181,19 @@ ImageTransformer<Dtype>* CreateImageTransformer(ImageTransformationParameter par
 	  prob_transformers->push_back(transformer);
 	  weights.push_back(weight);
 	}
+	// ZeroBorder
+	for (int j = 0; j < prob_param.zero_border_params_size(); j++) {
+	  ZeroBorderTransformParameter zero_border_param = prob_param.zero_border_params(j); 
+	  if (j < prob_param.zero_border_prob_weights_size()) {
+	    weight = prob_param.zero_border_prob_weights(j);
+	  } else {
+	    weight = 1;
+	  }
+	  ImageTransformer<Dtype>* transformer = new ZeroBorderImageTransformer<Dtype>(zero_border_param);
+	  transformer->InitRand(rng_seed);
+	  prob_transformers->push_back(transformer);
+	  weights.push_back(weight);
+	}
 
     ImageTransformer<Dtype>* prob_transformer = new ProbImageTransformer<Dtype>(prob_transformers, weights);
 	prob_transformer->InitRand(rng_seed);
