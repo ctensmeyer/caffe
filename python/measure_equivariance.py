@@ -127,14 +127,6 @@ def init_model(network_file, weights_file, gpu=0):
 	return model
 
 
-def open_lmdb(test_lmdb):
-	env = lmdb.open(test_lmdb, readonly=True, map_size=int(2 ** 42))
-	txn = env.begin(write=False)
-	cursor = txn.cursor()
-	cursor.first()
-	return env, txn, cursor
-
-
 def log(args, s, newline=True):
 	print s
 	if args.log_file:
@@ -366,30 +358,21 @@ def get_transforms(transform_file):
 	return transforms
 
 
-def get_image(cursor, args):
-	doc_datum = caffe.proto.caffe_pb2.DocumentDatum()
-	dd_serialized = cursor.value()
-	if not dd_serialized:
-		# done traversing database
-		return None, None
-	cursor.next()
-	doc_datum.ParseFromString(dd_serialized)  # decode lmdb entry
-	label = doc_datum.dbid
-
-	nparr = np.fromstring(doc_datum.image.data, np.uint8)
-	# load the image as is (do not force color/grayscale)
-	im = cv2.imdecode(nparr, args.color)  
-	if im.ndim == 2:
-		# explicit single channel to match dimensions of color
-		im = im[:,:,np.newaxis]
-
-	return im, label
+def open_dbs(db_paths):
+	dbs = list()
+	for path in db_paths:
+		env = lmdb.open(path, readonly=True, map_size=int(2 ** 42))
+		txn = env.begin(write=False)
+		cursor = txn.cursor()
+		cursor.first()
+		dbs.append( (env, txn, cursor) )
+	return dbs
 
 
-def preprocess_im(im, means, scale):
-	means = np.asarray(map(float, means.split(',')))
-	means = means[np.newaxis,np.newaxis,np.newaxis,:]
-	return float(scale) * (im - means)
+def close_dbs(dbs):
+	for env, txn, cursor in dbs:
+		txn.abort()
+		env.close()
 
 
 def fprop(model, ims, args):
@@ -397,22 +380,92 @@ def fprop(model, ims, args):
 	transposed = np.transpose(ims, [0,3,1,2])
 	model.blobs[args.input_blob].reshape(*transposed.shape)
 	model.blobs[args.input_blob].data[:,:,:,:] = transposed
-	#for x in xrange(ims.shape[0]):
-	#	transposed = np.transpose(ims[0], [0,3,1,2])
-	#	model.blobs[args.input_blob].data[x,:,:,:] = transposed
-	# propagate on batch
 	model.forward()
 
 	
-def scale_shift_im(im, means, scale):
-	preprocessed_im = scale * (im - means)
+def get_image(dd_serialized, slice_idx, args):
+	doc_datum = caffe.proto.caffe_pb2.DocumentDatum()
+	doc_datum.ParseFromString(dd_serialized)	
+
+	channel_tokens = args.channels.split(args.delimiter)
+	channel_idx = min(slice_idx, len(channel_tokens)-1)
+	num_channels = int(channel_tokens[channel_idx])
+
+	nparr = np.fromstring(doc_datum.image.data, np.uint8)
+	im = cv2.imdecode(nparr, int(num_channels == 3) )
+	if im.ndim == 2:
+		# explicit single channel to match dimensions of color
+		im = im[:,:,np.newaxis]
+	label = doc_datum.dbid
+	return im, label
+
+
+def scale_shift_im(im, slice_idx, args):
+
+	# find the correct mean values.  
+	means_tokens = args.means.split(args.delimiter)
+	mean_idx = min(slice_idx, len(means_tokens) - 1)
+	mean_vals = np.asarray(map(int, means_tokens[mean_idx].split(',')))
+
+	# find the correct scale value
+	scale_tokens = args.scales.split(args.delimiter)
+	scale_idx = min(slice_idx, len(scale_tokens) - 1)
+	scale_val = float(scale_tokens[scale_idx]) 
+
+	preprocessed_im = scale_val * (im - mean_vals)
 	return preprocessed_im
 
 
-def get_activations(model, transforms, lmdb_file, args):
-	env, txn, cursor = open_lmdb(lmdb_file)
+def prepare_images(dbs, transforms, args):
+	ims_slice_transforms = list()
+	labels = list()
+	keys = list()
 
-	num_images = min(args.max_images, env.stat()['entries'])
+	# apply the transformations to every slice of the image independently
+	for slice_idx, entry in enumerate(dbs):
+		env, txn, cursor = entry
+
+		im_slice, label_slice = get_image(cursor.value(), slice_idx, args)
+		transformed_slices = apply_all_transforms(im_slice, transforms)
+		for transform_idx in xrange(len(transformed_slices)):
+			transformed_slices[transform_idx] = scale_shift_im(transformed_slices[transform_idx], slice_idx, args)
+
+		ims_slice_transforms.append(transformed_slices)
+		labels.append(label_slice)
+		keys.append(cursor.key())
+
+	# check that all keys match
+	key = keys[0]
+	for slice_idx, _key in enumerate(keys):
+		if _key != key:
+			log(args, "WARNING!, keys differ %s vs %s for slices %d and %d" % (key, _key, 0, slice_idx))
+
+	
+	# check that all labels match
+	label = labels[0]
+	for slice_idx, _label in enumerate(labels):
+		if _label != label:
+			log(args, "WARNING!, key %s has differing labels: %d vs %d for slices %d and %d" % (key, label, _label, 0, slice_idx))
+
+	# stack each set of slices (along channels) into a single numpy array
+	num_transforms = len(ims_slice_transforms[0])
+	num_slices = len(ims_slice_transforms)
+	ims = list()
+	for transform_idx in xrange(num_transforms):
+		im_slices = list()
+		for slice_idx in xrange(num_slices):
+			im_slice = ims_slice_transforms[slice_idx][transform_idx]
+			im_slices.append(np.atleast_3d(im_slice))
+		whole_im = np.concatenate(im_slices, axis=2) # append along channels
+		ims.append(whole_im)
+
+	return ims, label
+
+
+def get_activations(model, transforms, lmdb_files, args):
+	dbs = open_dbs(lmdb_files)
+
+	num_images = min(args.max_images, dbs[0][0].stat()['entries'])
 	num_activations = model.blobs[args.blob].data.shape[1]
 	num_classes = model.blobs['prob'].data.shape[1]
 
@@ -421,14 +474,9 @@ def get_activations(model, transforms, lmdb_file, args):
 	classifications = {transform: np.zeros((num_images,))  for transform in transforms}
 	labels = list()
 	
-	means = np.asarray(map(int, args.means.split(',')))
-	scale = args.scale
-
 	for iter_num in xrange(num_images):
-		im, label = get_image(cursor, args)
+		ims, label = prepare_images(dbs, transforms, args)
 		labels.append(label)
-		ims = apply_all_transforms(im, transforms)
-		ims = map(lambda im: scale_shift_im(im, means, scale), ims)
 
 		fprop(model, ims, args)
 		for idx, transform in enumerate(transforms):
@@ -549,33 +597,17 @@ def train_equivariance_model(model_type, loss, input_train_features, input_test_
 	classify_layer_params[0].data[:] = classifier_weights[:]  # data copy, not object reassignment
 	classify_layer_params[1].data[:] = classifier_bias[:]
 
-	#classify_layer_params = solver.test_nets[0].params['classify']
-	#classify_layer_params[0].data[:] = classifier_weights[:] 
-	#classify_layer_params[1].data[:] = classifier_bias[:]
-
 	# initialize mappings to the identity
 	mapping_layer_params = solver.net.params['mapping']
 	shape = mapping_layer_params[0].data.shape
 	mapping_layer_params[0].data[:] = np.eye(shape[0], shape[1])[:]
-
-	#mapping_layer_params = solver.test_nets[0].params['mapping']
-	#shape = mapping_layer_params[0].data.shape
-	#mapping_layer_params[0].data[:] = np.eye(shape[0], shape[1])[:]
 
 	if mlp:
 		hidden_layer_params = solver.net.params['mlp_hidden']
 		shape = hidden_layer_params[0].data.shape
 		hidden_layer_params[0].data[:] = np.eye(shape[0], shape[1])[:]
 
-		#hidden_layer_params = solver.test_nets[0].params['mlp_hidden']
-		#shape = hidden_layer_params[0].data.shape
-		#hidden_layer_params[0].data[:] = np.eye(shape[0], shape[1])[:]
-		
-
-	#solver.net.forward()
-	#solver.test_nets[0].forward()
 	solver.solve()
-
 	return solver.net, solver.test_nets[0], solver.iter  # the trained model
 
 
@@ -583,14 +615,6 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 		test_features, all_test_labels, test_classifications, test_output_probs, transforms, model, args):
 	all_train_metrics = {transform: dict() for transform in transforms}
 	all_test_metrics = {transform: dict() for transform in transforms}
-	# model_loss_metric
-	#all_train_metrics['none'] = dict()
-	#for data in ['', 'c_']:
-	#	for model_type in ['linear', 'mlp']:
-	#		for loss in ['l2', 'ce']:
-	#			for metric in ['acc', 'agreement', 'l2', 'jsd']:
-	#				for mode in ['train', 'test']:
-	#					all_train_metrics['none']["%s_%s%s_%s_%s" % (mode, data, model_type, loss, metric)] = 0
 
 	# Get indices for different data splits (all vs those classified correctly under no transform)
 	original_train_classifications = train_classifications['none']
@@ -631,8 +655,7 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 			original_train_classifications = train_classifications['none'][train_indices]
 			original_test_classifications = test_classifications['none'][test_indices]
 
-
-			# l2
+			# l2 training
 			# predict the transformed representation directly from the original representation
 			for model_type in ['linear', 'mlp']:
 				train_metrics, test_metrics = _measure_equivariance('lr', 'l2', original_train_features, original_test_features,
@@ -644,7 +667,7 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 				for metric, val in test_metrics.iteritems():
 					all_test_metrics[transform]["%s%s_%s_%s" % (data, model_type, 'l2', metric)] = val
 
-			# CE loss
+			# Cross Entropy training
 			# the classification weights which are fixed are trained for the original representation, so we take the transformed
 			# represenation and try to undo it using a linear or mlp model
 			for model_type in ['linear', 'mlp']:
@@ -658,6 +681,7 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 					all_test_metrics[transform]["%s%s_%s_%s" % (data, model_type, 'ce', metric)] = val
 
 	return all_train_metrics, all_test_metrics
+
 
 def _measure_equivariance(model_type, loss, input_train_features, input_test_features, target_train_features, 
 			target_test_features, train_labels, test_labels, target_train_output_probs, target_test_output_probs, 
@@ -728,8 +752,10 @@ def main(args):
 	log(args, "Loaded Transforms.  %d transforms" % len(transforms))
 	model = init_model(args.network_file, args.weight_file, gpu=args.gpu)
 
-	train_features, train_output_probs, train_classifications, train_labels = get_activations(model, transforms, args.train_lmdb, args)
-	test_features, test_output_probs, test_classifications, test_labels = get_activations(model, transforms, args.test_lmdb, args)
+	train_lmdbs = args.train_lmdbs.split(args.delimiter)
+	train_features, train_output_probs, train_classifications, train_labels = get_activations(model, transforms, train_lmdbs, args)
+	test_lmdbs = args.test_lmdbs.split(args.delimiter)
+	test_features, test_output_probs, test_classifications, test_labels = get_activations(model, transforms, test_lmdbs, args)
 
 	log(args, "Measuring invariances...")
 	train_invariance_metrics = measure_invariances(train_features, train_output_probs, train_classifications, train_labels, transforms, args)
@@ -752,6 +778,25 @@ def main(args):
 
 	#cleanup_scratch_space(args)
 		
+def check_args(args):
+	num_train_lmdbs = 0 if args.train_lmdbs == "" else len(args.train_lmdbs.split(args.delimiter))
+	num_test_lmdbs = 0 if args.test_lmdbs == "" else len(args.test_lmdbs.split(args.delimiter))
+	if num_test_lmdbs == 0:
+		raise Exception("No test lmdbs specified");
+	if num_train_lmdbs != num_test_lmdbs:
+		raise Exception("Different number of train and test lmdbs: %d vs %d" % (num_train_lmdb, num_test_lmdbs))
+
+	num_scales = len(args.scales.split(args.delimiter))
+	if num_scales != 1 and num_scales != num_test_lmdbs:
+		raise Exception("Different number of test lmdbs and scales: %d vs %d" % (num_test_lmdbs, num_scales))
+
+	num_means = len(args.means.split(args.delimiter))
+	if num_means != 1 and num_means != num_test_lmdbs:
+		raise Exception("Different number of test lmdbs and means: %d vs %d" % (num_test_lmdbs, num_means))
+
+	num_channels = len(args.channels.split(args.delimiter))
+	if num_channels != 1 and num_channels != num_test_lmdbs:
+		raise Exception("Different number of test lmdbs and channels: %d vs %d" % (num_test_lmdbs, num_channels))
 
 def get_args():
 	parser = argparse.ArgumentParser(
@@ -760,24 +805,26 @@ def get_args():
 				help="Caffe network file")
 	parser.add_argument("weight_file", 
 				help="Caffe weights file")
-	parser.add_argument("train_lmdb", 
+	parser.add_argument("train_lmdbs", 
 				help="LMDB of images (encoded DocDatums), used to train equivariance mappings")
-	parser.add_argument("test_lmdb", 
+	parser.add_argument("test_lmdbs", 
 				help="LMDB of images (encoded DocDatums), used to test equivariance mappings")
 	parser.add_argument("transform_file", type=str, default="",
 				help="File containing transformations to do")
 
 	parser.add_argument("-f", "--log-file", type=str, default="",
 				help="Log File")
+
 	parser.add_argument("-m", "--means", type=str, default="0",
 				help="Optional mean values per channel " 
 				"(e.g. 127 for grayscale or 182,192,112 for BGR)")
-	parser.add_argument("-a", "--scale", type=float, default=(1.0 / 255),
+	parser.add_argument('-c', '--channels', default="1", type=str,
+				help='Number of channels to take from each slice')
+	parser.add_argument("-a", "--scales", type=str, default=str(1.0 / 255),
 				help="Optional scale factor")
-	#parser.add_argument("-b", "--train-batch-size", type=int, default=4,
-	#			help="Batch size for training equivariance models")
-	parser.add_argument("-i", "--test-iterations", type=int, default=400,
-				help="Number of test iterations for testing equivariance models")
+	parser.add_argument("-d", "--delimiter", default=':', type=str, 
+				help="Delimiter used for indicating multiple image slice parameters")
+
 	parser.add_argument("-e", "--max-epochs", type=int, default=20,
 				help="Max training epochs for equivariance models")
 	parser.add_argument("-l", "--learning-rate", type=float, default=0.1,
@@ -788,14 +835,13 @@ def get_args():
 				help="Max number of images for processing")
 	parser.add_argument("--gpu", type=int, default=0,
 				help="GPU to use for running the models")
-	parser.add_argument("--color", default=False, action="store_true",
-				help="Read in the images as color")
 	parser.add_argument("--input-blob", type=str, default="data",
 				help="Name of input blob")
 	parser.add_argument("--blob", type=str, default="fc7",
 				help="Name of blob on which to measure equivariance")
 
 	args = parser.parse_args()
+	check_args(args)
 	args.train_batch_size = 1
 
 	return args
