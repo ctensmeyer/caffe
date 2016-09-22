@@ -106,7 +106,7 @@ void Net_SetInputArrays(Net<Dtype>* net, bp::object data_obj,
     boost::dynamic_pointer_cast<MemoryDataLayer<Dtype> >(net->layers()[layer_num]);
   if (!md_layer) {
     throw std::runtime_error("set_input_arrays may only be called if the"
-        " first layer is a MemoryDataLayer");
+        " specified layer is a MemoryDataLayer");
   }
 
   // check that we were passed appropriately-sized contiguous memory
