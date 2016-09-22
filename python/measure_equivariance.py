@@ -19,9 +19,16 @@ import tempfile
 
 
 def setup_scratch_space(args):
-	args.tmp_dir = tempfile.mkdtemp()
+	try:
+		os.makedirs("./tmp")
+	except:
+		pass
+	#args.tmp_dir = #tempfile.mkdtemp()
+	args.tmp_dir = "./tmp"
 	args.train_file = os.path.join(args.tmp_dir, "train.prototxt")
+	args.train_db = os.path.join(args.tmp_dir, "train.h5")
 	args.test_file = os.path.join(args.tmp_dir, "test.prototxt")
+	args.test_db = os.path.join(args.tmp_dir, "test.h5")
 	args.solver_file = os.path.join(args.tmp_dir, "solver.prototxt")
 
 
@@ -29,90 +36,57 @@ def cleanup_scratch_space(args):
 	shutil.rmtree(args.tmp_dir)
 
 
-def logistic_regression_l2_train_proto(args, num_activations):
+def equivariance_proto(args, num_activations, num_classes, l2_loss_weight=1, mlp=False, classify_layer_name="classify"):
 	n = caffe.NetSpec()
 
-	mem_param = dict(batch_size=args.train_batch_size, channels=num_activations, height=1, width=1)
-	n.original_activations, n.labels1 = L.MemoryData(memory_data_param=mem_param)
-	n.transform_activations, n.labels2 = L.MemoryData(memory_data_param=mem_param)
+	act_mem_param = dict(batch_size=1, channels=num_activations, height=1, width=1)
+	prob_mem_param = dict(batch_size=1, channels=num_classes, height=1, width=1)
+	n.original_activations, n.labels1 = L.MemoryData(memory_data_param=act_mem_param, ntop=2)
+	n.transform_activations, n.labels2 = L.MemoryData(memory_data_param=act_mem_param, ntop=2)
+	n.transform_output_probs, n.labels3 = L.MemoryData(memory_data_param=prob_mem_param, ntop=2)
 
-	n.sil1 = L.Silence(n.labels1)
-	n.sil2 = L.Silence(n.labels1)
+	L.Silence(n.labels1, ntop=0)
+	L.Silence(n.labels2, ntop=0)
+	#L.Silence(n.labels3)  # used for accuracy
 
-	n.prev = L.InnerProduct(n.original_activations, num_output=num_activations, weight_filler=dict(type='msra'))
+	if mlp:
+		n.prev = L.InnerProduct(n.original_activations, num_output=args.hidden_size, weight_filler=dict(type='msra'))
+		n.prev = L.ReLU(n.prev, in_place=True)
+	else:
+		n.prev = n.original_activations
+
+	n.prev = L.InnerProduct(n.prev, num_output=num_activations, weight_filler=dict(type='msra'))
 	n.prev = L.ReLU(n.prev, in_place=True)
-	n.loss = L.EuclideanLossLayer(n.prev, n.transform_activations, loss_param=dict(normalize=True)) 
 
-	return n.to_proto()
+	ce_loss_weight = 1 - l2_loss_weight
 
-
-def logistic_regression_l2_test_proto(args, num_activations, num_classes):
-	n = caffe.NetSpec()
-
-	mem_param = dict(batch_size=args.test_batch_size, channels=num_activations, height=1, width=1)
-	n.original_activations, n.labels = L.MemoryData(memory_data_param=mem_param)
-
-	n.sil = L.Silence(n.labels)
-
-	n.prev = L.InnerProduct(n.original_activations, num_output=num_activations, weight_filler=dict(type='msra'))
-	n.prev = L.ReLU(n.prev, in_place=True)
-	n.prev = L.InnerProduct(n.prev, num_output=num_classes,
-		param=[{'lr_mult':0, 'decay_mult':0}, {'lr_mult': 0, 'decay_mult': 0}])  # weights to be fixed later 
-	n.prob = L.Softmax(n.prev)
-
-	return n.to_proto()
-
-
-def logistic_regression_ce_proto(args, num_activations, num_classes):
-	n = caffe.NetSpec()
-
-	mem_param = dict(batch_size=args.batch_size, channels=num_activations, height=1, width=1)
-	n.original_activations = L.MemoryData(memory_data_param=mem_param)
-	mem_param2 = dict(batch_size=args.batch_size, channels=num_classes, height=1, width=1)
-	n.transform_out_probs = L.MemoryData(memory_data_param=mem_param)
-
-	n.prev = L.InnerProduct(n.original_activations, num_output=num_activations, weight_filler=dict(type='msra'))
-	n.prev = L.ReLU(n.prev, in_place=True)
+	n.reconstruction = L.EuclideanLoss(n.prev, n.transform_activations, loss_weight=l2_loss_weight, loss_param=dict(normalize=True)) 
 
 	# now finish the computation of the rest of the network
 	# hard coded for measuring equivariance of last hidden layers
-	n.prev = L.InnerProduct(n.prev, num_output=num_classes, 
-		param=[{'lr_mult':0, 'decay_mult':0}, {'lr_mult': 0, 'decay_mult': 0}])  # weights to be fixed later 
-	n.prev = L.Softmax(n.prev)
-	n.loss = L.EuclideanLossLayer(n.prev, n.transform_output_probs, loss_param=dict(normalize=True))
+	n.prev = L.InnerProduct(n.prev, num_output=num_classes, name=classify_layer_name,
+		param=[{'lr_mult':0, 'decay_mult':0}, {'lr_mult': 0, 'decay_mult': 0}])  # weights to be fixed to the network's original weights
+	n.prob = L.Softmax(n.prev)
+	n.ce_loss = L.EuclideanLoss(n.prob, n.transform_output_probs, loss_weight=ce_loss_weight, loss_param=dict(normalize=True))
 
 	# TODO: write Full Softmax/CE loss layer to compare full distributions
-	#n.loss = L.CrossEntropyLossLayer(n.prev, n.out_probs)
+	#n.ce_loss = L.SoftmaxCrossEntropyLossLayer(n.prev, n.transform_output_probs)
+
+	n.accuracy = L.Accuracy(n.prev, n.labels3)
 
 	return n.to_proto()
 
 
-def mlp_l2_proto(args, num_activations):
-	n = caffe.NetSpec()
-
-	mem_param = dict(batch_size=args.batch_size, channels=1, height=1, width=num_activations)
-	n.original_activations = L.MemoryData(memory_data_param=mem_param)
-	n.transform_activations = L.MemoryData(memory_data_param=mem_param)
-
-	n.prev = L.InnerProduct(n.original_activations, num_output=args.hidden_size, weight_filler=dict(type='msra'))
-	n.prev = L.ReLU(n.prev, in_place=True)
-	n.prev = L.InnerProduct(n.original_activations, num_output=num_activations, weight_filler=dict(type='msra'))
-	n.prev = L.ReLU(n.prev, in_place=True)
-	n.loss = L.EuclideanLossLayer(n.prev, n.transform_activations, loss_param=dict(normalize=True)) 
-
-	return n.to_proto()
-
-
-def create_solver(args, num_instances, max_epochs=20):
+def create_solver(args, num_train_instances, num_test_instances):
 	s = caffe.proto.caffe_pb2.SolverParameter()
 	s.train_net = args.train_file
 	s.test_net.append(args.test_file)
 
-	s.test_interval = num_instances / args.train_batch_size / 4
-	s.test_iter.append(args.test_iterations)
-	s.max_iter = num_instances * max_epochs / args.train_batch_size
+	s.test_interval = num_train_instances / 4
+	s.test_iter.append(num_test_instances)
+	s.max_iter = num_train_instances * args.max_epochs
 
-	s.type = "SGD"
+	#s.solver_type = caffe.proto.caffe_pb2.SolverType.SGD  # why isn't it working?  Default anyway
 	s.momentum = 0.9
 	s.weight_decay = 1e-3
 
@@ -126,6 +100,7 @@ def create_solver(args, num_instances, max_epochs=20):
 
 	s.solver_mode = caffe.proto.caffe_pb2.SolverParameter.GPU
 	s.snapshot = 0  # don't do snapshotting
+	s.display = 20
 
 	return s
 	
@@ -518,51 +493,85 @@ def measure_invariances(all_features, all_output_probs, all_classifications, lab
 	return metrics
 
 
+def train_model(model_type, loss, transform_train_features, transform_test_features, train_labels, test_labels, 
+	original_train_features, original_test_features, transform_train_output_probs, transform_test_output_probs, 
+	classifier_weights, classifier_bias, args):
 
-def	train_lr_l2(transform_train_features, transform_test_features, train_labels, test_labels, original_train_features, 
-		original_test_features, original_train_output_probs, original_test_output_probs, model, netspec, args):
-
-	num_instances = transform_train_features.shape[0]
+	num_train_instances = transform_train_features.shape[0]
+	num_test_instances = transform_test_features.shape[0]
 	num_activations = transform_train_features.shape[1]
-	num_classes = original_train_output_probs.shape[1]
+	num_classes = transform_train_output_probs.shape[1]
+	l2_loss_weight = 1 if loss == 'l2' else 0
+	mlp = model_type == 'mlp'
+	classify_layer_name="classify"
 
-	train_network = logistic_regression_l2_train_proto(args, num_activations)
+	# Write the prototxt for the train and test nets, as well as the solver
+	train_network = equivariance_proto(args, num_activations, num_classes, l2_loss_weight, mlp, classify_layer_name)
 	with open(args.train_file, 'w') as f:
 		f.write(str(train_network))
-	test_network = logistic_regression_l2_test_proto(args, num_activations, num_classes)
+	test_network = equivariance_proto(args, num_activations, num_classes, l2_loss_weight, mlp, classify_layer_name)
 	with open(args.test_file, 'w') as f:
 		f.write(str(test_network))
 
-	solver_param = create_solver(args, num_instances)
+	solver_param = create_solver(args, num_train_instances, num_test_instances)
 	with open(args.solver_file, 'w') as f:
 		f.write(str(solver_param))
 
+	# load the solver and the network files it references
 	solver = caffe.get_solver(args.solver_file)
-	solver.net.set_input_arrays(original_train_features, train_labels, 0)
-	solver.net.set_input_arrays(transform_train_features, train_labels, 1)
+
+	# set up inputs from the specified arrays
+	solver.net.set_input_arrays(original_train_features, train_labels, 0)   # train inputs
+	solver.net.set_input_arrays(transform_train_features, train_labels, 1)  # train l2 targets
+	solver.net.set_input_arrays(transform_train_output_probs, train_labels, 2)    # train ce targets
+
+	solver.test_nets[0].set_input_arrays(original_test_features, test_labels, 0)   # test inputs
+	solver.test_nets[0].set_input_arrays(transform_test_features, test_labels, 1)  # test l2 targets
+	solver.test_nets[0].set_input_arrays(transform_test_output_probs, test_labels, 2)  # test ce targets
+
+	# fix the classificaiton weights/biases to be the passed in weights/biases
+	train_classify_layer_params = solver.net.params[classify_layer_name]
+	train_classify_layer_params[0].data[:] = classifier_weights[:]  # data copy, not object reassignment
+	train_classify_layer_params[1].data[:] = classifier_bias[:]  
+
+	test_classify_layer_params = solver.test_nets[0].params[classify_layer_name]  # might be redundant 
+	test_classify_layer_params[0].data[:] = classifier_weights[:]  
+	test_classify_layer_params[1].data[:] = classifier_bias[:]  
+
+	solver.net.blobs['original_activations'].data[:,:] = 0
+	print np.squeeze(solver.net.blobs['original_activations'].data[0])[:50]
+	solver.net.forward()
+	solver.test_nets[0].forward()
+	print solver.net.blobs['original_activations'].data.shape 
+	print original_train_features.shape
+	if not np.allclose(solver.net.blobs['original_activations'].data[0,:], original_train_features[0,:]):
+		print "Not equal"
+		print np.squeeze(solver.net.blobs['original_activations'].data[0])[:20]
+		print solver.net.blobs['labels1'].data
+		for x in xrange(5):
+			print "Idx", x
+			print np.squeeze(original_train_features[x,:])[:20]
+			print
+		exit()
+
 	solver.solve()
 
+	return solver.net  # the trained model
 
-def train_model(model_type, loss, transform_train_features, transform_test_features, train_labels, test_labels, 
-	original_train_features, original_test_features, original_train_output_probs, original_test_output_probs, model, netspec, args):
-	if model_type == 'linear' and loss == 'l2':
-		equivariant_model = train_lr_l2(transform_train_features, transform_test_features, train_labels, test_labels, original_train_features, 
-			original_test_features, original_train_output_probs, original_test_output_probs, model, netspec, args)
-	else:
-		equivariant_model = None
-	return equivariant_model
 
 
 def measure_equivariances(train_features, all_train_labels, train_classifications, train_output_probs,
-		test_features, all_test_labels, test_classifications, test_output_probs, transforms, model, netspec, args):
-	metrics = {transform: dict() for transform in transforms}
+		test_features, all_test_labels, test_classifications, test_output_probs, transforms, model, args):
+	all_train_metrics = {transform: dict() for transform in transforms}
+	all_test_metrics = {transform: dict() for transform in transforms}
 	# model_loss_metric
-	metrics['none'] = dict()
-	for data in ['', 'c_']:
-		for model in ['linear', 'mlp']:
-			for loss in ['l2', 'ce']:
-				for metric in ['acc', 'agreement', 'l2', 'jsd']:
-					metrics['none']["%s%s_%s_%s" % (data, model, loss, metric)] = 0
+	#all_train_metrics['none'] = dict()
+	#for data in ['', 'c_']:
+	#	for model_type in ['linear', 'mlp']:
+	#		for loss in ['l2', 'ce']:
+	#			for metric in ['acc', 'agreement', 'l2', 'jsd']:
+	#				for mode in ['train', 'test']:
+	#					all_train_metrics['none']["%s_%s%s_%s_%s" % (mode, data, model_type, loss, metric)] = 0
 
 	# Get indices for different data splits (all vs those classified correctly under no transform)
 	original_train_classifications = train_classifications['none']
@@ -572,8 +581,15 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 	train_all_indices = np.ones_like(train_correct_indices)
 	test_all_indices = np.ones_like(test_correct_indices)
 
+	last_layer_params = model.params.items()[-1][1]
+	classification_weights = last_layer_params[0].data
+	classification_bias = last_layer_params[1].data
+
 	for transform in transforms:
-		for data in ['', 'c_']:
+		if transform == 'none':
+			continue
+		#for data in ['', 'c_']:
+		for data in ['']:
 			if data == 'c_':
 				train_indices = train_correct_indices
 				test_indices = test_correct_indices
@@ -584,20 +600,74 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 			transform_test_features = test_features[transform][test_indices]
 			transform_train_output_probs = train_output_probs[transform][train_indices]
 			transform_test_output_probs = test_output_probs[transform][test_indices]
+			transform_train_classifications = train_classifications[transform][train_indices]
+			transform_test_classifications = test_classifications[transform][test_indices]
 
 			train_labels = all_train_labels[train_indices]
 			test_labels = all_test_labels[train_indices]
 			original_train_features = train_features['none'][train_indices]
 			original_test_features = test_features['none'][test_indices]
-			for model_type in ['linear', 'mlp']:
-				for loss in ['l2', 'ce']:
+			num_train_instances = transform_train_features.shape[0]
+			num_test_instances = transform_test_features.shape[0]
+			num_activations = transform_test_features.shape[1]
+			num_classes = transform_test_output_probs.shape[1]
+			#for model_type in ['linear', 'mlp']:
+			for model_type in ['linear']:
+				#for loss in ['l2', 'ce']:
+				for loss in ['l2']:
 					equivariant_model = train_model(model_type, loss, transform_train_features, transform_test_features, 
 							train_labels, test_labels, original_train_features, original_test_features, transform_train_output_probs,
-							transform_test_output_probs, model, netspec, args)
-					transform_metrics = score_model()
-					for metric, val in transform_metrics.iteritems():
-						metrics[transform]["%s%s_%s_%s" % (data, model, loss, metric)] = val
+							transform_test_output_probs, classification_weights, classification_bias, args)
+
+					train_metrics = score_model(equivariant_model, transform_train_features, transform_train_output_probs, 
+						transform_train_classifications, train_labels, num_train_instances)
+
+					equivariant_model.set_input_arrays(original_test_features, test_labels, 0)
+					test_metrics = score_model(equivariant_model, transform_test_features, transform_test_output_probs, 
+						transform_test_classifications, test_labels, num_test_instances)
+
+					for metric, val in test_metrics.iteritems():
+						all_train_metrics[transform]["%s%s_%s_%s" % (data, model, loss, metric)] = val
+					for metric, val in train_metrics.iteritems():
+						all_test_metrics[transform]["%s%s_%s_%s" % (data, model, loss, metric)] = val
 					
+	return all_train_metrics, all_test_metrics
+
+
+def extract_from_equivariant(model, num_instances):
+	num_activations = model.blobs['reconstruction'].data.shape[1]
+	num_classes = model.blobs['prob'].data.shape[1]
+
+	features = np.zeros((num_instances, num_activations))
+	output_probs = np.zeros((num_instances, num_classes))
+	classifications = np.zeros((num_instances,))
+
+	for idx in xrange(num_instances):
+		model.forward()
+		features[idx,:] = model.blobs['reconstruction'].data[idx,:]
+		output_probs[idx,:] = model.blobs['prob'].data[idx,:]
+		classifications[idx] = np.argmax(model.blobs['prob'].data[idx])
+
+	return featurs, output_probs, classifications
+	
+
+
+def score_model(model, target_features, target_output_probs, target_classifications, target_labels, num_instances):
+	reconstructed_features, predicted_output_probs, predicted_classifications = extract_from_equivariant(model, num_instances)
+	metrics = dict()
+
+	avg_l2 = measure_avg_l2(reconstructed_features, target_features)
+	metrics['avg_l2'] = avg_l2
+
+	agreement = measure_agreement(predicted_classifications, target_classifications)
+	metrics['agreement'] = agreement
+
+	accuracy = measure_agreement(predicted_classifications, target_labels)
+	metrics['accuracy'] = accuracy
+
+	avg_jsd = measure_avg_jsd(predicted_output_probs, target_output_probs)
+	metrics['avg_jsd'] = avg_jsd
+
 	return metrics
 
 
@@ -618,7 +688,7 @@ def main(args):
 	setup_scratch_space(args)
 	log(args, "Measuring equivariances...")
 	equivariance_metrics = measure_equivariances(train_features, train_labels, train_classifications, train_output_probs, 
-			test_features, test_labels, test_classifications, test_output_probs, transforms, model, netspec, args)
+			test_features, test_labels, test_classifications, test_output_probs, transforms, model, args)
 	print equivariance_metrics
 	log(args, "Done...")
 
@@ -649,10 +719,10 @@ def get_args():
 				"(e.g. 127 for grayscale or 182,192,112 for BGR)")
 	parser.add_argument("-a", "--scale", type=float, default=(1.0 / 255),
 				help="Optional scale factor")
-	parser.add_argument("-b", "--train-batch-size", type=int, default=1,
-				help="Batch size for training equivariance models")
-	parser.add_argument("-c", "--test-batch-size", type=int, default=100,
-				help="Batch size for testing equivariance models")
+	#parser.add_argument("-b", "--train-batch-size", type=int, default=1,
+	#			help="Batch size for training equivariance models")
+	#parser.add_argument("-c", "--test-batch-size", type=int, default=100,
+	#			help="Batch size for testing equivariance models")
 	parser.add_argument("-i", "--test-iterations", type=int, default=400,
 				help="Number of test iterations for testing equivariance models")
 	parser.add_argument("-e", "--max-epochs", type=int, default=20,
