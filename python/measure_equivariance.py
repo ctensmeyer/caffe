@@ -21,6 +21,7 @@ import caffe.proto.caffe_pb2
 from caffe import layers as L, params as P
 
 
+
 def setup_scratch_space(args):
 	try:
 		os.makedirs("./tmp")
@@ -353,8 +354,6 @@ def get_transforms(transform_file):
 	if transform_file:
 		transforms = map(lambda s: s.rstrip().lower(), open(args.transform_file, 'r').readlines())
 	transforms = filter(lambda s: not s.startswith("#"), transforms)
-	if 'none' not in transforms:
-		transforms.append('none')
 	return transforms
 
 
@@ -426,6 +425,7 @@ def prepare_images(dbs, transforms, args):
 		env, txn, cursor = entry
 
 		im_slice, label_slice = get_image(cursor.value(), slice_idx, args)
+		cursor.next()
 		transformed_slices = apply_all_transforms(im_slice, transforms)
 		for transform_idx in xrange(len(transformed_slices)):
 			transformed_slices[transform_idx] = scale_shift_im(transformed_slices[transform_idx], slice_idx, args)
@@ -487,8 +487,16 @@ def get_activations(model, transforms, lmdb_files, args):
 		if iter_num > 0 and iter_num % 100 == 0:
 			log(args, "%.2f%% (%d/%d) Batches" % (100. * iter_num / num_images, iter_num, num_images))
 		log(args, "%.2f%% (%d/%d) Batches" % (100. * iter_num / num_images, iter_num, num_images))
+	labels = np.asarray(labels)
 
-	return activations, output_probs, classifications, np.asarray(labels)
+	if args.shuffle:
+		p = np.random.permutation(activations[transforms[0]].shape[0])
+		labels = labels[p]
+		for transform in transforms:
+			activations[transform] = activations[transform][p]
+			output_probs[transform] = output_probs[transform][p]
+			classifications[transform] = classifications[transform][p]
+	return activations, output_probs, classifications, labels
 
 
 def measure_avg_l2(a, b):
@@ -517,9 +525,9 @@ def measure_invariances(all_features, all_output_probs, all_classifications, lab
 	# Avg sqrt(Jensen Shannon Divergence) between output_probs
 	# All of the above for instances correctly classified
 	metrics = {transform: dict() for transform in transforms}
-	original_features = all_features['none']
-	original_output_probs = all_output_probs['none']
-	original_classifications = all_classifications['none']
+	original_features = all_features[transforms[0]]
+	original_output_probs = all_output_probs[transforms[0]]
+	original_classifications = all_classifications[transforms[0]]
 
 	correct_indices = (original_classifications == labels)
 	for transform in transforms:
@@ -617,8 +625,8 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 	all_test_metrics = {transform: dict() for transform in transforms}
 
 	# Get indices for different data splits (all vs those classified correctly under no transform)
-	original_train_classifications = train_classifications['none']
-	original_test_classifications = test_classifications['none']
+	original_train_classifications = train_classifications[transforms[0]]
+	original_test_classifications = test_classifications[transforms[0]]
 	train_correct_indices = original_train_classifications == all_train_labels
 	test_correct_indices = original_test_classifications == all_test_labels
 	train_all_indices = np.ones_like(train_correct_indices, dtype=bool)
@@ -629,7 +637,7 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 	classification_bias = last_layer_params[1].data
 
 	for transform in transforms:
-		if transform == 'none':
+		if transform == transforms[0]:
 			continue
 		#for data in ['', 'c_']:
 		for data in ['']:
@@ -648,17 +656,17 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 
 			train_labels = all_train_labels[train_indices]
 			test_labels = all_test_labels[train_indices]
-			original_train_features = train_features['none'][train_indices]
-			original_test_features = test_features['none'][test_indices]
-			original_train_output_probs = train_output_probs['none'][train_indices]
-			original_test_output_probs = test_output_probs['none'][test_indices]
-			original_train_classifications = train_classifications['none'][train_indices]
-			original_test_classifications = test_classifications['none'][test_indices]
+			original_train_features = train_features[transforms[0]][train_indices]
+			original_test_features = test_features[transforms[0]][test_indices]
+			original_train_output_probs = train_output_probs[transforms[0]][train_indices]
+			original_test_output_probs = test_output_probs[transforms[0]][test_indices]
+			original_train_classifications = train_classifications[transforms[0]][train_indices]
+			original_test_classifications = test_classifications[transforms[0]][test_indices]
 
 			# l2 training
 			# predict the transformed representation directly from the original representation
 			for model_type in ['linear', 'mlp']:
-				train_metrics, test_metrics = _measure_equivariance('lr', 'l2', original_train_features, original_test_features,
+				train_metrics, test_metrics = _measure_equivariance(model_type, 'l2', original_train_features, original_test_features,
 					transform_train_features, transform_test_features, train_labels, test_labels, transform_train_output_probs,
 					transform_test_output_probs, classification_weights, classification_bias, transform_train_classifications,
 					transform_test_classifications, args)
@@ -671,7 +679,7 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 			# the classification weights which are fixed are trained for the original representation, so we take the transformed
 			# represenation and try to undo it using a linear or mlp model
 			for model_type in ['linear', 'mlp']:
-				train_metrics, test_metrics = _measure_equivariance('lr', 'ce', transform_train_features, transform_test_features,
+				train_metrics, test_metrics = _measure_equivariance(model_type, 'ce', transform_train_features, transform_test_features,
 					original_train_features, original_test_features, train_labels, test_labels, original_train_output_probs,
 					original_test_output_probs, classification_weights, classification_bias, original_train_classifications, 
 					original_test_classifications, args)
@@ -773,10 +781,20 @@ def main(args):
 	log(args, "Equivariance Test Metrics:\n %s" % pprint.pformat(equivariance_metrics[1]))
 	log(args, "Done...")
 
+	all_metrics = {'train': 
+					{'invariance': train_invariance_metrics,
+					 'equivariance': equivariance_metrics[0]},
+				   'test': 
+					{'invariance': test_invariance_metrics,
+					 'equivariance': equivariance_metrics[1]},
+				}
+	with open(args.out_file, 'w') as f:
+		f.write(pprint.pformat(all_metrics))
+
 	if args.log_file:
 		args.log.close()
 
-	#cleanup_scratch_space(args)
+	cleanup_scratch_space(args)
 		
 def check_args(args):
 	num_train_lmdbs = 0 if args.train_lmdbs == "" else len(args.train_lmdbs.split(args.delimiter))
@@ -811,6 +829,8 @@ def get_args():
 				help="LMDB of images (encoded DocDatums), used to test equivariance mappings")
 	parser.add_argument("transform_file", type=str, default="",
 				help="File containing transformations to do")
+	parser.add_argument("out_file", type=str, default="",
+				help="File to write the output")
 
 	parser.add_argument("-f", "--log-file", type=str, default="",
 				help="Log File")
@@ -838,6 +858,8 @@ def get_args():
 	parser.add_argument("--input-blob", type=str, default="data",
 				help="Name of input blob")
 	parser.add_argument("--blob", type=str, default="fc7",
+				help="Name of blob on which to measure equivariance")
+	parser.add_argument("--shuffle", default=False, action="store_true",
 				help="Name of blob on which to measure equivariance")
 
 	args = parser.parse_args()
