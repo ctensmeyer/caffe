@@ -2,11 +2,11 @@
 import os
 import re
 import sys
+import caffe  # must come before cv2
 import cv2
 import h5py
 import math
 import lmdb
-import caffe
 import errno
 import shutil
 import random
@@ -112,6 +112,7 @@ def create_solver(args, num_train_instances, num_test_instances):
 
 	s.solver_mode = caffe.proto.caffe_pb2.SolverParameter.GPU
 	s.snapshot = 0  # don't do snapshotting
+	s.snapshot_after_train = False
 	s.display = 100
 
 	return s
