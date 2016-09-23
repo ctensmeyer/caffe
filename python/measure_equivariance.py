@@ -21,14 +21,18 @@ import caffe.proto.caffe_pb2
 from caffe import layers as L, params as P
 
 
+def safe_mkdir(_dir):
+	try:
+		os.makedirs(os.path.join(_dir))
+	except OSError as exc:
+		if exc.errno != errno.EEXIST:
+			raise
+
 
 def setup_scratch_space(args):
-	try:
-		os.makedirs("./tmp")
-	except:
-		pass
-	#args.tmp_dir = #tempfile.mkdtemp()
-	args.tmp_dir = "./tmp"
+	#safe_mkdir("./tmp")
+	#args.tmp_dir = "./tmp"
+	args.tmp_dir = tempfile.mkdtemp()
 	args.train_file = os.path.join(args.tmp_dir, "train_val.prototxt")
 	args.train_db = os.path.join(args.tmp_dir, "train.h5")
 	args.train_db_list = os.path.join(args.tmp_dir, "train_list.txt")
@@ -485,9 +489,8 @@ def get_activations(model, transforms, lmdb_files, args):
 			output_probs[transform][iter_num, :] = model.blobs['prob'].data[idx, :]
 			classifications[transform][iter_num] = np.argmax(model.blobs['prob'].data[idx, :])
 
-		if iter_num > 0 and iter_num % 100 == 0:
+		if iter_num > 0 and iter_num % 10 == 0:
 			log(args, "%.2f%% (%d/%d) Batches" % (100. * iter_num / num_images, iter_num, num_images))
-		log(args, "%.2f%% (%d/%d) Batches" % (100. * iter_num / num_images, iter_num, num_images))
 	labels = np.asarray(labels)
 
 	if args.shuffle:
@@ -762,13 +765,13 @@ def merge_all_dicts(dict_args):
 		
 
 def partition_transforms(transforms, size):
-	original_transform = transforms[0]
+	base_transform = transforms[0]
 	partitions = []
 	idx = 1
 	while idx < len(transforms):
-		partition = [original_transform]
 		idx2 = 0
 		while idx2 < size and (idx + idx2) < len(transforms):
+			partition = [base_transform]
 			partition.append(transforms[idx + idx2])
 			idx2 += 1
 		partitions.append(partition)
@@ -776,49 +779,16 @@ def partition_transforms(transforms, size):
 	return partitions
 
 
-def main(args):
-	log(args, str(args))
-	all_transforms = get_transforms(args.transform_file)
-	log(args, "Loaded Transforms.  %d transforms" % len(all_transforms))
-	model = init_model(args.network_file, args.weight_file, gpu=args.gpu)
+def filter_existing(transforms, out_dir):
+	filtered_transforms = [transforms[0]]
+	for transform in transforms:
+		if not os.path.exists(os.path.join(out_dir, "%s.txt" % transform.replace(' ', '_'))):
+			filtered_transforms.append(transform)
+	
+	return filtered_transforms
 
-	all_train_invariance_metrics, all_test_invariance_metrics = [], []
-	all_train_equivariance_metrics, all_test_equivariance_metrics = [], []
-
-	transform_partitions = partition_transforms(all_transforms, args.num_transforms)
-	for transforms in transform_partitions:
-		log(args, "Starting on Transfroms: %r\n" % transforms)
-
-		train_lmdbs = args.train_lmdbs.split(args.delimiter)
-		train_features, train_output_probs, train_classifications, train_labels = get_activations(model, transforms, train_lmdbs, args)
-		test_lmdbs = args.test_lmdbs.split(args.delimiter)
-		test_features, test_output_probs, test_classifications, test_labels = get_activations(model, transforms, test_lmdbs, args)
-
-		log(args, "Measuring invariances...")
-		train_invariance_metrics = measure_invariances(train_features, train_output_probs, train_classifications, train_labels, transforms, args)
-		test_invariance_metrics = measure_invariances(test_features, test_output_probs, test_classifications, test_labels, transforms, args)
-		log(args, "Done...")
-		all_train_invariance_metrics.append(train_invariance_metrics)
-		all_test_invariance_metrics.append(test_invariance_metrics)
-
-		setup_scratch_space(args)
-		log(args, "Measuring equivariances...")
-		train_equivariance_metrics, test_equivariance_metrics = measure_equivariances(train_features, train_labels, train_classifications, train_output_probs, 
-				test_features, test_labels, test_classifications, test_output_probs, transforms, model, args)
-		all_train_equivariance_metrics.append(train_equivariance_metrics)
-		all_test_equivariance_metrics.append(test_equivariance_metrics)
-
-	train_invariance_metrics = merge_all_dicts(all_train_invariance_metrics)
-	test_invariance_metrics = merge_all_dicts(all_test_invariance_metrics)
-	train_equivariance_metrics = merge_all_dicts(all_train_equivariance_metrics)
-	test_equivariance_metrics = merge_all_dicts(all_test_equivariance_metrics)
-
-	log(args, "Invariance Train Metrics:\n %s" % pprint.pformat(train_invariance_metrics))
-	log(args, "Invariance Test Metrics:\n %s" % pprint.pformat(test_invariance_metrics))
-	log(args, "Equivariance Train Metrics:\n %s" % pprint.pformat(train_equivariance_metrics))
-	log(args, "Equivariance Test Metrics:\n %s" % pprint.pformat(test_equivariance_metrics))
-	log(args, "Done...")
-
+def write_output(out_dir, transform, train_invariance_metrics, test_invariance_metrics,
+			train_equivariance_metrics, test_equivariance_metrics):
 	all_metrics = {'train': 
 					{'invariance': train_invariance_metrics,
 					 'equivariance': train_equivariance_metrics},
@@ -826,14 +796,75 @@ def main(args):
 					{'invariance': test_invariance_metrics,
 					 'equivariance': test_equivariance_metrics},
 				}
-	with open(args.out_file, 'w') as f:
-		f.write(pprint.pformat(all_metrics))
 
+	out_file = os.path.join(out_dir, "%s.txt" % transform.replace(' ', '_'))
+	with open(out_file, 'w') as f:
+		f.write(pprint.pformat(all_metrics))
+	log(args, "Metrics for Transform %r:\n %s" % (transform, pprint.pformat(train_invariance_metrics)))
+
+
+def main(args):
+	log(args, str(args))
+
+	safe_mkdir(args.out_dir)
+	all_transforms = get_transforms(args.transform_file)
+
+	# don't redo work that we have already done
+	all_transforms = filter_existing(all_transforms, args.out_dir)
+	if len(all_transforms) <= 1:
+		log(args, "No transforms to do.  Exiting...")
+		exit()
+
+	log(args, "Loaded Transforms.  %d transforms" % len(all_transforms))
+	model = init_model(args.network_file, args.weight_file, gpu=args.gpu)
+
+	train_lmdbs = args.train_lmdbs.split(args.delimiter)
+	test_lmdbs = args.test_lmdbs.split(args.delimiter)
+
+	base_transform = all_transforms[0]
+	log(args, "Starting on Baseline Transform: %r\n" % base_transform)
+
+	base_train_features, base_train_output_probs, base_train_classifications, _ = get_activations(model, [base_transform], train_lmdbs, args)
+	base_test_features, base_test_output_probs, base_test_classifications, _ = get_activations(model, [base_transform], test_lmdbs, args)
+
+	transform_partitions = partition_transforms(all_transforms, args.num_transforms)
+	log(args, "Transform Partitions: %r" % transform_partitions)
+	for transforms in transform_partitions:
+		log(args, "Starting on Transforms: %r\n" % transforms)
+
+		train_features, train_output_probs, train_classifications, train_labels = get_activations(model, transforms[1:], train_lmdbs, args)
+		train_features.update(base_train_features)
+		train_output_probs.update(base_train_output_probs)
+		train_classifications.update(base_train_classifications)
+
+		test_features, test_output_probs, test_classifications, test_labels = get_activations(model, transforms[1:], test_lmdbs, args)
+		test_features.update(base_test_features)
+		test_output_probs.update(base_test_output_probs)
+		test_classifications.update(base_test_classifications)
+
+		log(args, "Measuring invariances...")
+		train_invariance_metrics = measure_invariances(train_features, train_output_probs, train_classifications, train_labels, transforms, args)
+		test_invariance_metrics = measure_invariances(test_features, test_output_probs, test_classifications, test_labels, transforms, args)
+		log(args, "Done...")
+
+		setup_scratch_space(args)
+		log(args, "Measuring equivariances...")
+		train_equivariance_metrics, test_equivariance_metrics = measure_equivariances(train_features, train_labels, train_classifications, train_output_probs, 
+				test_features, test_labels, test_classifications, test_output_probs, transforms, model, args)
+
+		for transform in transforms:
+			write_output(args.out_dir, transform, train_invariance_metrics[transform], test_invariance_metrics[transform],
+					train_equivariance_metrics[transform], test_equivariance_metrics[transform])
+
+	log(args, "Done Measure Equivariances")
+
+
+	cleanup_scratch_space(args)
+	log(args, "Exiting...")
+		
 	if args.log_file:
 		args.log.close()
 
-	cleanup_scratch_space(args)
-		
 def check_args(args):
 	num_train_lmdbs = 0 if args.train_lmdbs == "" else len(args.train_lmdbs.split(args.delimiter))
 	num_test_lmdbs = 0 if args.test_lmdbs == "" else len(args.test_lmdbs.split(args.delimiter))
@@ -865,9 +896,9 @@ def get_args():
 				help="LMDB of images (encoded DocDatums), used to train equivariance mappings")
 	parser.add_argument("test_lmdbs", 
 				help="LMDB of images (encoded DocDatums), used to test equivariance mappings")
-	parser.add_argument("transform_file", type=str, default="",
+	parser.add_argument("transform_file", type=str,
 				help="File containing transformations to do")
-	parser.add_argument("out_file", type=str, default="",
+	parser.add_argument("out_dir", type=str,
 				help="File to write the output")
 
 	parser.add_argument("-f", "--log-file", type=str, default="",
@@ -881,6 +912,8 @@ def get_args():
 	parser.add_argument("-a", "--scales", type=str, default=str(1.0 / 255),
 				help="Optional scale factor")
 	parser.add_argument("-d", "--delimiter", default=':', type=str, 
+				help="Delimiter used for indicating multiple image slice parameters")
+	parser.add_argument("--no-cache", default=False, action='store_true',
 				help="Delimiter used for indicating multiple image slice parameters")
 
 	parser.add_argument("-e", "--max-epochs", type=int, default=20,
