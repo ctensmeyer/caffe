@@ -753,40 +753,77 @@ def score_model(model, target_features, target_output_probs,
 
 	return metrics
 
+def merge_all_dicts(dict_args):
+	result = {}
+	for dictionary in dict_args:
+		result.update(dictionary)
+	return result
+		
+
+def partition_transforms(transforms, size):
+	original_transform = transforms[0]
+	partitions = []
+	idx = 1
+	while idx < len(transforms):
+		partition = [original_transform]
+		idx2 = 0
+		while idx2 < size and (idx + idx2) < len(transforms):
+			partition.append(transforms[idx + idx2])
+			idx2 += 1
+		partitions.append(partition)
+		idx += size
+	return partitions
+
 
 def main(args):
 	log(args, str(args))
-	transforms = get_transforms(args.transform_file)
-	log(args, "Loaded Transforms.  %d transforms" % len(transforms))
+	all_transforms = get_transforms(args.transform_file)
+	log(args, "Loaded Transforms.  %d transforms" % len(all_transforms))
 	model = init_model(args.network_file, args.weight_file, gpu=args.gpu)
 
-	train_lmdbs = args.train_lmdbs.split(args.delimiter)
-	train_features, train_output_probs, train_classifications, train_labels = get_activations(model, transforms, train_lmdbs, args)
-	test_lmdbs = args.test_lmdbs.split(args.delimiter)
-	test_features, test_output_probs, test_classifications, test_labels = get_activations(model, transforms, test_lmdbs, args)
+	all_train_invariance_metrics, all_test_invariance_metrics = [], []
+	all_train_equivariance_metrics, all_test_equivariance_metrics = [], []
 
-	log(args, "Measuring invariances...")
-	train_invariance_metrics = measure_invariances(train_features, train_output_probs, train_classifications, train_labels, transforms, args)
-	test_invariance_metrics = measure_invariances(test_features, test_output_probs, test_classifications, test_labels, transforms, args)
-	log(args, "Done...")
+	transform_partitions = partition_transforms(all_transforms, args.num_transforms)
+	for transforms in transform_partitions:
+		log(args, "Starting on Transfroms: %r\n" % transforms)
 
-	setup_scratch_space(args)
-	log(args, "Measuring equivariances...")
-	equivariance_metrics = measure_equivariances(train_features, train_labels, train_classifications, train_output_probs, 
-			test_features, test_labels, test_classifications, test_output_probs, transforms, model, args)
+		train_lmdbs = args.train_lmdbs.split(args.delimiter)
+		train_features, train_output_probs, train_classifications, train_labels = get_activations(model, transforms, train_lmdbs, args)
+		test_lmdbs = args.test_lmdbs.split(args.delimiter)
+		test_features, test_output_probs, test_classifications, test_labels = get_activations(model, transforms, test_lmdbs, args)
+
+		log(args, "Measuring invariances...")
+		train_invariance_metrics = measure_invariances(train_features, train_output_probs, train_classifications, train_labels, transforms, args)
+		test_invariance_metrics = measure_invariances(test_features, test_output_probs, test_classifications, test_labels, transforms, args)
+		log(args, "Done...")
+		all_train_invariance_metrics.append(train_invariance_metrics)
+		all_test_invariance_metrics.append(test_invariance_metrics)
+
+		setup_scratch_space(args)
+		log(args, "Measuring equivariances...")
+		train_equivariance_metrics, test_equivariance_metrics = measure_equivariances(train_features, train_labels, train_classifications, train_output_probs, 
+				test_features, test_labels, test_classifications, test_output_probs, transforms, model, args)
+		all_train_equivariance_metrics.append(train_equivariance_metrics)
+		all_test_equivariance_metrics.append(test_equivariance_metrics)
+
+	train_invariance_metrics = merge_all_dicts(all_train_invariance_metrics)
+	test_invariance_metrics = merge_all_dicts(all_test_invariance_metrics)
+	train_equivariance_metrics = merge_all_dicts(all_train_equivariance_metrics)
+	test_equivariance_metrics = merge_all_dicts(all_test_equivariance_metrics)
 
 	log(args, "Invariance Train Metrics:\n %s" % pprint.pformat(train_invariance_metrics))
 	log(args, "Invariance Test Metrics:\n %s" % pprint.pformat(test_invariance_metrics))
-	log(args, "Equivariance Train Metrics:\n %s" % pprint.pformat(equivariance_metrics[0]))
-	log(args, "Equivariance Test Metrics:\n %s" % pprint.pformat(equivariance_metrics[1]))
+	log(args, "Equivariance Train Metrics:\n %s" % pprint.pformat(train_equivariance_metrics))
+	log(args, "Equivariance Test Metrics:\n %s" % pprint.pformat(test_equivariance_metrics))
 	log(args, "Done...")
 
 	all_metrics = {'train': 
 					{'invariance': train_invariance_metrics,
-					 'equivariance': equivariance_metrics[0]},
+					 'equivariance': train_equivariance_metrics},
 				   'test': 
 					{'invariance': test_invariance_metrics,
-					 'equivariance': equivariance_metrics[1]},
+					 'equivariance': test_equivariance_metrics},
 				}
 	with open(args.out_file, 'w') as f:
 		f.write(pprint.pformat(all_metrics))
@@ -846,6 +883,8 @@ def get_args():
 				help="Delimiter used for indicating multiple image slice parameters")
 
 	parser.add_argument("-e", "--max-epochs", type=int, default=20,
+				help="Max training epochs for equivariance models")
+	parser.add_argument("-n", "--num-transforms", type=int, default=5,
 				help="Max training epochs for equivariance models")
 	parser.add_argument("-l", "--learning-rate", type=float, default=0.1,
 				help="Initial Learning rate for equivariance models")
