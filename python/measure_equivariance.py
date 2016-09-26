@@ -60,13 +60,20 @@ def equivariance_proto(args, num_features, num_classes, l2_loss_weight=1, mlp=Fa
 		batch_size=1, source=args.test_db_list, ntop=4, include=dict(phase=caffe.TEST))
 
 	if mlp:
-		n.prev = L.InnerProduct(n.input_features, num_output=int(args.hidden_size * num_features), name='mlp_hidden')
+		n.prev = L.InnerProduct(n.input_features, num_output=int(args.hidden_size * num_features), name='mlp_hidden',
+			weight_filler={'type': 'gaussian', 'std': 0.001,})
 		n.prev = L.ReLU(n.prev, in_place=True)
-	else:
-		n.prev = n.input_features
 
-	n.prev = L.InnerProduct(n.prev, num_output=num_features, name='mapping')
-	n.reconstruction = L.ReLU(n.prev, name='reconstruction')  # assumes that target_features are rectified
+		n.residual = L.InnerProduct(n.prev, num_output=num_features, name='residual',
+			weight_filler={'type': 'gaussian', 'std': 0.001,})
+		n.combined = L.Eltwise(n.input_features, n.residual, name='combined')
+		n.reconstruction = L.ReLU(n.combined, name='reconstruction')  # assumes that target_features are rectified
+	else:
+		n.residual = L.InnerProduct(n.input_features, num_output=num_features, name='residual',
+			weight_filler={'type': 'gaussian', 'std': 0.001,})
+		n.combined = L.Eltwise(n.input_features, n.residual, name='combined')
+		n.combined = L.Eltwise(n.input_features, n.residual, name='combined')
+		n.reconstruction = L.ReLU(n.combined, name='reconstruction')  # assumes that target_features are rectified
 
 	# caffe will automatically insert split layers when two or more layers have the same bottom, but
 	# in so doing, it mangles the name.  By explicitly doing the split, we control the names so that 
@@ -609,15 +616,15 @@ def train_equivariance_model(model_type, loss, input_train_features, input_test_
 	classify_layer_params[0].data[:] = classifier_weights[:]  # data copy, not object reassignment
 	classify_layer_params[1].data[:] = classifier_bias[:]
 
-	# initialize mappings to the identity
-	mapping_layer_params = solver.net.params['mapping']
-	shape = mapping_layer_params[0].data.shape
-	mapping_layer_params[0].data[:] = np.eye(shape[0], shape[1])[:]
+	## initialize mappings to the identity
+	#mapping_layer_params = solver.net.params['mapping']
+	#shape = mapping_layer_params[0].data.shape
+	#mapping_layer_params[0].data[:] = np.eye(shape[0], shape[1])[:]
 
-	if mlp:
-		hidden_layer_params = solver.net.params['mlp_hidden']
-		shape = hidden_layer_params[0].data.shape
-		hidden_layer_params[0].data[:] = np.eye(shape[0], shape[1])[:]
+	#if mlp:
+	#	hidden_layer_params = solver.net.params['mlp_hidden']
+	#	shape = hidden_layer_params[0].data.shape
+	#	hidden_layer_params[0].data[:] = np.eye(shape[0], shape[1])[:]
 
 	solver.solve()
 	return solver.net, solver.test_nets[0], solver.iter  # the trained model
