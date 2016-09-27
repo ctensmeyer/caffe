@@ -131,7 +131,6 @@ TYPED_TEST(SoftmaxFullLossLayerTest, TestBackward) {
 TYPED_TEST(SoftmaxFullLossLayerTest, TestGradient) {
   typedef typename TypeParam::Dtype Dtype;
   LayerParameter layer_param;
-  //layer_param.mutable_loss_param()->set_normalize(false);
   layer_param.add_loss_weight(3);
   SoftmaxFullLossLayer<Dtype> layer(layer_param);
   GradientChecker<Dtype> checker(1e-2, 1e-2, 1701);
@@ -139,7 +138,6 @@ TYPED_TEST(SoftmaxFullLossLayerTest, TestGradient) {
       this->blob_top_vec_, 0);
 }
 
-/*
 TYPED_TEST(SoftmaxFullLossLayerTest, TestGradientUnnormalized) {
   typedef typename TypeParam::Dtype Dtype;
   LayerParameter layer_param;
@@ -149,6 +147,5 @@ TYPED_TEST(SoftmaxFullLossLayerTest, TestGradientUnnormalized) {
   checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
       this->blob_top_vec_, 0);
 }
-*/
 
 }  // namespace caffe
