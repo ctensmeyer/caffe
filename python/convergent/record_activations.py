@@ -25,17 +25,6 @@ def init_model(network_file, weights_file, gpu=0):
 	return model
 
 
-#def read_corresponding_layers(layers_manifest, num_models):
-#	corresponding_layers = list()
-#	for ln, line in enumerate(open(layers_manifest).readlines()):
-#		layers = line.split()
-#		if len(layers) != num_models:
-#			raise Exception("Found %d layers on line %d of %s.  Expected %d" % (
-#				len(layers), ln, layers_manifest, num_models))
-#		corresponding_layers.append(layers)
-#	return corresponding_layers
-
-
 def open_lmdb(test_lmdb):
 	env = lmdb.open(test_lmdb, readonly=True, map_size=int(2 ** 42))
 	txn = env.begin(write=False)

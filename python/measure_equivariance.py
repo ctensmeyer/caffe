@@ -19,14 +19,7 @@ import numpy as np
 import scipy.ndimage
 import caffe.proto.caffe_pb2
 from caffe import layers as L, params as P
-
-
-def safe_mkdir(_dir):
-	try:
-		os.makedirs(os.path.join(_dir))
-	except OSError as exc:
-		if exc.errno != errno.EEXIST:
-			raise
+from utils import get_transforms, apply_all_transforms, safe_mkdir
 
 
 def setup_scratch_space(args):
@@ -50,9 +43,18 @@ def cleanup_scratch_space(args):
 	shutil.rmtree(args.tmp_dir)
 
 
-def equivariance_proto(args, num_features, num_classes, l2_loss_weight=1, mlp=False):
+def equivariance_proto(args, num_features, num_classes, loss='l2', mlp=False):
+	ce_hard_loss_weight = 0
+	ce_soft_loss_weight = 0
+	l2_loss_weight = 0
+	if loss == 'l2':
+		l2_loss_weight = 1
+	elif loss == 'ce_hard':
+		ce_hard_loss_weight = 1
+	else:
+		ce_soft_loss_weight = 1
+
 	n = caffe.NetSpec()
-	ce_loss_weight = 1 - l2_loss_weight
 
 	n.input_features, n.target_features, n.target_output_probs, n.labels = L.HDF5Data(
 		batch_size=args.train_batch_size, source=args.train_db_list, ntop=4, include=dict(phase=caffe.TRAIN))
@@ -87,16 +89,18 @@ def equivariance_proto(args, num_features, num_classes, l2_loss_weight=1, mlp=Fa
 	# hard coded for measuring equivariance of last hidden layers
 	n.classify = L.InnerProduct(n.reconstruction2, num_output=num_classes, name="classify",
 		param=[{'lr_mult':0, 'decay_mult':0}, {'lr_mult': 0, 'decay_mult': 0}])  # weights to be fixed to the network's original weights
-	n.prob = L.Softmax(n.classify, name='prob')
-	n.ce_loss = L.EuclideanLoss(n.prob, n.target_output_probs, name='ce_loss',
-		loss_weight=0, loss_param=dict(normalize=True))
-	n.ce_loss2 = L.SoftmaxWithLoss(n.classify, n.labels, name='ce_loss2',
-		loss_weight=ce_loss_weight, loss_param=dict(normalize=True))
 
-	# TODO: write Full Softmax/CE loss layer to compare full distributions
-	#n.ce_loss = L.SoftmaxCrossEntropyLossLayer(n.prev, n.transform_output_probs)
+	n.prob = L.Softmax(n.classify)
+	# use the original predicted probs as the targets for CE
+	n.ce_loss_soft = L.SoftmaxFullLoss(n.classify, n.target_output_probs, name='ce_loss_soft',
+		loss_weight=ce_soft_loss_weight, loss_param=dict(normalize=True))
 
-	n.accuracy = L.Accuracy(n.classify, n.labels)
+	# use the labels as the targets for CE
+	n.ce_loss_hard = L.SoftmaxWithLoss(n.classify, n.labels, name='ce_loss_hard',
+		loss_weight=ce_hard_loss_weight, loss_param=dict(normalize=True))
+
+	# use n.prob to suppress it as an output of the network
+	n.accuracy = L.Accuracy(n.prob, n.labels)
 
 	return n.to_proto()
 
@@ -150,223 +154,6 @@ def log(args, s, newline=True):
 		else:
 			args.log.write(s)
 
-
-def apply_elastic_deformation(im, tokens):
-	sigma, alpha, seed = float(tokens[1]), float(tokens[2]), int(tokens[3])
-	np.random.seed(seed)
-
-	displacement_x = np.random.uniform(-1 * alpha, alpha, im.shape[:2])
-	displacement_y = np.random.uniform(-1 * alpha, alpha, im.shape[:2])
-
-	displacement_x = scipy.ndimage.gaussian_filter(displacement_x, sigma, truncate=2)
-	displacement_y = scipy.ndimage.gaussian_filter(displacement_y, sigma, truncate=2)
-
-	coords_y = np.asarray( [ [y] * im.shape[1] for y in xrange(im.shape[0]) ])
-	coords_y = np.clip(coords_y + displacement_y, 0, im.shape[0])
-
-	coords_x = np.transpose(np.asarray( [ [x] * im.shape[0] for x in xrange(im.shape[1]) ] ))
-	coords_x = np.clip(coords_x + displacement_x, 0, im.shape[1])
-
-	# the backwards mapping function, which assures that all coords are in
-	# the range of the input
-	if im.ndim == 3:
-		coords_y = coords_y[:,:,np.newaxis]
-		coords_y = np.concatenate(im.shape[2] * [coords_y], axis=2)[np.newaxis,:,:,:]
-
-		coords_x = coords_x[:,:,np.newaxis]
-		coords_x = np.concatenate(im.shape[2] * [coords_x], axis=2)[np.newaxis,:,:,:]
-
-		coords_d = np.zeros_like(coords_x)
-		for x in xrange(im.shape[2]):
-			coords_d[:,:,:,x] = x
-		coords = np.concatenate( (coords_y, coords_x, coords_d), axis=0)
-	else:
-		coords = np.concatenate( (coords_y[np.newaxis,:,:], coords_x[np.newaxis,:,:]), axis=0)
-
-	## first order spline interpoloation (bilinear?) using the backwards mapping
-	output = scipy.ndimage.map_coordinates(im, coords, order=1, mode='reflect')
-
-	return output
-
-
-
-# "crop y x height width"
-def apply_crop(im, tokens):
-	y, x = int(tokens[1]), int(tokens[2])
-	height, width = int(tokens[3]), int(tokens[4])
-	if y >= im.shape[0] or x >= im.shape[1]:
-		print "Invalid crop: (y,x) outside image bounds (%r with %r)" % (im.shape, tokens)
-		exit(1)
-	if (y < 0 and y + height >= 0) or (x < 0 and x + width >= 0):
-		print "Invalid crop: negative indexing has wrap around (%r with %r)" % (im.shape, tokens)
-		exit(1)
-	if (height > im.shape[0]) or (width > im.shape[1]):
-		print "Invalid crop: crop dims larger than image (%r with %r)" % (im.shape, tokens)
-		exit(1)
-	if (y + height > im.shape[0]) or (x + width > im.shape[1]):
-		print "Invalid crop: crop goes off edge of image (%r with %r)" % (im.shape, tokens)
-		exit(1)
-		
-	return im[y:y+height,x:x+width]
-
-
-def apply_rand_crop(im, tokens):
-	height, width = int(tokens[1]), int(tokens[2])
-	if (height > im.shape[0]) or (width > im.shape[1]):
-		print "Invalid crop: crop dims larger than image (%r with %r)" % (im.shape, tokens)
-		exit(1)
-
-	y = random.randint(0, im.shape[0] - height)
-	x = random.randint(0, im.shape[1] - width)
-	return im[y:y+height,x:x+width]
-
-# "resize height width"
-def apply_resize(im, tokens):
-	size = int(tokens[2]), int(tokens[1])
-	return cv2.resize(im, size)
-
-# "mirror {h,v,hv}"
-def apply_mirror(im, tokens):
-	if tokens[1] == 'h':
-		return cv2.flip(im, 0)
-	elif tokens[1] == 'v':
-		return cv2.flip(im, 1)
-	elif tokens[1] == 'hv':
-		return cv2.flip(im, -1)
-	else:
-		print "Unrecongized mirror operation %r" % tokens
-		exit(1)
-
-def apply_color_jitter(im, tokens):
-	sigma, seed = float(tokens[1]), int(tokens[2])
-	np.random.seed(seed)
-	im = im.astype(int)  # protect against over-flow wrapping
-	if im.shape == 2:
-		im = im + int(np.random.normal(0, sigma))
-	else:
-		for c in xrange(im.shape[2]):
-			im[:,:,c] = im[:,:,c] + int(np.random.normal(0, sigma))
-	
-	# truncate back to image range
-	im = np.clip(im, 0, 255)
-	im = im.astype(np.uint8) 
-	return im
-
-# "guassnoise sigma seed"
-def apply_gaussnoise(im, tokens):
-	sigma, seed = float(tokens[1]), int(tokens[2])
-	np.random.seed(seed)
-	noise = np.random.normal(0, sigma, im.shape[:2])
-	if len(im.shape) == 2:
-		im = (im + noise)
-	else:
-		im = im + noise[:,:,np.newaxis]
-	im = np.clip(im, 0, 255)
-	im = im.astype(np.uint8)
-	return im
-
-# "rotate degree"
-def apply_rotation(im, tokens):
-	degree = float(tokens[1])
-	center = (im.shape[0] / 2, im.shape[1] / 2)
-	rot_mat = cv2.getRotationMatrix2D(center, degree, 1.0)
-	return cv2.warpAffine(im, rot_mat, im.shape[:2], flags=cv2.INTER_LINEAR)
-
-# "blur sigma"
-def apply_blur(im, tokens):
-	sigma = float(tokens[1])
-	size = int(sigma * 4 + .999)
-	if size % 2 == 0:
-		size += 1
-	return cv2.GaussianBlur(im, (size, size), sigma)
-	
-# "unsharpmask sigma amount"
-def apply_unsharpmask(im, tokens):
-	blurred = np.atleast_3d(apply_blur(im, tokens))
-	amount = float(tokens[2])
-	sharp = (1 + amount) * im + (-amount * blurred)
-	sharp = np.clip(sharp, 0, 255)
-	return sharp
-
-# "shear degree {h,v}"
-def apply_shear(im, tokens):
-	degree = float(tokens[1])
-	radians = math.tan(degree * math.pi / 180)
-	shear_mat = np.array([ [1, 0, 0], [0, 1, 0] ], dtype=np.float)
-	if tokens[2] == 'h':
-		shear_mat[0,1] = radians
-	elif tokens[2] == 'v':
-		shear_mat[1,0] = radians
-	else:
-		print "Invalid shear type: %r" % tokens
-	return cv2.warpAffine(im, shear_mat, im.shape[:2], flags=cv2.INTER_LINEAR)
-
-# "perspective dy1 dx1 dy2 dx2 dy3 dx3 dy4 dx4"
-def apply_perspective(im, tokens):
-	pts1 = np.array([[0,0],[1,0],[1,1],[0,1]], dtype=np.float32)
-	pts2 = np.array([[0 + float(tokens[1]) ,0 + float(tokens[2])],
-					   [1 + float(tokens[3]) ,0 + float(tokens[4])],
-					   [1 + float(tokens[5]) ,1 + float(tokens[6])],
-					   [0 + float(tokens[7]) ,1 + float(tokens[8])]
-					   ], dtype=np.float32)
-	M = cv2.getPerspectiveTransform(pts1,pts2)
-	return cv2.warpPerspective(im, M, im.shape[:2])
-
-def apply_transform(im, transform_str):
-	tokens = transform_str.split()
-	if tokens[0] == 'crop':
-		return apply_crop(im, tokens)
-	if tokens[0] == 'randcrop':
-		return apply_rand_crop(im, tokens)
-	elif tokens[0] == 'resize':
-		return apply_resize(im, tokens)
-	elif tokens[0] == 'mirror':
-		return apply_mirror(im, tokens)
-	elif tokens[0] == 'gaussnoise':
-		return apply_gaussnoise(im, tokens)
-	elif tokens[0] == 'rotation':
-		return apply_rotation(im, tokens)
-	elif tokens[0] == 'blur':
-		return apply_blur(im, tokens)
-	elif tokens[0] == 'unsharpmask' or tokens[0] == 'unsharp':
-		return apply_unsharpmask(im, tokens)
-	elif tokens[0] == 'shear':
-		return apply_shear(im, tokens)
-	elif tokens[0] == 'perspective':
-		return apply_perspective(im, tokens)
-	elif tokens[0] == 'color_jitter':
-		return apply_color_jitter(im, tokens)
-	elif tokens[0] == 'elastic':
-		return apply_elastic_deformation(im, tokens)
-	elif tokens[0] == 'none':
-		return im
-	else:
-		print "Unknown transform: %r" % transform_str
-		exit(1)
-
-
-# all transforms must yield images of the same dimensions
-def apply_transforms(im, multi_transform_str):
-	transform_strs = multi_transform_str.split(';')
-	for ts in transform_strs:
-		im = apply_transform(im, ts)
-	return im
-
-
-def apply_all_transforms(im, transform_strs):
-	ims = list()
-	for ts in transform_strs:
-		im_out = apply_transforms(im, ts)
-		ims.append(im_out)
-	return ims
-
-
-def get_transforms(transform_file):
-	transforms = list()
-	if transform_file:
-		transforms = map(lambda s: s.rstrip().lower(), open(args.transform_file, 'r').readlines())
-	transforms = filter(lambda s: not s.startswith("#"), transforms)
-	return transforms
 
 
 def open_dbs(db_paths):
@@ -593,14 +380,13 @@ def train_equivariance_model(model_type, loss, input_train_features, input_test_
 	num_test_instances = input_test_features.shape[0]
 	num_activations = input_train_features.shape[1]
 	num_classes = target_train_output_probs.shape[1]
-	l2_loss_weight = 1 if loss == 'l2' else 0
 	mlp = model_type == 'mlp'
 
 	write_hdf5s(args, input_train_features, target_train_features, target_train_output_probs, train_labels,
 			input_test_features, target_test_features, target_test_output_probs, test_labels)
 
 	# Write the prototxt for the train and test nets, as well as the solver
-	net_param = equivariance_proto(args, num_activations, num_classes, l2_loss_weight, mlp)
+	net_param = equivariance_proto(args, num_activations, num_classes, loss, mlp)
 	with open(args.train_file, 'w') as f:
 		f.write(re.sub("VAL_", "", str(net_param)))
 
@@ -687,17 +473,19 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 					all_test_metrics[transform]["%s%s_%s_%s" % (data, model_type, 'l2', metric)] = val
 
 			# Cross Entropy training
-			# the classification weights which are fixed are trained for the original representation, so we take the transformed
-			# represenation and try to undo it using a linear or mlp model
-			for model_type in ['linear', 'mlp']:
-				train_metrics, test_metrics = _measure_equivariance(model_type, 'ce', transform_train_features, transform_test_features,
-					original_train_features, original_test_features, train_labels, test_labels, original_train_output_probs,
-					original_test_output_probs, classification_weights, classification_bias, original_train_classifications, 
-					original_test_classifications, args)
-				for metric, val in train_metrics.iteritems():
-					all_train_metrics[transform]["%s%s_%s_%s" % (data, model_type, 'ce', metric)] = val
-				for metric, val in test_metrics.iteritems():
-					all_test_metrics[transform]["%s%s_%s_%s" % (data, model_type, 'ce', metric)] = val
+			for suffix in ['_soft', '_hard']:
+				loss = "ce%s" % suffix
+				# the classification weights which are fixed are trained for the original representation, so we take the transformed
+				# represenation and try to undo it using a linear or mlp model
+				for model_type in ['linear', 'mlp']:
+					train_metrics, test_metrics = _measure_equivariance(model_type, loss, transform_train_features, transform_test_features,
+						original_train_features, original_test_features, train_labels, test_labels, original_train_output_probs,
+						original_test_output_probs, classification_weights, classification_bias, original_train_classifications, 
+						original_test_classifications, args)
+					for metric, val in train_metrics.iteritems():
+						all_train_metrics[transform]["%s%s_%s_%s" % (data, model_type, loss, metric)] = val
+					for metric, val in test_metrics.iteritems():
+						all_test_metrics[transform]["%s%s_%s_%s" % (data, model_type, loss, metric)] = val
 
 	return all_train_metrics, all_test_metrics
 
@@ -814,7 +602,7 @@ def main(args):
 	log(args, str(args))
 
 	safe_mkdir(args.out_dir)
-	all_transforms = get_transforms(args.transform_file)
+	all_transforms, _ = get_transforms(args.transform_file)
 
 	# don't redo work that we have already done
 	all_transforms = filter_existing(all_transforms, args.out_dir)
