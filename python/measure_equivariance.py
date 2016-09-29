@@ -568,8 +568,8 @@ def partition_transforms(transforms, size):
 	idx = 1
 	while idx < len(transforms):
 		idx2 = 0
+		partition = [base_transform]
 		while idx2 < size and (idx + idx2) < len(transforms):
-			partition = [base_transform]
 			partition.append(transforms[idx + idx2])
 			idx2 += 1
 		partitions.append(partition)

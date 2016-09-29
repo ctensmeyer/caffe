@@ -4,6 +4,7 @@ import cv2
 import math
 import os
 import errno
+import scipy.ndimage
 
 
 def safe_mkdir(_dir):
