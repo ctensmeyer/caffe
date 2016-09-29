@@ -44,15 +44,18 @@ def cleanup_scratch_space(args):
 
 
 def equivariance_proto(args, num_features, num_classes, loss='l2', mlp=False):
-	ce_hard_loss_weight = 0
-	ce_soft_loss_weight = 0
-	l2_loss_weight = 0
 	if loss == 'l2':
+		ce_hard_loss_weight = 0
+		ce_soft_loss_weight = 0
 		l2_loss_weight = 1
 	elif loss == 'ce_hard':
-		ce_hard_loss_weight = 1
+		ce_hard_loss_weight = 0.75
+		ce_soft_loss_weight = 0
+		l2_loss_weight = 0.25
 	else:
-		ce_soft_loss_weight = 1
+		ce_hard_loss_weight = 0
+		ce_soft_loss_weight = 0.75
+		l2_loss_weight = 0.25
 
 	n = caffe.NetSpec()
 
@@ -64,7 +67,7 @@ def equivariance_proto(args, num_features, num_classes, loss='l2', mlp=False):
 	if mlp:
 		n.prev = L.InnerProduct(n.input_features, num_output=int(args.hidden_size * num_features), name='mlp_hidden',
 			weight_filler={'type': 'gaussian', 'std': 0.001,})
-		n.prev = L.ReLU(n.prev, in_place=True)
+		n.prev = L.TanH(n.prev, in_place=True)
 
 		n.residual = L.InnerProduct(n.prev, num_output=num_features, name='residual',
 			weight_filler={'type': 'gaussian', 'std': 0.001,})
@@ -115,7 +118,7 @@ def create_solver(args, num_train_instances, num_test_instances):
 
 	#s.solver_type = caffe.proto.caffe_pb2.SolverType.SGD  # why isn't it working?  Default anyway
 	s.momentum = 0.9
-	s.weight_decay = 1e-3
+	s.weight_decay = 5e-3  # strong weight decay as a prior to the identity mapping
 
 	s.base_lr = args.learning_rate
 	s.monitor_test = True
@@ -335,23 +338,23 @@ def measure_invariances(all_features, all_output_probs, all_classifications, lab
 
 		avg_l2 = measure_avg_l2(transform_features, original_features)
 		metrics[transform]['avg_l2'] = avg_l2
-		c_avg_l2 = measure_avg_l2(transform_features[correct_indices], original_features[correct_indices])
-		metrics[transform]['c_avg_l2'] = c_avg_l2
+		#c_avg_l2 = measure_avg_l2(transform_features[correct_indices], original_features[correct_indices])
+		#metrics[transform]['c_avg_l2'] = c_avg_l2
 
 		agreement = measure_agreement(transform_classifications, original_classifications)
 		metrics[transform]['agreement'] = agreement
-		c_agreement = measure_agreement(transform_classifications[correct_indices], original_classifications[correct_indices])
-		metrics[transform]['c_agreement'] = c_agreement
+		#c_agreement = measure_agreement(transform_classifications[correct_indices], original_classifications[correct_indices])
+		#metrics[transform]['c_agreement'] = c_agreement
 
 		accuracy = measure_agreement(transform_classifications, labels)
 		metrics[transform]['accuracy'] = accuracy
-		c_accuracy = measure_agreement(transform_classifications[correct_indices], labels[correct_indices])
-		metrics[transform]['c_accuracy'] = c_accuracy
+		#c_accuracy = measure_agreement(transform_classifications[correct_indices], labels[correct_indices])
+		#metrics[transform]['c_accuracy'] = c_accuracy
 
 		avg_jsd = measure_avg_jsd(transform_output_probs, original_output_probs)
 		metrics[transform]['avg_jsd'] = avg_jsd
-		c_avg_jsd = measure_avg_jsd(transform_output_probs[correct_indices], original_output_probs[correct_indices])
-		metrics[transform]['c_avg_jsd'] = c_avg_jsd
+		#c_avg_jsd = measure_avg_jsd(transform_output_probs[correct_indices], original_output_probs[correct_indices])
+		#metrics[transform]['c_avg_jsd'] = c_avg_jsd
 
 	return metrics
 
@@ -402,24 +405,24 @@ def train_equivariance_model(model_type, loss, input_train_features, input_test_
 	classify_layer_params[0].data[:] = classifier_weights[:]  # data copy, not object reassignment
 	classify_layer_params[1].data[:] = classifier_bias[:]
 
-	## initialize mappings to the identity
-	#mapping_layer_params = solver.net.params['mapping']
-	#shape = mapping_layer_params[0].data.shape
-	#mapping_layer_params[0].data[:] = np.eye(shape[0], shape[1])[:]
-
-	#if mlp:
-	#	hidden_layer_params = solver.net.params['mlp_hidden']
-	#	shape = hidden_layer_params[0].data.shape
-	#	hidden_layer_params[0].data[:] = np.eye(shape[0], shape[1])[:]
-
 	solver.solve()
 	return solver.net, solver.test_nets[0], solver.iter  # the trained model
+
+def init_empty_metrics(transforms):
+	d = dict()
+	for transform in transforms:
+		d[transform] = dict()
+		for model_type in ['linear', 'mlp']:
+			d[transform][model_type] = dict()
+			for loss in ['l2', 'ce_soft', 'ce_hard']:
+				d[transform][model_type][loss] = dict()
+	return d
 
 
 def measure_equivariances(train_features, all_train_labels, train_classifications, train_output_probs,
 		test_features, all_test_labels, test_classifications, test_output_probs, transforms, model, args):
-	all_train_metrics = {transform: dict() for transform in transforms}
-	all_test_metrics = {transform: dict() for transform in transforms}
+	all_train_metrics = init_empty_metrics(transforms) 
+	all_test_metrics = init_empty_metrics(transforms)
 
 	# Get indices for different data splits (all vs those classified correctly under no transform)
 	original_train_classifications = train_classifications[transforms[0]]
@@ -434,8 +437,8 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 	classification_bias = last_layer_params[1].data
 
 	for transform in transforms:
-		if transform == transforms[0]:
-			continue
+		#if transform == transforms[0]:
+		#	continue
 		#for data in ['', 'c_']:
 		for data in ['']:
 			if data == 'c_':
@@ -468,9 +471,9 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 					transform_test_output_probs, classification_weights, classification_bias, transform_train_classifications,
 					transform_test_classifications, args)
 				for metric, val in train_metrics.iteritems():
-					all_train_metrics[transform]["%s%s_%s_%s" % (data, model_type, 'l2', metric)] = val
+					all_train_metrics[transform][model_type]['l2'][metric] = val
 				for metric, val in test_metrics.iteritems():
-					all_test_metrics[transform]["%s%s_%s_%s" % (data, model_type, 'l2', metric)] = val
+					all_test_metrics[transform][model_type]['l2'][metric] = val
 
 			# Cross Entropy training
 			for suffix in ['_soft', '_hard']:
@@ -483,9 +486,9 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 						original_test_output_probs, classification_weights, classification_bias, original_train_classifications, 
 						original_test_classifications, args)
 					for metric, val in train_metrics.iteritems():
-						all_train_metrics[transform]["%s%s_%s_%s" % (data, model_type, loss, metric)] = val
+						all_train_metrics[transform][model_type][loss][metric] = val
 					for metric, val in test_metrics.iteritems():
-						all_test_metrics[transform]["%s%s_%s_%s" % (data, model_type, loss, metric)] = val
+						all_test_metrics[transform][model_type][loss][metric] = val
 
 	return all_train_metrics, all_test_metrics
 

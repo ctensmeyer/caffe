@@ -183,7 +183,7 @@ def apply_perspective(im, tokens):
 					   [0 + float(tokens[7]) ,1 + float(tokens[8])]
 					   ], dtype=np.float32)
 	M = cv2.getPerspectiveTransform(pts1,pts2)
-	return cv2.warpPerspective(im, M, im.shape[:2])
+	return cv2.warpPerspective(im, M, (im.shape[1], im.shape[0]))
 
 
 def apply_transform(im, transform_str):
