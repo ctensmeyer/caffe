@@ -317,7 +317,7 @@ def get_args():
 	parser.add_argument("caffe_weights", 
 				help="The model weight file (e.g. net.caffemodel)")
 	parser.add_argument("test_lmdbs", 
-				help="LMDBs of test images (encoded DocDatums), files separated with ;")
+				help="LMDBs of test images (encoded DocDatums), files separated with :")
 
 	parser.add_argument("-m", "--means", type=str, default="",
 				help="Optional mean values per the channel (e.g. 127 for grayscale or 182,192,112 for BGR)")
