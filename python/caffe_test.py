@@ -120,7 +120,7 @@ def fprop(caffenet, ims, batchsize=64):
 	responses = list()
 	while idx < len(ims):
 		sub_ims = ims[idx:idx+batchsize]
-		caffenet.blobs["data"].reshape(len(sub_ims), ims[0].shape[2], ims[0].shape[0], ims[0].shape[1]) 
+		caffenet.blobs["data"].reshape(len(sub_ims), sub_ims[0].shape[2], sub_ims[0].shape[0], sub_ims[0].shape[1]) 
 		for x, im in enumerate(sub_ims):
 			transposed = np.transpose(im, [2,0,1])
 			transposed = transposed[np.newaxis, :, :, :]

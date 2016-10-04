@@ -455,7 +455,7 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 			transform_test_classifications = test_classifications[transform][test_indices]
 
 			train_labels = all_train_labels[train_indices]
-			test_labels = all_test_labels[train_indices]
+			test_labels = all_test_labels[test_indices]
 			original_train_features = train_features[transforms[0]][train_indices]
 			original_test_features = test_features[transforms[0]][test_indices]
 			original_train_output_probs = train_output_probs[transforms[0]][train_indices]
@@ -568,8 +568,8 @@ def partition_transforms(transforms, size):
 	idx = 1
 	while idx < len(transforms):
 		idx2 = 0
+		partition = [base_transform]
 		while idx2 < size and (idx + idx2) < len(transforms):
-			partition = [base_transform]
 			partition.append(transforms[idx + idx2])
 			idx2 += 1
 		partitions.append(partition)

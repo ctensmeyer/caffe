@@ -13,7 +13,7 @@ import scipy.ndimage
 import traceback
 import errno
 import h5py
-from utils import safe_mkdir
+from utils import safe_mkdir, apply_transform
 
 def open_dbs(db_paths):
 	dbs = list()
@@ -87,6 +87,7 @@ def prepare_image(dbs, args):
 		env, txn, cursor = entry
 
 		im_slice, label_slice = get_image(cursor.value(), slice_idx, args)
+		im_slice = apply_transform(im_slice, args.transform)
 		im_slice = scale_shift_im(im_slice, slice_idx, args)
 
 		im_slices.append(im_slice)
@@ -203,6 +204,8 @@ def get_args():
 				help="GPU to use for running the models")
 	parser.add_argument("--input-blob", type=str, default="data",
 				help="Name of input blob")
+	parser.add_argument("--transform", type=str, default="none",
+				help="Transform to apply")
 	parser.add_argument("-d", "--delimiter", default=':', type=str, 
 				help="Delimiter used for indicating multiple image slice parameters")
 
