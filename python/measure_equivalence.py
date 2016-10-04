@@ -23,9 +23,9 @@ from utils import get_transforms, apply_all_transforms, safe_mkdir
 
 
 def setup_scratch_space(args):
-	safe_mkdir("./tmp")
-	args.tmp_dir = "./tmp"
-	#args.tmp_dir = tempfile.mkdtemp()
+	#safe_mkdir("./tmp")
+	#args.tmp_dir = "./tmp"
+	args.tmp_dir = tempfile.mkdtemp()
 	args.train_file = os.path.join(args.tmp_dir, "train_val.prototxt")
 	args.train_db = os.path.join(args.tmp_dir, "train.h5")
 	args.train_db_list = os.path.join(args.tmp_dir, "train_list.txt")
