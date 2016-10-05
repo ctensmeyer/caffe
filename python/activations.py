@@ -161,13 +161,15 @@ def main(args):
 				# pool over spatial regions
 				batch_activations = np.max(batch_activations, axis=(2,3))
 			activations[blob].append(batch_activations)
-		all_labels += labels
+		all_labels.extend(labels)
 
 		if iter_num > 0 and iter_num % 10 == 0:
 			print "%.2f%% (%d/%d) Batches" % (100. * iter_num / max_iters, iter_num, max_iters)
 
+	labels = np.asarray(labels, dtype=np.float32)
+	print labels.shape
 	with h5py.File(args.out_hdf5, 'w') as f:
-		f['labels'] = np.asarray(labels, dtype=np.float32)
+		f['labels'] = labels
 		for blob in blobs:
 			arr = np.concatenate(activations[blob], axis=0)
 			print arr.shape
