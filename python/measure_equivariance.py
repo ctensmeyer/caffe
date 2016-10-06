@@ -21,6 +21,9 @@ import caffe.proto.caffe_pb2
 from caffe import layers as L, params as P
 from utils import get_transforms, apply_all_transforms, safe_mkdir
 
+#LOSS_TYPES = ['l2', 'ce_soft', 'ce_hard']
+LOSS_TYPES = ['l2']
+
 
 def setup_scratch_space(args):
 	#safe_mkdir("./tmp")
@@ -417,7 +420,7 @@ def init_empty_metrics(transforms):
 		d[transform] = dict()
 		for model_type in ['linear', 'mlp']:
 			d[transform][model_type] = dict()
-			for loss in ['l2', 'ce_soft', 'ce_hard']:
+			for loss in LOSS_TYPES: #['l2', 'ce_soft', 'ce_hard']:
 				d[transform][model_type][loss] = dict()
 	return d
 
@@ -479,19 +482,19 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 					all_test_metrics[transform][model_type]['l2'][metric] = val
 
 			# Cross Entropy training
-			for suffix in ['_soft', '_hard']:
-				loss = "ce%s" % suffix
-				# the classification weights which are fixed are trained for the original representation, so we take the transformed
-				# represenation and try to undo it using a linear or mlp model
-				for model_type in ['linear', 'mlp']:
-					train_metrics, test_metrics = _measure_equivariance(model_type, loss, transform_train_features, transform_test_features,
-						original_train_features, original_test_features, train_labels, test_labels, original_train_output_probs,
-						original_test_output_probs, classification_weights, classification_bias, original_train_classifications, 
-						original_test_classifications, args)
-					for metric, val in train_metrics.iteritems():
-						all_train_metrics[transform][model_type][loss][metric] = val
-					for metric, val in test_metrics.iteritems():
-						all_test_metrics[transform][model_type][loss][metric] = val
+			#for suffix in ['_soft', '_hard']:
+			#	loss = "ce%s" % suffix
+			#	# the classification weights which are fixed are trained for the original representation, so we take the transformed
+			#	# represenation and try to undo it using a linear or mlp model
+			#	for model_type in ['linear', 'mlp']:
+			#		train_metrics, test_metrics = _measure_equivariance(model_type, loss, transform_train_features, transform_test_features,
+			#			original_train_features, original_test_features, train_labels, test_labels, original_train_output_probs,
+			#			original_test_output_probs, classification_weights, classification_bias, original_train_classifications, 
+			#			original_test_classifications, args)
+			#		for metric, val in train_metrics.iteritems():
+			#			all_train_metrics[transform][model_type][loss][metric] = val
+			#		for metric, val in test_metrics.iteritems():
+			#			all_test_metrics[transform][model_type][loss][metric] = val
 
 	return all_train_metrics, all_test_metrics
 
@@ -717,7 +720,7 @@ def get_args():
 	parser.add_argument("--no-cache", default=False, action='store_true',
 				help="Delimiter used for indicating multiple image slice parameters")
 
-	parser.add_argument("-e", "--max-epochs", type=int, default=20,
+	parser.add_argument("-e", "--max-epochs", type=int, default=10,
 				help="Max training epochs for equivariance models")
 	parser.add_argument("-n", "--num-transforms", type=int, default=5,
 				help="Max training epochs for equivariance models")
