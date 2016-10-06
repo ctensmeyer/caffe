@@ -59,10 +59,10 @@ def equivariance_proto(args, num_features, num_classes, loss='l2', mlp=False):
 
 	n = caffe.NetSpec()
 
-	n.input_features, n.target_features, n.target_output_probs, n.labels = L.HDF5Data(
-		batch_size=args.train_batch_size, source=args.train_db_list, ntop=4, include=dict(phase=caffe.TRAIN))
-	n.VAL_input_features, n.VAL_target_features, n.VAL_target_output_probs, n.VAL_labels = L.HDF5Data(
-		batch_size=1, source=args.test_db_list, ntop=4, include=dict(phase=caffe.TEST))
+	n.input_features, n.target_features, n.target_output_probs, n.labels, n.idx = L.HDF5Data(
+		batch_size=args.train_batch_size, source=args.train_db_list, ntop=5, include=dict(phase=caffe.TRAIN))
+	n.VAL_input_features, n.VAL_target_features, n.VAL_target_output_probs, n.VAL_labels, n.VAL_idx = L.HDF5Data(
+		batch_size=1, source=args.test_db_list, ntop=5, include=dict(phase=caffe.TEST))
 
 	if mlp:
 		n.prev = L.InnerProduct(n.input_features, num_output=int(args.hidden_size * num_features), name='mlp_hidden',
@@ -112,19 +112,20 @@ def create_solver(args, num_train_instances, num_test_instances):
 	s = caffe.proto.caffe_pb2.SolverParameter()
 	s.net = args.train_file
 
-	s.test_interval = num_train_instances / args.train_batch_size / 4
+	s.test_interval = num_train_instances / args.train_batch_size / 2
 	s.test_iter.append(num_test_instances)
 	s.max_iter = num_train_instances / args.train_batch_size * args.max_epochs
 
 	#s.solver_type = caffe.proto.caffe_pb2.SolverType.SGD  # why isn't it working?  Default anyway
 	s.momentum = 0.9
-	s.weight_decay = 5e-3  # strong weight decay as a prior to the identity mapping
+	s.weight_decay = 1e-4  # strong weight decay as a prior to the identity mapping
+	s.regularization_type = "L1"
 
 	s.base_lr = args.learning_rate
 	s.monitor_test = True
 	s.monitor_test_id = 0
 	s.test_compute_loss = True
-	s.max_steps_without_improvement = 4
+	s.max_steps_without_improvement = 2
 	s.max_periods_without_improvement = 1
 	s.gamma = 0.1
 
@@ -367,12 +368,14 @@ def write_hdf5s(args, input_train_features, target_train_features, target_train_
 		f['target_features'] = target_train_features.astype(np.float32)
 		f['target_output_probs'] = target_train_output_probs.astype(np.float32)
 		f['labels'] = train_labels[:,np.newaxis].astype(np.float32)
+		f['idx'] = np.arange(f['input_features'].shape[0], dtype=np.float32)
 
 	with h5py.File(args.test_db, 'w') as f:
 		f['input_features'] = input_test_features.astype(np.float32)
 		f['target_features'] = target_test_features.astype(np.float32)
 		f['target_output_probs'] = target_test_output_probs.astype(np.float32)
 		f['labels'] = test_labels[:,np.newaxis].astype(np.float32)
+		f['idx'] = np.arange(f['input_features'].shape[0], dtype=np.float32)
 
 
 def train_equivariance_model(model_type, loss, input_train_features, input_test_features, target_train_features, 
@@ -406,7 +409,7 @@ def train_equivariance_model(model_type, loss, input_train_features, input_test_
 	classify_layer_params[1].data[:] = classifier_bias[:]
 
 	solver.solve()
-	return solver.net, solver.test_nets[0], solver.iter  # the trained model
+	return solver.net, solver.test_nets[0]
 
 def init_empty_metrics(transforms):
 	d = dict()
@@ -501,23 +504,23 @@ def _measure_equivariance(model_type, loss, input_train_features, input_test_fea
 	num_activations = input_test_features.shape[1]
 	num_classes = target_test_output_probs.shape[1]
 
-	train_model, test_model, num_iters = train_equivariance_model(model_type, loss, input_train_features, input_test_features, 
+	train_model, test_model = train_equivariance_model(model_type, loss, input_train_features, input_test_features, 
 			target_train_features, target_test_features, train_labels, test_labels, target_train_output_probs,
 			target_test_output_probs, classification_weights, classification_bias, args)
 
 	# misaligned since it pulls data from where training left off
 	train_metrics = score_model(train_model, target_train_features, target_train_output_probs, 
-		target_train_classifications, train_labels, num_train_instances, num_iters)
+		target_train_classifications, train_labels, num_train_instances)
 
 	# should be aligned because testing the model during training should always completely
 	# cycle through the db
 	test_metrics = score_model(test_model, target_test_features, target_test_output_probs, 
-		target_test_classifications, test_labels, num_test_instances, 0)
+		target_test_classifications, test_labels, num_test_instances)
 					
 	return train_metrics, test_metrics
 
 
-def extract_from_equivariant(model, num_instances, offset):
+def extract_from_equivariant(model, num_instances):
 	num_activations = model.blobs['reconstruction'].data.shape[1]
 	num_classes = model.blobs['prob'].data.shape[1]
 
@@ -526,8 +529,8 @@ def extract_from_equivariant(model, num_instances, offset):
 	classifications = np.zeros((num_instances,))
 
 	for idx in xrange(num_instances):
-		arr_idx = (idx + offset) % num_instances
 		model.forward()
+		arr_idx = model.blobs['idx'].data[0]
 		features[arr_idx,:] = model.blobs['reconstruction'].data[0,:]
 		output_probs[arr_idx,:] = model.blobs['prob'].data[0,:]
 		classifications[arr_idx] = np.argmax(model.blobs['prob'].data[0])
