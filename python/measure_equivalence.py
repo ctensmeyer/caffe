@@ -60,35 +60,48 @@ def equivariance_proto(args, num_features, num_classes, loss='l2', mlp=False):
 	n = caffe.NetSpec()
 
 	n.input_features, n.target_features, n.target_output_probs, n.labels = L.HDF5Data(
-		batch_size=args.train_batch_size, source=args.train_db_list, ntop=4, include=dict(phase=caffe.TRAIN))
+			batch_size=args.train_batch_size, source=args.train_db_list, ntop=4, include=dict(phase=caffe.TRAIN))
+
+	n.input_features_scale, n.target_features_scale, n.reconstructed_features_scale = L.HDF5Data(
+			batch_size=args.train_batch_size, source=args.train_db_list, ntop=3, include=dict(phase=caffe.TRAIN))
 
 	n.VAL_input_features, n.VAL_target_features, n.VAL_target_output_probs, n.VAL_labels = L.HDF5Data(
 		batch_size=1, source=args.test_db_list, ntop=4, include=dict(phase=caffe.TEST))
 
+	n.VAL_input_features_scale, n.VAL_target_features_scale, n.VAL_reconstructed_features_scale = L.HDF5Data(
+		batch_size=1, source=args.test_db_list, ntop=3, include=dict(phase=caffe.TEST))
+
+	# scale inputs and targets so each neuron has equal importance in weight decay and loss
+	n.scaled_input_features = L.Scale(n.input_features, n.input_features_scale, axis=0)
+	n.scaled_target_features = L.Scale(n.target_features, n.target_features_scale, axis=0)
+
 	if mlp:
-		n.prev = L.InnerProduct(n.input_features, num_output=int(args.hidden_size * num_features), name='mlp_hidden',
-			weight_filler={'type': 'gaussian', 'std': 0.001,})
+		n.prev = L.InnerProduct(n.scaled_input_features, num_output=int(args.hidden_size * num_features), name='mlp_hidden',
+			weight_filler={'type': 'msra'})
 		n.prev = L.TanH(n.prev, in_place=True)
 
 		n.prev = L.InnerProduct(n.prev, num_output=num_features, name='linear',
-			weight_filler={'type': 'gaussian', 'std': 0.001,})
+			weight_filler={'type': 'msra'})
 	else:
-		n.prev = L.InnerProduct(n.input_features, num_output=num_features, name='linear',
-			weight_filler={'type': 'gaussian', 'std': 0.001,})
+		n.prev = L.InnerProduct(n.scaled_input_features, num_output=num_features, name='linear',
+			weight_filler={'type': 'msra'})
 
 
 	# caffe will automatically insert split layers when two or more layers have the same bottom, but
 	# in so doing, it mangles the name.  By explicitly doing the split, we control the names so that 
 	# the blob values can be accessed by the names given here
-	n.reconstruction = L.ReLU(n.prev, name='reconstruction')  # assumes that target_features are rectified
-	n.reconstruction1, n.reconstruction2 = L.Split(n.reconstruction, ntop=2)  
-
-	n.reconstruction_loss = L.EuclideanLoss(n.reconstruction1, n.target_features, name="reconstruction_loss",
+	n.unscaled_reconstruction = L.ReLU(n.prev, name='unscaled_reconstruction')  # assumes that target_features are rectified
+	n.unscaled_reconstruction1, n.unscaled_reconstruction2 = L.Split(n.unscaled_reconstruction, ntop=2)  
+	n.reconstruction_loss = L.EuclideanLoss(n.unscaled_reconstruction1, n.scaled_target_features, name="reconstruction_loss",
 				loss_weight=l2_loss_weight, loss_param=dict(normalize=True)) 
+
+	
+	# rescale to the original maginitudes so the reconstructions are compatible with the pretrained classifier
+	n.reconstruction = L.Scale(n.unscaled_reconstruction2, n.reconstructed_features_scale, name='reconstruction', axis=0)
 
 	# now finish the computation of the rest of the network
 	# hard coded for measuring equivariance of last hidden layers
-	n.classify = L.InnerProduct(n.reconstruction2, num_output=num_classes, name="classify",
+	n.classify = L.InnerProduct(n.reconstruction, num_output=num_classes, name="classify",
 		param=[{'lr_mult':0, 'decay_mult':0}, {'lr_mult': 0, 'decay_mult': 0}])  # weights to be fixed to the network's original weights
 
 	n.prob = L.Softmax(n.classify)
@@ -267,41 +280,56 @@ def perform_experiment(model_type, loss, classification_weights, classification_
 	return train_metrics, test_metrics
 
 
-def setup_hdf5s(args):
-	with h5py.File(args.train_db, 'w') as train_db:
-		with h5py.File(args.input_train_hdf5, 'r') as input_db:
-			with h5py.File(args.output_train_hdf5, 'r') as output_db:
-				train_db['input_features'] = np.asarray(input_db[args.blob])
-				log(args, "Train Input Features Shape: %s" % str(train_db['input_features'].shape))
+def sqrt_second_moment_around_zero(arr):
+	second_moment = (1. / arr.shape[0]) * np.sum((arr * arr), axis=0)
+	second_moment[second_moment == 0] = 1.  # in case a neuron never fires
+	second_moment = second_moment[np.newaxis, :]
+	return np.sqrt(second_moment)
+	
 
-				train_db['target_features'] = np.asarray(output_db[args.blob])
-				log(args, "Train Target Features Shape: %s" % str(train_db['target_features'].shape))
+def write_hdf5(write_db_file, input_db_file, output_db_file):
+	with h5py.File(write_db_file, 'w') as write_db:
+		with h5py.File(input_db_file, 'r') as input_db:
+			with h5py.File(output_db_file, 'r') as output_db:
+				input_features = np.asarray(input_db[args.blob])
+				write_db['input_features'] = input_features
+				log(args, "Input Features Shape: %s" % str(input_features.shape))
 
-				train_db['target_output_probs'] = np.asarray(output_db['prob'])
-				log(args, "Train Target Output Probs Shape: %s" % str(train_db['target_output_probs'].shape))
+				# used to normalize features on the fly
+				write_db['input_features_scale'] = 1. / sqrt_second_moment_around_zero(input_features)
 
-				train_db['labels'] = np.asarray(output_db['labels'])
-				log(args, "Train labels Shape: %s" % str(train_db['labels'].shape))
+				target_features = np.asarray(output_db[args.blob])
+				write_db['target_features'] = target_features
+				log(args, "Target Features Shape: %s" % str(target_features.shape))
 
-				num_train_instances, num_features = input_db[args.blob].shape
+				# used to normalize features on the fly
+				arr = sqrt_second_moment_around_zero(target_features)
+				write_db['target_features_scale'] = 1. / arr
+
+				# undo the normalization to be on the same scale as the pretrained
+				# classification weights
+				write_db['reconstructed_features_scale'] = arr
+
+				write_db['target_output_probs'] = np.asarray(output_db['prob'])
+				log(args, "Target Output Probs Shape: %s" % str(write_db['target_output_probs'].shape))
+
+				write_db['labels'] = np.asarray(output_db['labels'])
+				log(args, "labels Shape: %s" % str(write_db['labels'].shape))
+
+				num_instances, num_features = input_db[args.blob].shape
 				num_classes = output_db['prob'].shape[1]
+	return num_instances, num_features, num_classes
 
-	with h5py.File(args.test_db, 'w') as test_db:
-		with h5py.File(args.input_test_hdf5, 'r') as input_db:
-			with h5py.File(args.output_test_hdf5, 'r') as output_db:
-				test_db['input_features'] = np.asarray(input_db[args.blob])
-				log(args, "Test Input Features Shape: %s" % str(test_db['input_features'].shape))
 
-				test_db['target_features'] = np.asarray(output_db[args.blob])
-				log(args, "Test Target Features Shape: %s" % str(test_db['target_features'].shape))
 
-				test_db['target_output_probs'] = np.asarray(output_db['prob'])
-				log(args, "Test Target Output Probs Shape: %s" % str(test_db['target_output_probs'].shape))
+def setup_hdf5s(args):
+	log(args, "Writing Train HDF5")
+	num_train_instances, num_features, num_classes = write_hdf5(args.train_db, 
+											args.input_train_hdf5, args.output_train_hdf5)
 
-				test_db['labels'] = np.asarray(output_db['labels'])
-				log(args, "Test labels Shape: %s" % str(test_db['labels'].shape))
-
-				num_test_instances = input_db[args.blob].shape[0]
+	log(args, "\nWriting Test HDF5")
+	num_test_instances, num_features, num_classes = write_hdf5(args.test_db, 
+											args.input_test_hdf5, args.output_test_hdf5)
 
 	return num_train_instances, num_test_instances, num_features, num_classes
 		
@@ -330,7 +358,6 @@ def main(args):
 	log(args, "Num Test Instances: %d" % num_test_instances)
 	log(args, "Num Features: %d" % num_features)
 	log(args, "Num Classes: %d" % num_classes)
-	exit()
 
 	log(args, "Starting on Experiments")
 	for model_type in ['linear', 'mlp']:
@@ -373,7 +400,7 @@ def get_args():
 	parser.add_argument("-f", "--log-file", type=str, default="",
 				help="Log File")
 
-	parser.add_argument("-e", "--max-epochs", type=int, default=20,
+	parser.add_argument("-e", "--max-epochs", type=int, default=10,
 				help="Max training epochs for equivalence models")
 	parser.add_argument("-l", "--learning-rate", type=float, default=0.1,
 				help="Initial Learning rate for equivalence models")
