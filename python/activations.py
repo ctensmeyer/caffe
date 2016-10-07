@@ -166,7 +166,7 @@ def main(args):
 		if iter_num > 0 and iter_num % 10 == 0:
 			print "%.2f%% (%d/%d) Batches" % (100. * iter_num / max_iters, iter_num, max_iters)
 
-	labels = np.asarray(labels, dtype=np.float32)
+	labels = np.asarray(all_labels, dtype=np.float32)
 	print labels.shape
 	with h5py.File(args.out_hdf5, 'w') as f:
 		f['labels'] = labels

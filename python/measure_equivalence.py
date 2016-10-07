@@ -21,6 +21,8 @@ import caffe.proto.caffe_pb2
 from caffe import layers as L, params as P
 from utils import get_transforms, apply_all_transforms, safe_mkdir
 
+#LOSS_TYPES = ['l2', 'ce_soft', 'ce_hard']
+LOSS_TYPES = ['l2']
 
 def setup_scratch_space(args):
 	#safe_mkdir("./tmp")
@@ -59,14 +61,14 @@ def equivariance_proto(args, num_features, num_classes, loss='l2', mlp=False):
 
 	n = caffe.NetSpec()
 
-	n.input_features, n.target_features, n.target_output_probs, n.labels = L.HDF5Data(
-			batch_size=args.train_batch_size, source=args.train_db_list, ntop=4, include=dict(phase=caffe.TRAIN))
+	n.input_features, n.target_features, n.target_output_probs, n.labels, n.idx = L.HDF5Data(
+			batch_size=args.train_batch_size, source=args.train_db_list, ntop=5, include=dict(phase=caffe.TRAIN))
 
 	n.input_features_scale, n.target_features_scale, n.reconstructed_features_scale = L.HDF5Data(
 			batch_size=args.train_batch_size, source=args.train_db_list, ntop=3, include=dict(phase=caffe.TRAIN))
 
-	n.VAL_input_features, n.VAL_target_features, n.VAL_target_output_probs, n.VAL_labels = L.HDF5Data(
-		batch_size=1, source=args.test_db_list, ntop=4, include=dict(phase=caffe.TEST))
+	n.VAL_input_features, n.VAL_target_features, n.VAL_target_output_probs, n.VAL_labels, n.VAL_idx = L.HDF5Data(
+		batch_size=1, source=args.test_db_list, ntop=5, include=dict(phase=caffe.TEST))
 
 	n.VAL_input_features_scale, n.VAL_target_features_scale, n.VAL_reconstructed_features_scale = L.HDF5Data(
 		batch_size=1, source=args.test_db_list, ntop=3, include=dict(phase=caffe.TEST))
@@ -123,20 +125,21 @@ def create_solver(args, num_train_instances, num_test_instances):
 	s = caffe.proto.caffe_pb2.SolverParameter()
 	s.net = args.train_file
 
-	s.test_interval = num_train_instances / args.train_batch_size / 4
+	s.test_interval = num_train_instances / args.train_batch_size / 2
 	s.test_iter.append(num_test_instances)
 	s.max_iter = num_train_instances / args.train_batch_size * args.max_epochs
 
 	#s.solver_type = caffe.proto.caffe_pb2.SolverType.SGD  # why isn't it working?  Default anyway
 	s.momentum = 0.9
-	s.weight_decay = 5e-3  # strong weight decay as a prior to the identity mapping
-	s.clip_gradients = 10
+	s.weight_decay = 1e-4  # strong weight decay as a prior to the identity mapping
+	s.regularization_type = 'L2'
+	s.clip_gradients = 5
 
 	s.base_lr = args.learning_rate
 	s.monitor_test = True
 	s.monitor_test_id = 0
 	s.test_compute_loss = True
-	s.max_steps_without_improvement = 4
+	s.max_steps_without_improvement = 3
 	s.max_periods_without_improvement = 1
 	s.gamma = 0.1
 
@@ -190,7 +193,7 @@ def measure_agreement(a, b):
 	return np.sum(a == b) / float(a.shape[0])
 
 
-def extract_from_model(model, num_instances, offset):
+def extract_from_model(model, num_instances):
 	num_activations = model.blobs['reconstruction'].data.shape[1]
 	num_classes = model.blobs['prob'].data.shape[1]
 
@@ -199,8 +202,8 @@ def extract_from_model(model, num_instances, offset):
 	classifications = np.zeros((num_instances,))
 
 	for idx in xrange(num_instances):
-		arr_idx = (idx + offset) % num_instances
 		model.forward()
+		arr_idx = model.blobs['idx'].data[0]
 		features[arr_idx,:] = model.blobs['reconstruction'].data[0,:]
 		output_probs[arr_idx,:] = model.blobs['prob'].data[0,:]
 		classifications[arr_idx] = np.argmax(model.blobs['prob'].data[0])
@@ -209,8 +212,8 @@ def extract_from_model(model, num_instances, offset):
 	
 
 def score_model(model, target_features, target_output_probs, 
-	target_classifications, target_labels, num_instances, offset):
-	reconstructed_features, predicted_output_probs, predicted_classifications = extract_from_model(model, num_instances, offset)
+	target_classifications, target_labels, num_instances):
+	reconstructed_features, predicted_output_probs, predicted_classifications = extract_from_model(model, num_instances)
 	metrics = dict()
 
 	avg_l2 = measure_avg_l2(reconstructed_features, target_features)
@@ -234,7 +237,7 @@ def init_empty_metrics():
 		d[split] = dict()
 		for model_type in ['linear', 'mlp']:
 			d[split][model_type] = dict()
-			for loss in ['l2', 'ce_soft', 'ce_hard']:
+			for loss in LOSS_TYPES:
 				d[split][model_type][loss] = dict()
 	return d
 
@@ -259,23 +262,23 @@ def train_model(model_type, loss, classifier_weights, classifier_bias, num_train
 	classify_layer_params[1].data[:] = classifier_bias[:]
 
 	solver.solve()
-	return solver.net, solver.test_nets[0], solver.iter  # the trained model
+	return solver.net, solver.test_nets[0]
 
 
 def perform_experiment(model_type, loss, classification_weights, classification_bias, num_train_instances, 
 		num_test_instances, num_features, num_classes,  args):
 
-	model_train, model_test, train_offset = train_model(model_type, loss, 
+	model_train, model_test = train_model(model_type, loss, 
 				classification_weights, classification_bias, num_train_instances, 
 				num_test_instances, num_features, num_classes, args)
 	
 	with h5py.File(args.train_db, 'r') as f:
 		train_metrics = score_model(model_train, f['target_features'], f['target_output_probs'], 
-				np.argmax(f['target_output_probs'], axis=1), f['labels'], num_train_instances, train_offset)
+				np.argmax(f['target_output_probs'], axis=1), f['labels'], num_train_instances)
 
 	with h5py.File(args.test_db, 'r') as f:
 		test_metrics = score_model(model_test, f['target_features'], f['target_output_probs'], 
-				np.argmax(f['target_output_probs'], axis=1), f['labels'], num_test_instances, 0)
+				np.argmax(f['target_output_probs'], axis=1), f['labels'], num_test_instances)
 
 	return train_metrics, test_metrics
 
@@ -287,20 +290,20 @@ def sqrt_second_moment_around_zero(arr):
 	return np.sqrt(second_moment)
 	
 
-def write_hdf5(write_db_file, input_db_file, output_db_file):
+def write_hdf5(write_db_file, input_db_file, output_db_file, args):
 	with h5py.File(write_db_file, 'w') as write_db:
 		with h5py.File(input_db_file, 'r') as input_db:
 			with h5py.File(output_db_file, 'r') as output_db:
-				input_features = np.asarray(input_db[args.blob])
+				input_features = np.asarray(input_db[args.blob][:args.max_instances])
 				write_db['input_features'] = input_features
-				log(args, "Input Features Shape: %s" % str(input_features.shape))
+				log(args, "Input Features Shape: %s" % str(write_db['input_features'].shape))
 
 				# used to normalize features on the fly
 				write_db['input_features_scale'] = 1. / sqrt_second_moment_around_zero(input_features)
 
-				target_features = np.asarray(output_db[args.blob])
+				target_features = np.asarray(output_db[args.blob][:args.max_instances])
 				write_db['target_features'] = target_features
-				log(args, "Target Features Shape: %s" % str(target_features.shape))
+				log(args, "Target Features Shape: %s" % str(write_db['target_features'].shape))
 
 				# used to normalize features on the fly
 				arr = sqrt_second_moment_around_zero(target_features)
@@ -310,13 +313,15 @@ def write_hdf5(write_db_file, input_db_file, output_db_file):
 				# classification weights
 				write_db['reconstructed_features_scale'] = arr
 
-				write_db['target_output_probs'] = np.asarray(output_db['prob'])
+				write_db['target_output_probs'] = np.asarray(output_db['prob'][:args.max_instances])
 				log(args, "Target Output Probs Shape: %s" % str(write_db['target_output_probs'].shape))
 
-				write_db['labels'] = np.asarray(output_db['labels'])
+				write_db['labels'] = np.asarray(output_db['labels'][:args.max_instances])
 				log(args, "labels Shape: %s" % str(write_db['labels'].shape))
 
-				num_instances, num_features = input_db[args.blob].shape
+				write_db['idx'] = np.arange(write_db['labels'].shape[0], dtype=np.float32)
+
+				num_instances, num_features = input_features.shape
 				num_classes = output_db['prob'].shape[1]
 	return num_instances, num_features, num_classes
 
@@ -325,11 +330,11 @@ def write_hdf5(write_db_file, input_db_file, output_db_file):
 def setup_hdf5s(args):
 	log(args, "Writing Train HDF5")
 	num_train_instances, num_features, num_classes = write_hdf5(args.train_db, 
-											args.input_train_hdf5, args.output_train_hdf5)
+											args.input_train_hdf5, args.output_train_hdf5, args)
 
 	log(args, "\nWriting Test HDF5")
 	num_test_instances, num_features, num_classes = write_hdf5(args.test_db, 
-											args.input_test_hdf5, args.output_test_hdf5)
+											args.input_test_hdf5, args.output_test_hdf5, args)
 
 	return num_train_instances, num_test_instances, num_features, num_classes
 		
@@ -361,7 +366,7 @@ def main(args):
 
 	log(args, "Starting on Experiments")
 	for model_type in ['linear', 'mlp']:
-		for loss in ['l2', 'ce_soft', 'ce_hard']:
+		for loss in LOSS_TYPES:
 			log(args, "EXPERIMENT %s %s" % (model_type, loss))
 			train_metrics, test_metrics = perform_experiment(model_type, loss, 
 				classification_weights, classification_bias, num_train_instances, num_test_instances, 
@@ -402,9 +407,11 @@ def get_args():
 
 	parser.add_argument("-e", "--max-epochs", type=int, default=10,
 				help="Max training epochs for equivalence models")
+	parser.add_argument("--max-instances", type=int, default=100000,
+				help="Max Instances used to train/test equivalence models")
 	parser.add_argument("-l", "--learning-rate", type=float, default=0.1,
 				help="Initial Learning rate for equivalence models")
-	parser.add_argument("-k", "--hidden-size", type=float, default=1.,
+	parser.add_argument("-k", "--hidden-size", type=float, default=0.3,
 				help="Fraction of # inputs to determine hidden size for mlp equivalence mappings")
 	parser.add_argument("--gpu", type=int, default=0,
 				help="GPU to use for running the models")
