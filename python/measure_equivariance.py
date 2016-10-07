@@ -315,7 +315,7 @@ def measure_avg_jsd(a, b):
 	total_divergence = 0
 	for idx in xrange(a.shape[0]):
 		m = 0.5 * (a[idx] + b[idx])
-		jsd = 0.5 * (scipy.stats.entropy(a[idx], m) + scipy.stats.entropy(b[idx], m))
+		jsd = max(0.5 * (scipy.stats.entropy(a[idx], m) + scipy.stats.entropy(b[idx], m)), 0)
 		total_divergence += math.sqrt(jsd)
 	return total_divergence / a.shape[0]
 
@@ -443,8 +443,8 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 	classification_bias = last_layer_params[1].data
 
 	for transform in transforms:
-		#if transform == transforms[0]:
-		#	continue
+		if transform == transforms[0]:
+			continue
 		#for data in ['', 'c_']:
 		for data in ['']:
 			if data == 'c_':
@@ -513,7 +513,7 @@ def _measure_equivariance(model_type, loss, input_train_features, input_test_fea
 
 	# misaligned since it pulls data from where training left off
 	train_metrics = score_model(train_model, target_train_features, target_train_output_probs, 
-		target_train_classifications, train_labels, num_train_instances)
+		target_train_classifications, train_labels)
 
 	# should be aligned because testing the model during training should always completely
 	# cycle through the db
@@ -543,8 +543,8 @@ def extract_from_equivariant(model, num_instances):
 
 
 def score_model(model, target_features, target_output_probs, 
-	target_classifications, target_labels, num_instances, offset):
-	reconstructed_features, predicted_output_probs, predicted_classifications = extract_from_equivariant(model, num_instances, offset)
+	target_classifications, target_labels, num_instances):
+	reconstructed_features, predicted_output_probs, predicted_classifications = extract_from_equivariant(model, num_instances)
 	metrics = dict()
 
 	avg_l2 = measure_avg_l2(reconstructed_features, target_features)
@@ -585,7 +585,7 @@ def partition_transforms(transforms, size):
 
 def filter_existing(transforms, out_dir):
 	filtered_transforms = [transforms[0]]
-	for transform in transforms:
+	for transform in transforms[1:]:
 		if not os.path.exists(os.path.join(out_dir, "%s.txt" % transform.replace(' ', '_'))):
 			filtered_transforms.append(transform)
 	
