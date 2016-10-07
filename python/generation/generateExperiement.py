@@ -5,8 +5,8 @@ DS = ["rvl_cdip", "andoc_1m", "rvl_cdip_10", "rvl_cdip_100", "andoc_1m_10", "and
 
 ########################
 #ds = 'rvl_cdip_100'
-#ds = 'andoc_1m_50'
-ds = 'imagenet'
+ds = 'andoc_1m'
+#ds = 'imagenet'
 #######################
 
 
@@ -187,8 +187,9 @@ def paddingExperiments():
     group = "padding"
 
     #experiments = EXPERIMENTS["padding"]
-    experiments = EXPERIMENTS["multiple2"]
+    #experiments = EXPERIMENTS["multiple2"]
     #experiments.update(EXPERIMENTS["multiple"])
+    experiments = EXPERIMENTS["multiple"]
 
     for name, (tags, tr) in experiments.items():
         print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
@@ -260,9 +261,9 @@ def channelExperiments():
 if __name__ == "__main__":
     #print COMBO(ds, 227, multiple=True)
     #sizeExperiments()
-    #paddingExperiments()
+    paddingExperiments()
     #depthExperiments()
     #widthExperiments()
-    augmentationExperiments()
+    #augmentationExperiments()
     #channelExperiments()
     #variantExperiments()

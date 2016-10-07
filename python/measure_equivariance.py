@@ -513,7 +513,7 @@ def _measure_equivariance(model_type, loss, input_train_features, input_test_fea
 
 	# misaligned since it pulls data from where training left off
 	train_metrics = score_model(train_model, target_train_features, target_train_output_probs, 
-		target_train_classifications, train_labels)
+		target_train_classifications, train_labels, num_train_instances)
 
 	# should be aligned because testing the model during training should always completely
 	# cycle through the db
@@ -747,6 +747,7 @@ def get_args():
 	
 
 if __name__ == "__main__":
+	print sys.argv
 	args = get_args()
 	main(args)
 

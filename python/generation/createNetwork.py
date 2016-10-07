@@ -9,6 +9,7 @@ import make_transforms
 import caffe
 from caffe import layers as L
 from caffe import params as P
+import caffe.proto.caffe_pb2 as proto
 
 import numpy as np
 import random
@@ -83,11 +84,13 @@ def LMDB_PATH(dataset, tag, split):
 		lmdbs.append(os.path.join(ROOT, "lmdb", dataset, tag, split, s))
 	return lmdbs
 
-def LMDB_PATH_BINARIZE(dataset, tag, data_partition='train'):
+def LMDB_PATH_BINARIZE(dataset, tag, size, data_partition='train'):
 	if not isinstance(tag, basestring):
-		path = os.path.join(ROOT, "lmdb", dataset, tag[0], "%s_%s_lmdb" % (tag[1], data_partition))
+		path = os.path.join(ROOT, "lmdb", dataset, str(size), tag[0], "%s_%s_lmdb" % (tag[1], data_partition))
+		#path = os.path.join(ROOT, "lmdb", dataset, tag[0], "%s_%s_lmdb" % (tag[1], data_partition))
 	else:
-		path = os.path.join(ROOT, "lmdb", dataset, tag, "%s_%s_lmdb" % (tag, data_partition))
+		path = os.path.join(ROOT, "lmdb", dataset, str(size), tag, "%s_%s_lmdb" % (tag, data_partition))
+		#path = os.path.join(ROOT, "lmdb", dataset, tag, "%s_%s_lmdb" % (tag, data_partition))
 	return path
 	
 
@@ -116,9 +119,12 @@ def getNumChannels(tags):
 def poolLayer(prev, **kwargs):
 	return L.Pooling(prev, pool=P.Pooling.MAX, **kwargs)
 
-def convLayer(prev, **kwargs):
+def convLayer(prev, lrn=False, **kwargs):
 	conv = L.Convolution(prev, param=[dict(lr_mult=1), dict(lr_mult=2)], weight_filler=dict(type='msra'), **kwargs)
 	relu = L.ReLU(conv, in_place=True)
+	if lrn:
+		# optional Local Response Normalization
+		relu = L.LRN(relu, lrn_param={'local_size': min(kwargs['num_output'] / 3, 5), 'alpha': 0.0001, 'beta': 0.75})
 	return relu
 
 def convLayerSigmoid(prev, **kwargs):
@@ -385,6 +391,7 @@ FC_LAYERS = {
 
 
 VAL_BATCH_SIZE = 40
+TRAIN_TRAIN = "train_train.prototxt"
 TRAIN_VAL = "train_val.prototxt"
 TRAIN_TEST = "train_test.prototxt"
 TRAIN_TEST2 = "train_test2.prototxt"
@@ -479,7 +486,8 @@ def createElasticDeformationParam(elastic_sigma, elastic_max_alpha):
 	return dict(sigma=elastic_sigma, max_alpha=elastic_max_alpha)
 
 
-def createTransformParam2(scale, shift,  seed):
+def createTransformParam2(scale, shift,  seed, rotate=False, shear=False, perspective=False, 
+		elastic=False, color_jitter=False, blur=False, noise=False, zero_border=0):
 	params = []
 	if scale is not None and shift is not None:
 		params.append({'linear_params': {'scale': scale, 'shift': shift}})
@@ -487,6 +495,31 @@ def createTransformParam2(scale, shift,  seed):
 		params.append({'linear_params': {'scale': scale, 'shift': 0}})
 	elif shift is not None:
 		params.append({'linear_params': {'scale': 1.0, 'shift': shift}})
+	if rotate:
+		params.append({'rotate_params': {'max_angle': 20, 
+										'interpolation': proto.INTER_NEAREST, 
+										'border_mode': proto.BORDER_REFLECT}})
+	if shear:
+		params.append({'shear_params': {'max_shear_angle': 10, 
+										'interpolation': proto.INTER_NEAREST, 
+										'border_mode': proto.BORDER_REFLECT}})
+	if perspective:
+		params.append({'perspective_params': {'max_sigma': 0.00005, 
+											'interpolation': proto.INTER_NEAREST, 
+											'border_mode': proto.BORDER_REFLECT}})
+	if elastic:
+		params.append({'elastic_deformation_params': {'sigma': 3.5, 
+												'max_alpha': 10,
+												'interpolation': proto.INTER_NEAREST, 
+												'border_mode': proto.BORDER_REFLECT}})
+	if blur:
+		params.append({'gauss_blur_params': {'max_sigma': 3}})
+	if noise:
+		params.append({'gauss_noise_params': {'std_dev': 10./255}})
+	if color_jitter:
+		params.append({'color_jitter_params': {'sigma': 20}})
+	if zero_border:
+		params.append({'zero_border_params': {'zero_len': zero_border}})
 	return {'params': params, 'rng_seed': seed}
 		
 
@@ -653,8 +686,11 @@ def createTransformParam(phase, seed=None, test_transforms = DEFAULT_TEST_TRANSF
 	return p
 
 
-def createBinarizeNetwork(train_input_sources=[], train_label_sources=[], val_input_sources=[], val_label_sources=[], depth=3,
-						  kernel_size=3, num_filters=24, num_scales=1, wfm_loss=True, global_features=0, deploy=False, seed=None):
+def createBinarizeNetwork(train_input_sources=[], train_label_sources=[], train_label_equal_sources=[], val_input_sources=[], 
+						  val_label_sources=[], val_label_equal_sources=[], uniform_weights=False, depth=3, kernel_size=3, 
+						  num_filters=24, num_scales=1, lrn=0, pool=0, wfm_loss=True, global_features=0, one_convs=0, deploy=False, 
+						  seed=None, rotate=False, shear=False, perspective=False, elastic=False, color_jitter=False, blur=False, 
+						  noise=False, zero_border=0, train_batch_size=1, pfm_loss_weight=0, densenet=False):
 	assert deploy or len(train_input_sources) == len(val_input_sources)
 	assert deploy or len(train_label_sources) == len(val_label_sources)
 	assert deploy or train_input_sources
@@ -665,24 +701,17 @@ def createBinarizeNetwork(train_input_sources=[], train_label_sources=[], val_in
 
 	if deploy:
 		n.data = L.Input()
+		n.dims = L.Input()
 	else:
 		# training inputs
 		inputs = list()
 
-		if num_scales > 1:
-			first_input, height, width = L.DocData(sources=[train_input_sources[0]], include=dict(phase=caffe.TRAIN), 
-				ntop=3, label_names=['height', 'width'], backend=P.Data.LMDB, batch_size=1, 
-				image_transform_param=createTransformParam2(scale=(1./255), shift=127, seed=seed))
-			inputs.append(first_input)
-			n.dims = L.Concat(height, width, include=dict(phase=caffe.TRAIN))
-		else:
-			first_input = L.DocData(sources=[train_input_sources[0]], include=dict(phase=caffe.TRAIN), batch_size=1, backend=P.Data.LMDB,
-				image_transform_param=createTransformParam2(scale=(1./255), shift=127, seed=seed))
-			inputs.append(first_input)
-
-		for source in train_input_sources[1:]:
-			input = L.DocData(sources=[source], include=dict(phase=caffe.TRAIN), batch_size=1, backend=P.Data.LMDB,
-				image_transform_param=createTransformParam2(scale=(1./255), shift=127, seed=seed))
+		for source in train_input_sources:
+			input = L.DocData(sources=[source], include=dict(phase=caffe.TRAIN), batch_size=train_batch_size, backend=P.Data.LMDB,
+				seed=seed, rand_advance_skip=10,
+				image_transform_param=createTransformParam2(scale=(1./255), shift=127, seed=seed, 
+					rotate=rotate, shear=shear, perspective=perspective, elastic=elastic, color_jitter=color_jitter,
+					blur=blur, noise=noise))
 			inputs.append(input)
 
 		if len(inputs) == 1:
@@ -691,30 +720,35 @@ def createBinarizeNetwork(train_input_sources=[], train_label_sources=[], val_in
 			n.data = L.Concat(*inputs, include=dict(phase=caffe.TRAIN))
 
 		# training labels
-		n.gt = L.DocData(sources=[train_label_sources[0]], include=dict(phase=caffe.TRAIN), batch_size=1, backend=P.Data.LMDB)
-			
+		n.gt = L.DocData(sources=[train_label_sources[0]], include=dict(phase=caffe.TRAIN), batch_size=train_batch_size, backend=P.Data.LMDB,
+			seed=seed, rand_advance_skip=10,
+			image_transform_param=createTransformParam2(scale=(1./255), shift=None, seed=seed, 
+				rotate=rotate, shear=shear, perspective=perspective, elastic=elastic, color_jitter=False, blur=False, noise=False))
 
-		if wfm_loss:
-			n.recall_weights = L.DocData(sources=[train_label_sources[1]], include=dict(phase=caffe.TRAIN), batch_size=1, backend=P.Data.LMDB,
-				image_transform_param=createTransformParam2(scale=(1./128), shift=None, seed=seed))
-			n.precision_weights = L.DocData(sources=[train_label_sources[2]], include=dict(phase=caffe.TRAIN), batch_size=1, backend=P.Data.LMDB,
-				image_transform_param=createTransformParam2(scale=(1./128), shift=None, seed=seed))
+		n.recall_weights = L.DocData(sources=[train_label_sources[1]], include=dict(phase=caffe.TRAIN), batch_size=train_batch_size, backend=P.Data.LMDB,
+			seed=seed, rand_advance_skip=10,
+			image_transform_param=createTransformParam2(scale=(1./128), shift=None, seed=seed,
+				rotate=rotate, shear=shear, perspective=perspective, elastic=elastic, color_jitter=False, blur=False, noise=False, zero_border=zero_border))
+		n.precision_weights = L.DocData(sources=[train_label_sources[2]], include=dict(phase=caffe.TRAIN), batch_size=train_batch_size, backend=P.Data.LMDB,
+			seed=seed, rand_advance_skip=10,
+			image_transform_param=createTransformParam2(scale=(1./128), shift=None, seed=seed,
+				rotate=rotate, shear=shear, perspective=perspective, elastic=elastic, color_jitter=False, blur=False, noise=False, zero_border=zero_border))
+
+		if wfm_loss and uniform_weights:
+			n.recall_equal_weights = L.DocData(sources=[train_label_equal_sources[1]], include=dict(phase=caffe.TRAIN), batch_size=train_batch_size, backend=P.Data.LMDB,
+				seed=seed, rand_advance_skip=10,
+				image_transform_param=createTransformParam2(scale=(1./128), shift=None, seed=seed,
+					rotate=rotate, shear=shear, perspective=perspective, elastic=elastic, color_jitter=False, blur=False, noise=False, zero_border=zero_border))
+			n.precision_equal_weights = L.DocData(sources=[train_label_equal_sources[2]], include=dict(phase=caffe.TRAIN), batch_size=train_batch_size, backend=P.Data.LMDB,
+				seed=seed, rand_advance_skip=10,
+				image_transform_param=createTransformParam2(scale=(1./128), shift=None, seed=seed,
+					rotate=rotate, shear=shear, perspective=perspective, elastic=elastic, color_jitter=False, blur=False, noise=False, zero_border=zero_border))
+			
 
 		# val inputs
 		inputs = list()
 
-		if num_scales > 1:
-			first_input, height, width = L.DocData(sources=[val_input_sources[0]], include=dict(phase=caffe.TEST), 
-				ntop=3, label_names=['height', 'width'], batch_size=1, backend=P.Data.LMDB,
-				image_transform_param=createTransformParam2(scale=(1./255), shift=127, seed=seed))
-			inputs.append(first_input)
-			n.VAL_dims = L.Concat(height, width, include=dict(phase=caffe.TEST))
-		else:
-			first_input = L.DocData(sources=[val_input_sources[0]], include=dict(phase=caffe.TEST), batch_size=1, backend=P.Data.LMDB,
-				image_transform_param=createTransformParam2(scale=(1./255), shift=127, seed=seed))
-			inputs.append(first_input)
-
-		for source in val_input_sources[1:]:
+		for source in val_input_sources:
 			input = L.DocData(sources=[source], include=dict(phase=caffe.TEST), batch_size=1, backend=P.Data.LMDB,
 				image_transform_param=createTransformParam2(scale=(1./255), shift=127, seed=seed))
 			inputs.append(input)
@@ -722,25 +756,36 @@ def createBinarizeNetwork(train_input_sources=[], train_label_sources=[], val_in
 		if len(inputs) == 1:
 			n.VAL_data = inputs[0]
 		else:
-			n.VAL_data = L.Concat(*inputs, include=dict(phase=caffe.TRAIN))
+			n.VAL_data = L.Concat(*inputs, include=dict(phase=caffe.TEST))
 			
 		# val labels
-		n.VAL_gt = L.DocData(sources=[val_label_sources[0]], include=dict(phase=caffe.TEST), batch_size=1, backend=P.Data.LMDB)
-			
+		n.VAL_gt = L.DocData(sources=[val_label_sources[0]], include=dict(phase=caffe.TEST), batch_size=1, backend=P.Data.LMDB,
+			image_transform_param=createTransformParam2(scale=(1./255), shift=None, seed=seed))
 
-		if wfm_loss:
-			n.VAL_recall_weights = L.DocData(sources=[val_label_sources[1]], include=dict(phase=caffe.TEST), batch_size=1, backend=P.Data.LMDB,
+		n.VAL_recall_weights = L.DocData(sources=[val_label_sources[1]], include=dict(phase=caffe.TEST), batch_size=1, backend=P.Data.LMDB,
+			image_transform_param=createTransformParam2(scale=(1./128), shift=None, seed=seed))
+		n.VAL_precision_weights = L.DocData(sources=[val_label_sources[2]], include=dict(phase=caffe.TEST), batch_size=1, backend=P.Data.LMDB,
+			image_transform_param=createTransformParam2(scale=(1./128), shift=None, seed=seed))
+
+		if wfm_loss and uniform_weights:
+			n.VAL_recall_equal_weights = L.DocData(sources=[val_label_equal_sources[1]], include=dict(phase=caffe.TEST), batch_size=1, backend=P.Data.LMDB,
 				image_transform_param=createTransformParam2(scale=(1./128), shift=None, seed=seed))
-			n.VAL_precision_weights = L.DocData(sources=[val_label_sources[2]], include=dict(phase=caffe.TEST), batch_size=1, backend=P.Data.LMDB,
+			n.VAL_precision_equal_weights = L.DocData(sources=[val_label_equal_sources[2]], include=dict(phase=caffe.TEST), batch_size=1, backend=P.Data.LMDB,
 				image_transform_param=createTransformParam2(scale=(1./128), shift=None, seed=seed))
 
 	# middle layers
 	prev_layer = n.data
 	pad_size = (kernel_size - 1) / 2
 	layers = collections.defaultdict(list)
+	layers[0].append(prev_layer)
 	for scale in xrange(num_scales):
 		for conv_idx in xrange(depth - scale):  # is depth - scale the right thing to do?
-			prev_layer = convLayer(prev_layer, kernel_size=kernel_size, pad=pad_size, num_output=num_filters, stride=1)
+			do_lrn = lrn > (conv_idx + scale)
+			if densenet and conv_idx > 0:
+				prev_layer = L.Concat(*layers[scale])
+			prev_layer = convLayer(prev_layer, kernel_size=kernel_size, pad=pad_size, num_output=num_filters, stride=1, lrn=do_lrn)
+			if pool > (conv_idx + scale):
+				prev_layer = poolLayer(prev_layer, kernel_size=3, stride=1, pad=1)
 			layers[scale].append(prev_layer)
 		if scale < (num_scales - 1):
 			# not last scale
@@ -764,27 +809,43 @@ def createBinarizeNetwork(train_input_sources=[], train_label_sources=[], val_in
 		for idx in xrange(len(last_layers)):
 			if idx == 0:
 				continue
-			last_layers[idx] = L.BilinearInterpolation(last_layers[idx], n.dims)
-		n.merged = L.Merge(*last_layers)
-		prev_layer = convLayer(n.merged, kernel_size=1, pad=0, num_output=num_filters, stride=1)
+			last_layers[idx] = L.BilinearInterpolation(last_layers[idx], n.data)
+		n.merged = L.Concat(*last_layers)
+		prev_layer = convLayer(n.merged, kernel_size=kernel_size, pad=pad_size, num_output=num_filters, stride=1)
+		layers[0].append(prev_layer)
 
+	for idx in xrange(one_convs):
+		prev_layer = convLayer(prev_layer, kernel_size=1, pad=0, num_output=num_filters, stride=1)
+		layers[0].append(prev_layer)
+
+	if densenet:
+		prev_layer = L.Concat(*layers[0])
+		
 	# output/loss layer
-	if wfm_loss:
+	if deploy:
+		n.prob = convLayerSigmoid(prev_layer, kernel_size=kernel_size, pad=pad_size, num_output=1, stride=1)
+	elif wfm_loss:
 		prev_layer = convLayerSigmoid(prev_layer, kernel_size=kernel_size, pad=pad_size, num_output=1, stride=1)
-		if not deploy: 
-			n.weighted_fmeasure = L.WeightedFmeasureLoss(prev_layer, n.gt, n.recall_weights, n.precision_weights)
-			n.precision, n.recall, n.accuracy, n.nmr = L.PR(prev_layer, n.gt, ntop=4, include=dict(phase=caffe.TEST))
+		if uniform_weights:
+			n.equal_fmeasure_loss = L.WeightedFmeasureLoss(prev_layer, n.gt, n.recall_equal_weights, n.precision_equal_weights)
+
+			# for metric purposes only
+			n.weighted_fmeasure_loss = L.WeightedFmeasureLoss(prev_layer, n.gt, n.recall_weights, n.precision_weights, 
+				loss_weight=pfm_loss_weight)
 		else:
-			output = prev_layer
+			n.weighted_fmeasure_loss = L.WeightedFmeasureLoss(prev_layer, n.gt, n.recall_weights, n.precision_weights)
+
+		# for metric purposes
+		n.precision, n.recall, n.accuracy, n.nmr, n.fmeasure = L.PR(prev_layer, n.gt, ntop=5, include=dict(phase=caffe.TEST))
 	else:
 		prev_layer = convLayerOnly(prev_layer, kernel_size=kernel_size, pad=pad_size, num_output=1, stride=1)
-		if not deploy:
-			n.class_loss = L.SigmoidCrossEntropyLoss(prev_layer, n.gt)
-			prev_layer = L.Sigmoid(prev_layer, include=dict(phase=caffe.TEST))
-			n.precision, n.recall, n.accuracy, n.nmr = L.PR(prev_layer, n.gt, ntop=4, include=dict(phase=caffe.TEST))
-		else:
-			output = L.Sigmoid(prev_layer)
+		n.class_loss = L.SigmoidCrossEntropyLoss(prev_layer, n.gt)
+		prev_layer = L.Sigmoid(prev_layer)
 
+		# for metric purposes only
+		n.precision, n.recall, n.accuracy, n.nmr, n.fmeasure = L.PR(prev_layer, n.gt, ntop=5, include=dict(phase=caffe.TEST))
+		n.weighted_fmeasure_loss = L.WeightedFmeasureLoss(prev_layer, n.gt, n.VAL_recall_weights, n.VAL_precision_weights, 
+			loss_weight=pfm_loss_weight)
 
 	return n.to_proto()
 
@@ -931,20 +992,31 @@ def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=Fals
 	
 	return n.to_proto()
 
-def createBinarizeExperiment(ds, tags, group, experiment, num_experiments=1, wfm_loss=True, lr=0.01, **kwargs):
 
-	sources_input_train = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, data_partition='train'), tags)
-	sources_input_val1 = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, data_partition='val1'), tags)
-	sources_input_val2 = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, data_partition='val2'), tags)
-	sources_input_test = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, data_partition='test'), tags)
+def createBinarizeExperiment(ds, tags, group, experiment, num_experiments=1, wfm_loss=True, lr=0.001, uniform_weights=False,
+		input_size=256, **kwargs):
 
+	sources_input_train = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, input_size, data_partition='train'), tags)
+	sources_input_val1 = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, input_size, data_partition='val1'), tags)
+	sources_input_val2 = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, input_size, data_partition='val2'), tags)
+	sources_input_test = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, input_size, data_partition='test'), tags)
+
+	# weights for Pseudo F-measure
 	label_tags = ['processed_gt', 'recall_weights', 'precision_weights']
-	sources_label_train = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, data_partition='train'), label_tags)
-	sources_label_val1 = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, data_partition='val1'), label_tags)
-	sources_label_val2 = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, data_partition='val2'), label_tags)
-	sources_label_test = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, data_partition='test'), label_tags)
+	sources_label_train = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, input_size, data_partition='train'), label_tags)
+	sources_label_val1 = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, input_size, data_partition='val1'), label_tags)
+	sources_label_val2 = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, input_size, data_partition='val2'), label_tags)
+	sources_label_test = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, input_size, data_partition='test'), label_tags)
 
-	params = {'train_input_sources': sources_input_train, 'train_label_sources': sources_label_train, 'wfm_loss': wfm_loss}
+	# weights for Equal weights F-measure
+	label_tags = ['processed_gt', 'uniform_recall_weights', 'uniform_precision_weights']
+	sources_label_equal_train = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, input_size, data_partition='train'), label_tags)
+	sources_label_equal_val1 = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, input_size, data_partition='val1'), label_tags)
+	sources_label_equal_val2 = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, input_size, data_partition='val2'), label_tags)
+	sources_label_equal_test = map(lambda tag: LMDB_PATH_BINARIZE(ds, tag, input_size, data_partition='test'), label_tags)
+
+	params = {'train_input_sources': sources_input_train, 'train_label_sources': sources_label_train, 
+			  'train_label_equal_sources': sources_label_equal_train, 'wfm_loss': wfm_loss, 'uniform_weights': uniform_weights}
 	params.update(kwargs)
 	
 	for exp_num in range(1,num_experiments+1):
@@ -957,21 +1029,31 @@ def createBinarizeExperiment(ds, tags, group, experiment, num_experiments=1, wfm
 			print "Directory Not Found, Creating"
 			os.makedirs(out_dir)
 
+		#create train_train file
+		train_val = os.path.join(out_dir, TRAIN_TRAIN)
+		with open(train_val, "w") as f:
+			n = str(createBinarizeNetwork(val_input_sources=sources_input_train, val_label_sources=sources_label_train, 
+										  val_label_equal_sources=sources_label_equal_train, **params))
+			f.write(re.sub("VAL_", "", n))
+
 		#create train_val file
 		train_val = os.path.join(out_dir, TRAIN_VAL)
 		with open(train_val, "w") as f:
-			n = str(createBinarizeNetwork(val_input_sources=sources_input_val1, val_label_sources=sources_label_val1, **params))
+			n = str(createBinarizeNetwork(val_input_sources=sources_input_val1, val_label_sources=sources_label_val1, 
+										  val_label_equal_sources=sources_label_equal_val1, **params))
 			f.write(re.sub("VAL_", "", n))
 	
 		#Create train_test file
 		train_test = os.path.join(out_dir, TRAIN_TEST)
 		with open(train_test, "w") as f:
-			n = str(createBinarizeNetwork(val_input_sources=sources_input_val2, val_label_sources=sources_label_val2, **params))
+			n = str(createBinarizeNetwork(val_input_sources=sources_input_val2, val_label_sources=sources_label_val2, 
+										  val_label_equal_sources=sources_label_equal_val2, **params))
 			f.write(re.sub("VAL_", "", n))
 
 		train_test = os.path.join(out_dir, TRAIN_TEST2)
 		with open(train_test, "w") as f:
-			n = str(createBinarizeNetwork(val_input_sources=sources_input_test, val_label_sources=sources_label_test, **params))
+			n = str(createBinarizeNetwork(val_input_sources=sources_input_test, val_label_sources=sources_label_test, 
+										  val_label_equal_sources=sources_label_equal_test, **params))
 			f.write(re.sub("VAL_", "", n))
 
 		#Create Deploy File
@@ -999,18 +1081,23 @@ def createBinarizeExperiment(ds, tags, group, experiment, num_experiments=1, wfm
 			f.write("gamma: %f\n" % 0.1)
 			f.write("monitor_test: true\n")
 			f.write("monitor_test_id: 0\n")
-			f.write("max_steps_without_improvement: %d\n" % 5)
-			f.write("max_periods_without_improvement: %d\n" % 6)
-			f.write("min_lr: %f\n" % 1e-8)
-			f.write("max_iter: %d\n" % 100000)
+			f.write("test_compute_loss: true\n")
+			f.write("max_steps_without_improvement: %d\n" % 3)
+			f.write("max_periods_without_improvement: %d\n" % 3)
+			f.write("min_iters_per_period: %d\n" % 10000)
+			f.write("min_iters_per_period: %d\n" % 2000)
+			f.write("min_iters_per_period: %d\n" % 2000)
+			f.write("min_lr: %f\n" % 1e-6)
+			f.write("max_iter: %d\n" % 200000)
 
 			f.write("test_iter: %d\n" % lmdb_num_entries(sources_label_val1[0]))
-			f.write("test_interval: %d\n" % 100)
-			f.write("snapshot: %d\n" % 100)
+			batch_size = kwargs.get('train_batch_size', 4)
+			f.write("test_interval: %d\n" % (lmdb_num_entries(sources_label_train[0]) / (2 * batch_size)))
+			f.write("snapshot: %d\n" % (lmdb_num_entries(sources_label_train[0]) / (2 * batch_size)))
 			f.write("momentum: %f\n" % 0.9)
 			f.write("weight_decay: %f\n" % 0.0005)
 
-			f.write("display: %d\n" % 1)
+			f.write("display: %d\n" % 20)
 			f.write("solver_mode: GPU\n")
 			f.write("snapshot_prefix: \"%s\"" % (snapshot_solver))
 	

@@ -407,9 +407,9 @@ def get_args():
 
 	parser.add_argument("-e", "--max-epochs", type=int, default=10,
 				help="Max training epochs for equivalence models")
-	parser.add_argument("--max-instances", type=int, default=100000,
+	parser.add_argument("--max-instances", type=int, default=50000,
 				help="Max Instances used to train/test equivalence models")
-	parser.add_argument("-l", "--learning-rate", type=float, default=0.1,
+	parser.add_argument("-l", "--learning-rate", type=float, default=0.01,
 				help="Initial Learning rate for equivalence models")
 	parser.add_argument("-k", "--hidden-size", type=float, default=0.3,
 				help="Fraction of # inputs to determine hidden size for mlp equivalence mappings")
