@@ -45,7 +45,7 @@ std_dev = collections.defaultdict(dict)
 dbs = list()
 discrete_fields = ['country', 'language', 'is_document', 'is_graphical_document', 
 	'is_historical_document', 'is_textual_document', 'collection', 'record_type_fine',
-	'record_type_broad', 'layout_type', 'layout_category', 'media_type']
+	'record_type_broad', 'layout_type', 'layout_category', 'media_type', 'dbid']
 continuous_fields = ['decade', 'column_count', 'possible_records', 'actual_records',
 	'pages_per_image', 'docs_per_image', 'machine_text', 'hand_text']
 
@@ -64,6 +64,9 @@ for db in os.listdir(in_dir):
 		d = caffe.proto.caffe_pb2.DocumentDatum()
 		d.ParseFromString(val)	
 
+		if d.HasField('dbid'):
+			discrete[db]['dbid'][d.dbid] += 1
+			#print d.dbid
 		if d.HasField('country'):
 			discrete[db]['country'][d.country] += 1
 		if d.HasField('language'):

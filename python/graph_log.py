@@ -227,10 +227,10 @@ def main(args):
 		print "f_measure", tup
 		print tup[0]
 
-	if 'weighted_fmeasure_raw' in sequences['Test_Losses']:
-		fmeasures = sequences['Test_Losses']['weighted_fmeasure_raw']
+	if 'weighted_fmeasure_loss_raw' in sequences['Test_Losses']:
+		fmeasures = sequences['Test_Losses']['weighted_fmeasure_loss_raw']
 		fmeasures.sort(key=lambda tup: tup[1])
-		tup = fmeasures[-1]
+		tup = fmeasures[0]  # lower is better
 		print tup
 		print tup[0]
 
