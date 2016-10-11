@@ -17,8 +17,16 @@ namespace caffe {
 
 template <typename Dtype>
 void ShearImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
-  Dtype shear_angle;
-  this->RandFloat(1, -param_.max_shear_angle(), param_.max_shear_angle(), &shear_angle); 
+  Dtype shear_angle = 0.;
+  Dtype negative = 0.;
+  if (param_.max_shear_angle() > 0 && param_.max_shear_angle() > param_.min_shear_angle()) {
+    this->RandFloat(1, param_.min_shear_angle(), param_.max_shear_angle(), &shear_angle); 
+    this->RandFloat(1, 0., 1., &negative);
+    if (negative <= param_.prob_negative()) {
+    	shear_angle = -1 * shear_angle;
+    }
+  }
+
   float shear_factor = (float) tan(shear_angle * 3.14159265 / 180.0);
   int interpolation = this->GetInterpolation(param_.interpolation());
   int border_mode = this->GetBorderMode(param_.border_mode());
@@ -32,7 +40,9 @@ void ShearImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
   shear.at<float>(0,0) = 1;
   shear.at<float>(1,1) = 1;
 
-  if (this->RandInt(2)) {
+  Dtype horizontal;
+  this->RandFloat(1, 0., 1., &horizontal);
+  if (horizontal <= param_.prob_horizontal()) {
     // shear in x
     shear.at<float>(0,1) = shear_factor;
     shear.at<float>(1,0) = 0;

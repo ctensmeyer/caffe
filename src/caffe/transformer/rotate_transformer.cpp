@@ -15,8 +15,15 @@ namespace caffe {
 
 template <typename Dtype>
 void RotateImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
-  Dtype angle;
-  this->RandFloat(1, -param_.max_angle(), param_.max_angle(), &angle); 
+  Dtype angle = 0.;
+  Dtype negative = 0.;
+  if (param_.max_angle() > 0 && param_.max_angle() > param_.min_angle()) {
+    this->RandFloat(1, param_.min_angle(), param_.max_angle(), &angle); 
+    this->RandFloat(1, 0., 1., &negative);
+    if (negative <= param_.prob_negative()) {
+    	angle = -1 * angle;
+    }
+  }
   // out uses the same number of channels as in, but uses floats
   out.create(in.size(), CV_32F | (0x18 & in.type()));
 
