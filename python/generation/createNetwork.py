@@ -1464,15 +1464,13 @@ def createExperiment(ds, tags, group, experiment, num_experiments=1, pool=None, 
 		
 
 def createEquivarianceExperiment(ds, tags, group, experiment, num_experiments=1, shift='mean', scale=(1.0/255), 
-								mapping='linear', l_tparams=[{}], l2_loss_weight=2., ce_loss_weight=1.):
+								mapping='linear', l_tparams=[{}], l2_loss_weight=2., ce_loss_weight=1., im_size=227):
 
 	# Check if tags are all the same size or not
 	# If they aren't we are doing multi-scale training, and need to stick them all
 	# in the same doc data layer 
 	if not isinstance(tags, list):
 		tags = [tags]
-
-	im_size = 227
 
 	tags_noSize = map(getTagWithoutSize, tags)
 	if shift == "mean":

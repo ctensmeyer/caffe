@@ -121,13 +121,24 @@ d_l_tparams = {
 			 dict(blur=[2.4, 2.5]), 
 			 dict(blur=[2.9, 3.0]), 
 			],
-	'crop': [dict(crop=['center']), 
-             dict(crop=['ul']), 
-             dict(crop=['ur']), 
-             dict(crop=['bl']), 
-             dict(crop=['br']),
-			]
 }
+crop_tparams = [dict(crop=['center']), 
+             	dict(crop=['ul']), 
+            	dict(crop=['ur']), 
+             	dict(crop=['bl']), 
+             	dict(crop=['br']),
+			   ]
+
+def equivarianceCropExperiments(ds):
+	group = "equivariance"
+	tags = get_tags(ds, size=256)
+
+	for mapping in MAPPINGS:
+		for loss in [1.]:
+			name = "crop256_%s_%d" % (mapping, loss)
+			print "createEquivarianceExperiment(%r, %r, %r, %r)" % (ds, tags, group, name)
+			createNetwork.createEquivarianceExperiment(ds, tags, group, name, num_experiments=1, mapping=mapping, 
+				l_tparams=crop_tparams, ce_loss_weight=loss, l2_loss_weight=50*loss)
 
 def equivarianceExperiments(ds):
 	group = "equivariance"
@@ -146,4 +157,5 @@ def equivarianceExperiments(ds):
 if __name__ == "__main__":
 	for ds in datasets:
 		equivarianceExperiments(ds)
+		equivarianceCropExperiments(ds)
 
