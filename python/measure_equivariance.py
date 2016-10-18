@@ -23,6 +23,8 @@ from utils import get_transforms, apply_all_transforms, safe_mkdir
 
 #LOSS_TYPES = ['l2', 'ce_soft', 'ce_hard']
 LOSS_TYPES = ['l2']
+#MODEL_TYPES = ['linear', 'mlp']
+MODEL_TYPES = ['linear']
 
 
 def setup_scratch_space(args):
@@ -418,7 +420,7 @@ def init_empty_metrics(transforms):
 	d = dict()
 	for transform in transforms:
 		d[transform] = dict()
-		for model_type in ['linear', 'mlp']:
+		for model_type in MODEL_TYPES:
 			d[transform][model_type] = dict()
 			for loss in LOSS_TYPES: #['l2', 'ce_soft', 'ce_hard']:
 				d[transform][model_type][loss] = dict()
@@ -471,7 +473,7 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 
 			# l2 training
 			# predict the transformed representation directly from the original representation
-			for model_type in ['linear', 'mlp']:
+			for model_type in MODEL_TYPES:
 				train_metrics, test_metrics = _measure_equivariance(model_type, 'l2', original_train_features, original_test_features,
 					transform_train_features, transform_test_features, train_labels, test_labels, transform_train_output_probs,
 					transform_test_output_probs, classification_weights, classification_bias, transform_train_classifications,

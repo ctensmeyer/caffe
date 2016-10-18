@@ -10,8 +10,10 @@ import matplotlib.pylab as plt
 from utils import get_transforms, safe_mkdir
 
 SPLITS = ['train', 'test']
-MODEL_TYPES = ['linear', 'mlp']
-LOSS_TYPES = ['l2', 'ce_soft', 'ce_hard']
+#MODEL_TYPES = ['linear', 'mlp']
+MODEL_TYPES = ['linear']
+#LOSS_TYPES = ['l2', 'ce_soft', 'ce_hard']
+LOSS_TYPES = ['l2']
 METRICS = ['accuracy', 'agreement', 'avg_jsd', 'avg_l2']
 
 def plot_lines(x_labels, title, line_dict, out_file):
@@ -164,9 +166,9 @@ def format_labels(transforms):
 	labels = list()
 	for transform in transforms:
 		if transform == 'none' or transform == 'resize 227 277':
-			labels.append('baseline')
+			labels.append('0')
 		else:
-			labels.append(transform.split()[1])
+			labels.append(transform.split()[1][:3])
 	return labels, transforms[-1].split()[0]
 
 
@@ -177,15 +179,12 @@ def main(transform_file, in_dir, out_dir):
 	all_metrics = load_metrics(transforms, in_dir)
 	label_names, title_prefix = format_labels(transforms)
 	invariance_sequences = format_invariances(all_metrics)
-	#pprint.pprint(invariance_sequences)
 	equivariance_sequences = format_equivariances(all_metrics)
-	#print
-	#pprint.pprint(equivariance_sequences)
 
 	plot_invariances(invariance_sequences, out_dir, label_names, title_prefix)
 	plot_equivariances(equivariance_sequences, invariance_sequences, out_dir, label_names, title_prefix)
-	plot_loss_equivariance_compare(equivariance_sequences, out_dir, label_names, title_prefix)
-	plot_model_equivariance_compare(equivariance_sequences, out_dir, label_names, title_prefix)
+	#plot_loss_equivariance_compare(equivariance_sequences, out_dir, label_names, title_prefix)
+	#plot_model_equivariance_compare(equivariance_sequences, out_dir, label_names, title_prefix)
 	plot_split_equivariance_compare(equivariance_sequences, out_dir, label_names, title_prefix)
 
 	
