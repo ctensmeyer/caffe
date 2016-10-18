@@ -522,7 +522,8 @@ def main(args):
 		raise
 	finally:
 		close_dbs(test_dbs)
-		args.log.close()
+		if args.log_file:
+			args.log.close()
 		
 
 def check_args(args):
