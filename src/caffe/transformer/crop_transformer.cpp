@@ -193,6 +193,21 @@ void CropImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& out) {
 	    }
 	  }
 	  break;
+	case CropTransformParameter::UL_CORNER:
+	  crop_h_pos = crop_w_pos = 0;
+	  break;
+	case CropTransformParameter::UR_CORNER:
+	  crop_h_pos = 0;
+	  crop_w_pos = in_width - cur_width_;
+	  break;
+	case CropTransformParameter::BL_CORNER:
+	  crop_h_pos = in_height - cur_height_;
+	  crop_w_pos = 0;
+	  break;
+	case CropTransformParameter::BR_CORNER:
+	  crop_h_pos = in_height - cur_height_;
+	  crop_w_pos = in_width - cur_width_;
+	  break;
 	default:
 	  CHECK(0) << "Invalid CropLocation: " << param_.location();
 	  break;

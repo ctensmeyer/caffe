@@ -619,6 +619,10 @@ message CropTransformParameter {
     RANDOM = 0;
     CENTER = 1;
     RAND_CORNER = 2;
+    UL_CORNER = 3;
+    UR_CORNER = 4;
+    BL_CORNER = 5;
+    BR_CORNER = 6;
   }
   optional CropLocation location = 7 [default = RANDOM];
 }
@@ -658,40 +662,52 @@ message GaussNoiseTransformParameter {
 
 message RotateTransformParameter {
   optional float max_angle = 1 [default = 0];
+  optional float min_angle = 5 [default = 0];
   optional Interpolation interpolation = 2 [default = INTER_LINEAR];
   optional BorderMode border_mode = 3 [default = BORDER_CONSTANT];
   optional float border_val = 4 [default = 0];
+  optional float prob_negative = 6 [default = 0.5];
 }
 
 message ShearTransformParameter {
   optional float max_shear_angle = 1 [default = 0];
+  optional float min_shear_angle = 5 [default = 0];
   optional Interpolation interpolation = 2 [default = INTER_LINEAR];
   optional BorderMode border_mode = 3 [default = BORDER_CONSTANT];
   optional float border_val = 4 [default = 0];
+  optional float prob_negative = 6 [default = 0.5];
+  optional float prob_horizontal = 7 [default = 0.5];
 }
 
 message GaussBlurTransformParameter {
+  optional float min_sigma = 2 [default = 0];
   optional float max_sigma = 1 [default = 1];
 }
 
 message UnsharpMaskTransformParameter {
+  optional float min_sigma = 3 [default = 0];
   optional float max_sigma = 1 [default = 1];
+  optional float min_amount = 4 [default = 0];
   optional float max_amount = 2 [default = 1];
 }
 
 message PerspectiveTransformParameter {
+  optional float min_sigma = 5 [default = 0];
   optional float max_sigma = 1 [default = 1];
   optional Interpolation interpolation = 2 [default = INTER_LINEAR];
   optional BorderMode border_mode = 3 [default = BORDER_CONSTANT];
   optional float border_val = 4 [default = 0];
+  repeated float values = 6;
 }
 
 message ColorJitterTransformParameter {
+  optional float mean = 2 [default = 0];
   optional float sigma = 1 [default = 5];
 }
 
 message ElasticDeformationTransformParameter {
   optional float sigma = 1 [default = 3];
+  optional float min_alpha = 6 [default = 0];
   optional float max_alpha = 2 [default = 10];
   optional Interpolation interpolation = 3 [default = INTER_LINEAR];
   optional BorderMode border_mode = 4 [default = BORDER_CONSTANT];

@@ -21,7 +21,7 @@ void ElasticDeformationImageTransformer<Dtype>::Transform(const cv::Mat& in, cv:
 
   float sigma, alpha;
   sigma = this->param_.sigma();
-  this->RandFloat(1, 0, this->param_.max_alpha(), &alpha);
+  this->RandFloat(1, this->param_.min_alpha(), this->param_.max_alpha(), &alpha);
 
   // out is same dims as in, but must be float
   out.create(in.size(), CV_32F | (0x18 & in.type()));

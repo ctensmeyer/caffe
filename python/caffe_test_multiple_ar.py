@@ -269,7 +269,7 @@ def get_image(dd_serialized, slice_idx, args):
 	num_channels = int(channel_tokens[channel_idx])
 
 	nparr = np.fromstring(doc_datum.image.data, np.uint8)
-	print len(doc_datum.image.data)
+	#print len(doc_datum.image.data)
 	im = cv2.imdecode(nparr, int(num_channels == 3) )
 	if im.ndim == 2:
 		# explicit single channel to match dimensions of color
@@ -507,7 +507,7 @@ def main(args):
 
 				# check stopping criteria
 				done = (num_total == args.max_images)
-				for env, txn, cursor in test_dbs:
+				for env, txn, cursor in [test_db]:
 					has_next = cursor.next() 
 					done |= (not has_next) # set done if there are no more elements
 
@@ -525,7 +525,8 @@ def main(args):
 		raise
 	finally:
 		close_dbs(test_dbs)
-		args.log.close()
+		if args.log:
+			args.log.close()
 		
 
 def check_args(args):

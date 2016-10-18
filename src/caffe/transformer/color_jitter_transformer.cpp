@@ -26,7 +26,7 @@ void ColorJitterImageTransformer<Dtype>::Transform(const cv::Mat& in, cv::Mat& o
   vector<float> channel_vals;
   for (int c = 0; c < in_channels; c++) {
   	Dtype channel_val;
-    this->RandGauss(1, 0, this->param_.sigma(), &channel_val);
+    this->RandGauss(1, this->param_.mean(), this->param_.sigma(), &channel_val);
 
     channel_vals.push_back((float) channel_val);
   }

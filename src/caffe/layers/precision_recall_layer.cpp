@@ -69,8 +69,14 @@ void PRLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 	}
   }
 
-  Dtype precision = true_positives / (true_positives + false_positives);  // precision
-  Dtype recall = true_positives / (true_positives + false_negatives);  // recall
+  Dtype precision = 0;
+  if (true_positives + false_positives != 0) {
+    precision = true_positives / (true_positives + false_positives);  // precision
+  }
+  Dtype recall = 0;
+  if (true_positives + false_negatives != 0) {
+    recall = true_positives / (true_positives + false_negatives);  // recall
+  }
   top[0]->mutable_cpu_data()[0] = precision;
   top[1]->mutable_cpu_data()[0] = recall;
   top[2]->mutable_cpu_data()[0] = (true_positives + true_negatives) / (true_positives + false_positives + true_negatives + false_negatives);  // accuracy
