@@ -181,6 +181,7 @@ def main(args):
 def get_args():
 	parser = argparse.ArgumentParser(
 		description="Dumps neuron activations to files")
+
 	parser.add_argument("network_file", 
 				help="Caffe network file")
 	parser.add_argument("weight_file", 

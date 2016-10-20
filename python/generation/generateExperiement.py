@@ -4,9 +4,9 @@ import createNetwork
 DS = ["rvl_cdip", "andoc_1m", "rvl_cdip_10", "rvl_cdip_100", "andoc_1m_10", "andoc_1m_50", "imagenet"]
 
 ########################
-#ds = 'rvl_cdip_100'
-ds = 'andoc_1m'
-#ds = 'imagenet'
+#ds = 'rvl_cdip'
+#ds = 'andoc_1m'
+ds = 'imagenet'
 #######################
 
 
@@ -94,11 +94,11 @@ EXPERIMENTS = {"baseline": {"baseline" : (COMBO(ds), dict(num_experiments=3, **d
                 "blur_sharp": {"gauss_blur_1_5": (COMBO(ds), dict(blur=1.5, **default)),
                                "gauss_blur_3":   (COMBO(ds), dict(blur=3, **default)),
                                
-                               "sharp_1_5":   (COMBO(ds), dict(unsharp=1.5, **default)),
-                               "sharp_3":   (COMBO(ds), dict(unsharp=3, **default)),
+                               #"sharp_1_5":   (COMBO(ds), dict(unsharp=1.5, **default)),
+                               #"sharp_3":   (COMBO(ds), dict(unsharp=3, **default)),
                                
-                               "sharp_blur_1_5":   (COMBO(ds), dict(blur=1.5, unsharp=1.5, **default)),
-                               "sharp_blur_3":   (COMBO(ds), dict(blur=3, unsharp=3, **default))
+                               #"sharp_blur_1_5":   (COMBO(ds), dict(blur=1.5, unsharp=1.5, **default)),
+                               #"sharp_blur_3":   (COMBO(ds), dict(blur=3, unsharp=3, **default))
                                },
 
                 "perspective": {"perspective_1": (COMBO(ds), dict(perspective=0.0001, **default)),
@@ -208,9 +208,9 @@ def widthExperiments():
 def augmentationExperiments():
     group = "augmentation"
     
-    experiments = EXPERIMENTS["standard"]
-    #experiments = EXPERIMENTS['baseline']
-    #experiments.update(EXPERIMENTS["standard"])
+    #experiments = EXPERIMENTS["standard"]
+    experiments = EXPERIMENTS['baseline']
+    experiments.update(EXPERIMENTS["standard"])
     experiments.update(EXPERIMENTS["shear"])
     experiments.update(EXPERIMENTS["blur_sharp"])
     experiments.update(EXPERIMENTS["rotate"])
@@ -261,9 +261,9 @@ def channelExperiments():
 if __name__ == "__main__":
     #print COMBO(ds, 227, multiple=True)
     #sizeExperiments()
-    paddingExperiments()
+    #paddingExperiments()
     #depthExperiments()
     #widthExperiments()
-    #augmentationExperiments()
+    augmentationExperiments()
     #channelExperiments()
     #variantExperiments()

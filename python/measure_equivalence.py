@@ -395,6 +395,7 @@ def get_args():
 				help="HDF5 of vectors used to train equivalence mappings")
 	parser.add_argument("output_test_hdf5", 
 				help="HDF5 of vectors used to train equivalence mappings")
+
 	parser.add_argument("network_file", 
 				help="Caffe network file for output representation")
 	parser.add_argument("weight_file", 
