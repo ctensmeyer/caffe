@@ -160,7 +160,7 @@ def main(args):
 			if batch_activations.ndim > 2:
 				# pool over spatial regions
 				batch_activations = np.max(batch_activations, axis=(2,3))
-			activations[blob].append(batch_activations)
+			activations[blob].append(np.copy(batch_activations))
 		all_labels.extend(labels)
 
 		if iter_num > 0 and iter_num % 10 == 0:
