@@ -31,6 +31,7 @@ def setup_scratch_space(args):
 	#safe_mkdir("./tmp")
 	#args.tmp_dir = "./tmp"
 	args.tmp_dir = tempfile.mkdtemp()
+	log(args, "Using tmp space: " + args.tmp_dir)
 	args.train_file = os.path.join(args.tmp_dir, "train_val.prototxt")
 	args.train_db = os.path.join(args.tmp_dir, "train.h5")
 	args.train_db_list = os.path.join(args.tmp_dir, "train_list.txt")
@@ -474,10 +475,15 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 			# l2 training
 			# predict the transformed representation directly from the original representation
 			for model_type in MODEL_TYPES:
-				train_metrics, test_metrics = _measure_equivariance(model_type, 'l2', original_train_features, original_test_features,
-					transform_train_features, transform_test_features, train_labels, test_labels, transform_train_output_probs,
-					transform_test_output_probs, classification_weights, classification_bias, transform_train_classifications,
-					transform_test_classifications, args)
+				#train_metrics, test_metrics = _measure_equivariance(model_type, 'l2', original_train_features, original_test_features,
+				#	transform_train_features, transform_test_features, train_labels, test_labels, transform_train_output_probs,
+				#	transform_test_output_probs, classification_weights, classification_bias, transform_train_classifications,
+				#	transform_test_classifications, args)
+
+				train_metrics, test_metrics = _measure_equivariance(model_type, 'l2', transform_train_features, transform_test_features,
+					original_train_features, original_test_features, train_labels, test_labels, original_train_output_probs,
+					original_test_output_probs, classification_weights, classification_bias, original_train_classifications, 
+					original_test_classifications, args)
 				for metric, val in train_metrics.iteritems():
 					all_train_metrics[transform][model_type]['l2'][metric] = val
 				for metric, val in test_metrics.iteritems():

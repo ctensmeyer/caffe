@@ -139,7 +139,7 @@ def equivarianceTestExperiments(ds):
 			name = "loss_%s_%.2f" % (mapping, loss)
 			print "createEquivarianceExperiment(%r, %r, %r, %r)" % (ds, tags, group, name)
 			createNetwork.createEquivarianceExperiment(ds, tags, group, name, num_experiments=1, mapping=mapping, 
-				l_tparams=rotate_params, ce_loss_weight=loss, l2_loss_weight=50*loss)
+				l_tparams=rotate_params, ce_loss_weight=loss, l2_loss_weight=50*loss, batch_size=10)
 
 
 	for mapping in ['linear']:
@@ -164,7 +164,7 @@ def equivarianceTestExperiments(ds):
 				params = list(rotate_params)
 				params[0] = dict(rotation=[0, max_rotation, 0.5])
 				createNetwork.createEquivarianceExperiment(ds, tags, group, name, num_experiments=1, mapping=mapping, 
-					l_tparams=params, ce_loss_weight=loss, l2_loss_weight=50*loss)
+					l_tparams=params, ce_loss_weight=loss, l2_loss_weight=50*loss, batch_size=10)
 
 def equivarianceCropExperiments(ds):
 	group = "equivariance"

@@ -23,11 +23,14 @@ from utils import get_transforms, apply_all_transforms, safe_mkdir
 
 #LOSS_TYPES = ['l2', 'ce_soft', 'ce_hard']
 LOSS_TYPES = ['l2']
+#MODEL_TYPES = ['linear', 'mlp']
+MODEL_TYPES = ['linear']
 
 def setup_scratch_space(args):
 	#safe_mkdir("./tmp")
 	#args.tmp_dir = "./tmp"
 	args.tmp_dir = tempfile.mkdtemp()
+	log(args, "Using tmp space: " + args.tmp_dir)
 	args.train_file = os.path.join(args.tmp_dir, "train_val.prototxt")
 	args.train_db = os.path.join(args.tmp_dir, "train.h5")
 	args.train_db_list = os.path.join(args.tmp_dir, "train_list.txt")
@@ -45,7 +48,7 @@ def cleanup_scratch_space(args):
 	shutil.rmtree(args.tmp_dir)
 
 
-def equivariance_proto(args, num_features, num_classes, loss='l2', mlp=False):
+def equivalence_proto(args, num_features, num_classes, loss='l2', mlp=False):
 	if loss == 'l2':
 		ce_hard_loss_weight = 0
 		ce_soft_loss_weight = 0
@@ -78,7 +81,7 @@ def equivariance_proto(args, num_features, num_classes, loss='l2', mlp=False):
 	n.scaled_target_features = L.Scale(n.target_features, n.target_features_scale, axis=0)
 
 	if mlp:
-		n.prev = L.InnerProduct(n.scaled_input_features, num_output=int(args.hidden_size * num_features), name='mlp_hidden',
+		n.prev = L.InnerProduct(n.scaled_input_features, num_output=args.hidden_size, name='mlp_hidden',
 			weight_filler={'type': 'msra'})
 		n.prev = L.TanH(n.prev, in_place=True)
 
@@ -92,14 +95,15 @@ def equivariance_proto(args, num_features, num_classes, loss='l2', mlp=False):
 	# caffe will automatically insert split layers when two or more layers have the same bottom, but
 	# in so doing, it mangles the name.  By explicitly doing the split, we control the names so that 
 	# the blob values can be accessed by the names given here
-	n.unscaled_reconstruction = L.ReLU(n.prev, name='unscaled_reconstruction')  # assumes that target_features are rectified
-	n.unscaled_reconstruction1, n.unscaled_reconstruction2 = L.Split(n.unscaled_reconstruction, ntop=2)  
-	n.reconstruction_loss = L.EuclideanLoss(n.unscaled_reconstruction1, n.scaled_target_features, name="reconstruction_loss",
+	#n.prev = n.scaled_input_features
+	n.scaled_reconstruction = L.ReLU(n.prev, name='scaled_reconstruction')  # assumes that target_features are rectified
+	n.scaled_reconstruction1, n.scaled_reconstruction2 = L.Split(n.scaled_reconstruction, ntop=2)  
+	n.reconstruction_loss = L.EuclideanLoss(n.scaled_reconstruction1, n.scaled_target_features, name="reconstruction_loss",
 				loss_weight=l2_loss_weight, loss_param=dict(normalize=True)) 
 
 	
 	# rescale to the original maginitudes so the reconstructions are compatible with the pretrained classifier
-	n.reconstruction = L.Scale(n.unscaled_reconstruction2, n.reconstructed_features_scale, name='reconstruction', axis=0)
+	n.reconstruction = L.Scale(n.scaled_reconstruction2, n.reconstructed_features_scale, name='reconstruction', axis=0)
 
 	# now finish the computation of the rest of the network
 	# hard coded for measuring equivariance of last hidden layers
@@ -185,57 +189,71 @@ def measure_avg_jsd(a, b):
 	for idx in xrange(a.shape[0]):
 		m = 0.5 * (a[idx] + b[idx])
 		jsd = 0.5 * (scipy.stats.entropy(a[idx], m) + scipy.stats.entropy(b[idx], m))
-		total_divergence += math.sqrt(jsd)
+		total_divergence += math.sqrt(max(jsd, 0))
 	return total_divergence / a.shape[0]
+
+def jsd(a, b):
+	m = 0.5 * (a + b)
+	d = 0.5 * (scipy.stats.entropy(a, m) + scipy.stats.entropy(b, m))
+	return math.sqrt(max(d, 0))
 
 
 def measure_agreement(a, b):
 	return np.sum(a == b) / float(a.shape[0])
 
 
-def extract_from_model(model, num_instances):
-	num_activations = model.blobs['reconstruction'].data.shape[1]
-	num_classes = model.blobs['prob'].data.shape[1]
+def score_model(model, num_instances):
 
-	features = np.zeros((num_instances, num_activations))
-	output_probs = np.zeros((num_instances, num_classes))
-	classifications = np.zeros((num_instances,))
+	total_scaled_l2 = 0
+	total_l2 = 0
+	total_jsd = 0
+	num_correct = 0
+	num_agree = 0
+	num_total = 0
 
 	for idx in xrange(num_instances):
 		model.forward()
 		arr_idx = model.blobs['idx'].data[0]
-		features[arr_idx,:] = model.blobs['reconstruction'].data[0,:]
-		output_probs[arr_idx,:] = model.blobs['prob'].data[0,:]
-		classifications[arr_idx] = np.argmax(model.blobs['prob'].data[0])
 
-	return features, output_probs, classifications
-	
+		scaled_reconstruction = model.blobs['scaled_reconstruction'].data[0,:]
+		scaled_target_features = model.blobs['scaled_target_features'].data[0,:]
+		total_scaled_l2 += np.sqrt(np.sum( (scaled_target_features - scaled_reconstruction) ** 2)) / scaled_target_features.shape[0]
 
-def score_model(model, target_features, target_output_probs, 
-	target_classifications, target_labels, num_instances):
-	reconstructed_features, predicted_output_probs, predicted_classifications = extract_from_model(model, num_instances)
-	metrics = dict()
+		reconstruction = model.blobs['reconstruction'].data[0,:]
+		target_features = model.blobs['target_features'].data[0,:]
+		total_l2 += np.sqrt(np.sum( (target_features - reconstruction) ** 2)) / target_features.shape[0]
 
-	avg_l2 = measure_avg_l2(reconstructed_features, target_features)
-	metrics['avg_l2'] = avg_l2
+		output_probs = model.blobs['prob'].data[0,:]
+		target_output_probs = model.blobs['target_output_probs'].data[0,:]
+		total_jsd += jsd(output_probs, target_output_probs)
 
-	agreement = measure_agreement(predicted_classifications, target_classifications)
-	metrics['agreement'] = agreement
+		classification = np.argmax(model.blobs['prob'].data[0])
+		target_classification = np.argmax(target_output_probs)
+		label = model.blobs['labels'].data[0]
+		if classification == label:
+			num_correct += 1
+		if classification == target_classification:
+			num_agree += 1
 
-	accuracy = measure_agreement(predicted_classifications, target_labels)
-	metrics['accuracy'] = accuracy
+		num_total += 1
 
-	avg_jsd = measure_avg_jsd(predicted_output_probs, target_output_probs)
-	metrics['avg_jsd'] = avg_jsd
+	num_total = float(num_total)
+	metrics = {
+	  'avg_scaled_l2': total_scaled_l2 / num_total,
+	  'avg_l2': total_l2 / num_total,
+	  'avg_jsd': total_jsd / num_total,
+	  'accuracy': num_correct / num_total,
+	  'agreement': num_correct / num_total
+	}
 
 	return metrics
-
+	
 
 def init_empty_metrics():
 	d = dict()
 	for split in ['train', 'test']:
 		d[split] = dict()
-		for model_type in ['linear', 'mlp']:
+		for model_type in MODEL_TYPES:
 			d[split][model_type] = dict()
 			for loss in LOSS_TYPES:
 				d[split][model_type][loss] = dict()
@@ -245,7 +263,7 @@ def init_empty_metrics():
 def train_model(model_type, loss, classifier_weights, classifier_bias, num_train_instances, 
 		num_test_instances, num_features, num_classes, args):
 
-	net_param = equivariance_proto(args, num_features, num_classes, loss, model_type == 'mlp')
+	net_param = equivalence_proto(args, num_features, num_classes, loss, model_type == 'mlp')
 	with open(args.train_file, 'w') as f:
 		f.write(re.sub("VAL_", "", str(net_param)))
 
@@ -261,6 +279,11 @@ def train_model(model_type, loss, classifier_weights, classifier_bias, num_train
 	classify_layer_params[0].data[:] = classifier_weights[:]  # data copy, not object reassignment
 	classify_layer_params[1].data[:] = classifier_bias[:]
 
+	# apparently necessary, though I thought the weights were shared between the two networks
+	classify_layer_params = solver.test_nets[0].params['classify']
+	classify_layer_params[0].data[:] = classifier_weights[:]  # data copy, not object reassignment
+	classify_layer_params[1].data[:] = classifier_bias[:]
+
 	solver.solve()
 	return solver.net, solver.test_nets[0]
 
@@ -272,13 +295,8 @@ def perform_experiment(model_type, loss, classification_weights, classification_
 				classification_weights, classification_bias, num_train_instances, 
 				num_test_instances, num_features, num_classes, args)
 	
-	with h5py.File(args.train_db, 'r') as f:
-		train_metrics = score_model(model_train, f['target_features'], f['target_output_probs'], 
-				np.argmax(f['target_output_probs'], axis=1), f['labels'], num_train_instances)
-
-	with h5py.File(args.test_db, 'r') as f:
-		test_metrics = score_model(model_test, f['target_features'], f['target_output_probs'], 
-				np.argmax(f['target_output_probs'], axis=1), f['labels'], num_test_instances)
+	train_metrics = score_model(model_train, num_train_instances)
+	test_metrics = score_model(model_test, num_test_instances)
 
 	return train_metrics, test_metrics
 
@@ -299,11 +317,16 @@ def write_hdf5(write_db_file, input_db_file, output_db_file, args):
 				log(args, "Input Features Shape: %s" % str(write_db['input_features'].shape))
 
 				# used to normalize features on the fly
-				write_db['input_features_scale'] = 1. / sqrt_second_moment_around_zero(input_features)
+				arr = sqrt_second_moment_around_zero(input_features)
+				write_db['input_features_scale'] = 1. / arr
+				print "Input_Features scales:"
+				print arr[:10]
 
 				target_features = np.asarray(output_db[args.blob][:args.max_instances])
 				write_db['target_features'] = target_features
 				log(args, "Target Features Shape: %s" % str(write_db['target_features'].shape))
+				print "Target Features scales:"
+				print arr[:10]
 
 				# used to normalize features on the fly
 				arr = sqrt_second_moment_around_zero(target_features)
@@ -365,7 +388,7 @@ def main(args):
 	log(args, "Num Classes: %d" % num_classes)
 
 	log(args, "Starting on Experiments")
-	for model_type in ['linear', 'mlp']:
+	for model_type in MODEL_TYPES:
 		for loss in LOSS_TYPES:
 			log(args, "EXPERIMENT %s %s" % (model_type, loss))
 			train_metrics, test_metrics = perform_experiment(model_type, loss, 
@@ -412,8 +435,8 @@ def get_args():
 				help="Max Instances used to train/test equivalence models")
 	parser.add_argument("-l", "--learning-rate", type=float, default=0.01,
 				help="Initial Learning rate for equivalence models")
-	parser.add_argument("-k", "--hidden-size", type=float, default=0.3,
-				help="Fraction of # inputs to determine hidden size for mlp equivalence mappings")
+	parser.add_argument("-k", "--hidden-size", type=float, default=2000,
+				help="Hidden size for mlp equivalence mappings")
 	parser.add_argument("--gpu", type=int, default=0,
 				help="GPU to use for running the models")
 	parser.add_argument("--blob", type=str, default="InnerProduct2",

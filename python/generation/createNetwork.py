@@ -1067,12 +1067,12 @@ def createEquivarianceNetwork(sources=[], val_sources=[], num_output=1, batch_si
 			if mapping == 'identity':
 				pass
 			elif mapping == 'linear':
-				linear_layer = ipLayer(cur_layer, name="linear_mapping-%d" % t-idx, num_output=4096)
+				linear_layer = ipLayer(cur_layer, name="linear_mapping-%d" % t_idx, num_output=4096)
 				cur_layer = L.Eltwise(linear_layer, cur_layer)  # residual layer
 			elif mapping == 'mlp':
-				mlp_layer = ipLayer(cur_layer, name="hidden_mapping-%d" % t-idx, num_output=num_hidden)
+				mlp_layer = ipLayer(cur_layer, name="hidden_mapping-%d" % t_idx, num_output=num_hidden)
 				mlp_layer = L.ReLU(mlp_layer, in_place=True)
-				mlp_layer = ipLayer(mlp_layer, name="linear_mapping-%d" % t-idx, num_output=4096)
+				mlp_layer = ipLayer(mlp_layer, name="linear_mapping-%d" % t_idx, num_output=4096)
 				cur_layer = L.Eltwise(mlp_layer, cur_layer)  # residual layer
 
 			cur_layer = L.ReLU(cur_layer, in_place=True)
@@ -1502,7 +1502,7 @@ def createEquivarianceExperiment(ds, tags, group, experiment, num_experiments=1,
 
 		#common parameters
 		params = dict(sources=list(sources_tr), num_output=OUTPUT_SIZES[ds], shift_channels=shift, scale_channels=scale, 
-					batch_size=batch_size, mapping='mapping', l_tparams=l_tparams, total_l2_loss_weight=l2_loss_weight,
+					batch_size=batch_size, mapping=mapping, l_tparams=l_tparams, total_l2_loss_weight=l2_loss_weight,
 					total_non_first_ce_loss_weight=ce_loss_weight)
 		params['val_batch_size'] = 4 if ds != 'imagenet' else 5
 
@@ -1545,15 +1545,15 @@ def createEquivarianceExperiment(ds, tags, group, experiment, num_experiments=1,
 		solver = os.path.join(out_dir, SOLVER)
 		with open(solver, "w") as f:
 			f.write("net: \"%s\"\n" % (train_val_solver))
-			f.write("base_lr: %f\n" % 0.001)
-			f.write("max_iter: %d\n" % 350000)
-			f.write("stepsize: %d\n" % 100000)
+			f.write("base_lr: %f\n" % 0.003)
+			f.write("max_iter: %d\n" % 500000)
+			f.write("stepsize: %d\n" % 150000)
 			f.write("test_iter: %d\n" % 10000) 
 			f.write("test_interval: %d\n" % 5000) 
 			f.write("snapshot: %d\n" % 5000) 
 			f.write("lr_policy: \"%s\"\n" % "step") 
 			f.write("gamma: %f\n" % 0.1) 
-			f.write("display: %d\n" % 1000) 
+			f.write("display: %d\n" % 100) 
 			f.write("momentum: %f\n" % 0.9) 
 			f.write("solver_mode: %s\n" % 'GPU') 
 			f.write("snapshot_prefix: \"%s\"" % (snapshot_solver))
