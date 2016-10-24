@@ -2,16 +2,19 @@
 import os
 import sys
 import ast
-from utils import safe_mkdir
+import numpy as np
 import matplotlib
 matplotlib.use('AGG')
 import matplotlib.pyplot as plt
-import sklearn.manifold.TSNE
+from utils import safe_mkdir
+import sklearn.manifold
 
 METRICS = ['accuracy', 'agreement', 'avg_jsd', 'avg_l2', 'avg_scaled_l2']
 MODEL_TYPES = ['linear']
 LOSS_TYPES = ['l2']
 SPLITS = ['train', 'test']
+
+SCALE = 100
 
 color_sizes = {
 'baseline' : ('black', 30),
@@ -41,22 +44,22 @@ color_sizes = {
 
 'h_mirror' : ('brown', 20),
 'hv_mirror' : ('brown', 35),
-'v_mirror' : ('brown' 50),
+'v_mirror' : ('brown', 50),
 
 'perspective_1' : ('cyan', 20),
 'perspective_2' : ('cyan', 35),
 'perspective_3' : ('cyan', 50),
-'perspective_4' : ('cyan' 65),
+'perspective_4' : ('cyan', 65),
 
 'rotation_5' : ('olive', 20),
 'rotation_10' : ('olive', 35),
 'rotation_15' : ('olive', 50),
 'rotation_20' : ('olive', 65),
 
-'shear_5' : ('orange', 20),
-'shear_10' : ('orange', 35),
-'shear_15' : ('orange', 50),
-'shear_20' : ('orange', 65),
+'shear_5' : ('darkgray', 20),
+'shear_10' : ('darkgray', 35),
+'shear_15' : ('darkgray', 50),
+'shear_20' : ('darkgray', 65),
 
 }
 
@@ -78,7 +81,7 @@ def get_color_sizes(net_dirs):
 
 ROOT='/fslhome/waldol1/fsl_groups/fslg_nnml/compute/experiments/preprocessing/nets'
 group_file = sys.argv[1]
-out_dir = sys.argv[2]
+root_out_dir = sys.argv[2]
 
 net_dirs = open(group_file, 'r').readlines()
 net_dirs = map(lambda s: s.rstrip(), net_dirs)
@@ -91,8 +94,8 @@ tsne = sklearn.manifold.TSNE(n_components=2, method='exact', metric='precomputed
 for split in SPLITS:
 	for loss in LOSS_TYPES:
 		for model_type in MODEL_TYPES:
-			#out_dir = os.path.join(out_dir, split, loss, model_type)
-			out_dir = os.path.join(out_dir, split)
+			#out_dir = os.path.join(root_out_dir, split, loss, model_type)
+			out_dir = os.path.join(root_out_dir, split)
 			safe_mkdir(out_dir)
 			for metric in METRICS:
 
@@ -103,13 +106,13 @@ for split in SPLITS:
 						fn = net_dir2.replace('/', '_') + '.txt'
 						result_file = os.path.join(result_dir, fn)
 						results = ast.literal_eval(open(result_file, 'r').read())
-						dist_mat[idx1,idx2] = results[split][model_type][loss][metric]
+						dist_mat[idx1,idx2] = SCALE * results[split][model_type][loss][metric]
 
-				np.savetxt(os.path.join(out_dir, "raw_dist_%s.txt" % metric), dist_mat, fmt='%.3f')
+				np.savetxt(os.path.join(out_dir, "raw_dist_%s.txt" % metric), dist_mat, fmt='%.2f')
 				sym_dist_mat = (dist_mat + dist_mat.T) / 2
-				np.savetxt(os.path.join(out_dir, "sym_dist_%s.txt" % metric), sym_dist_mat, fmt='%.3f')
+				np.savetxt(os.path.join(out_dir, "sym_dist_%s.txt" % metric), sym_dist_mat, fmt='%.2f')
 				diff_mat = dist_mat - dist_mat.T
-				np.savetxt(os.path.join(out_dir, "diff_%s.txt" % metric), diff_mat, fmt='%.4f')
+				np.savetxt(os.path.join(out_dir, "diff_%s.txt" % metric), diff_mat, fmt='%.3f')
 
 				embedding = tsne.fit_transform(sym_dist_mat)
 				out_im = os.path.join(out_dir, "embedding_%s.png" % metric)
