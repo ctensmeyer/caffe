@@ -83,7 +83,6 @@ def equivariance_proto(args, num_features, num_classes, loss='l2', mlp=False):
 		n.residual = L.InnerProduct(n.input_features, num_output=num_features, name='residual',
 			weight_filler={'type': 'gaussian', 'std': 0.001,})
 		n.combined = L.Eltwise(n.input_features, n.residual, name='combined')
-		n.combined = L.Eltwise(n.input_features, n.residual, name='combined')
 		n.reconstruction = L.ReLU(n.combined, name='reconstruction')  # assumes that target_features are rectified
 
 	# caffe will automatically insert split layers when two or more layers have the same bottom, but
@@ -124,8 +123,8 @@ def create_solver(args, num_train_instances, num_test_instances):
 
 	#s.solver_type = caffe.proto.caffe_pb2.SolverType.SGD  # why isn't it working?  Default anyway
 	s.momentum = 0.9
-	s.weight_decay = 1e-4  # strong weight decay as a prior to the identity mapping
-	s.regularization_type = "L1"
+	s.weight_decay = 1e-5
+	s.regularization_type = "L2"
 
 	s.base_lr = args.learning_rate
 	s.monitor_test = True
@@ -304,6 +303,7 @@ def get_activations(model, transforms, lmdb_files, args):
 			activations[transform] = activations[transform][p]
 			output_probs[transform] = output_probs[transform][p]
 			classifications[transform] = classifications[transform][p]
+	close_dbs(dbs)
 	return activations, output_probs, classifications, labels
 
 
@@ -311,6 +311,13 @@ def measure_avg_l2(a, b):
 	total_euclidean_dist = 0
 	for idx in xrange(a.shape[0]):
 		total_euclidean_dist += np.sqrt(np.sum((a[idx] - b[idx]) ** 2))
+	return total_euclidean_dist / a.shape[0]
+
+
+def measure_avg_mag(a):
+	total_euclidean_dist = 0
+	for idx in xrange(a.shape[0]):
+		total_euclidean_dist += np.sqrt(np.sum((a[idx] ** 2)))
 	return total_euclidean_dist / a.shape[0]
 	
 
@@ -344,7 +351,10 @@ def measure_invariances(all_features, all_output_probs, all_classifications, lab
 		transform_classifications = all_classifications[transform]
 
 		avg_l2 = measure_avg_l2(transform_features, original_features)
+		avg_mag = measure_avg_mag(original_features)
 		metrics[transform]['avg_l2'] = avg_l2
+		metrics[transform]['avg_norm_l2'] = avg_l2 / avg_mag
+		metrics[transform]['avg_norm_l2_sim'] = 1 - (avg_l2 / avg_mag)
 		#c_avg_l2 = measure_avg_l2(transform_features[correct_indices], original_features[correct_indices])
 		#metrics[transform]['c_avg_l2'] = c_avg_l2
 
@@ -354,12 +364,15 @@ def measure_invariances(all_features, all_output_probs, all_classifications, lab
 		#metrics[transform]['c_agreement'] = c_agreement
 
 		accuracy = measure_agreement(transform_classifications, labels)
+		original_accuracy = measure_agreement(original_classifications, labels)
 		metrics[transform]['accuracy'] = accuracy
+		metrics[transform]['norm_accuracy'] = accuracy / original_accuracy
 		#c_accuracy = measure_agreement(transform_classifications[correct_indices], labels[correct_indices])
 		#metrics[transform]['c_accuracy'] = c_accuracy
 
 		avg_jsd = measure_avg_jsd(transform_output_probs, original_output_probs)
 		metrics[transform]['avg_jsd'] = avg_jsd
+		metrics[transform]['avg_jss'] = 1 - avg_jsd
 		#c_avg_jsd = measure_avg_jsd(transform_output_probs[correct_indices], original_output_probs[correct_indices])
 		#metrics[transform]['c_avg_jsd'] = c_avg_jsd
 
@@ -446,8 +459,8 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 	classification_bias = last_layer_params[1].data
 
 	for transform in transforms:
-		if transform == transforms[0]:
-			continue
+		#if transform == transforms[0]:
+		#	continue
 		#for data in ['', 'c_']:
 		for data in ['']:
 			if data == 'c_':
@@ -556,16 +569,22 @@ def score_model(model, target_features, target_output_probs,
 	metrics = dict()
 
 	avg_l2 = measure_avg_l2(reconstructed_features, target_features)
+	avg_mag = measure_avg_mag(target_features)
 	metrics['avg_l2'] = avg_l2
+	metrics['avg_norm_l2'] = avg_l2 / avg_mag
+	metrics['avg_norm_l2_sim'] = 1 - (avg_l2 / avg_mag)
 
 	agreement = measure_agreement(predicted_classifications, target_classifications)
 	metrics['agreement'] = agreement
 
 	accuracy = measure_agreement(predicted_classifications, target_labels)
+	original_accuracy = measure_agreement(target_classifications, target_labels)
 	metrics['accuracy'] = accuracy
+	metrics['norm_accuracy'] = accuracy / original_accuracy
 
 	avg_jsd = measure_avg_jsd(predicted_output_probs, target_output_probs)
 	metrics['avg_jsd'] = avg_jsd
+	metrics['avg_jss'] = 1 - avg_jsd
 
 	return metrics
 

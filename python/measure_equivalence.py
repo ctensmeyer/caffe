@@ -135,7 +135,7 @@ def create_solver(args, num_train_instances, num_test_instances):
 
 	#s.solver_type = caffe.proto.caffe_pb2.SolverType.SGD  # why isn't it working?  Default anyway
 	s.momentum = 0.9
-	s.weight_decay = 1e-4  # strong weight decay as a prior to the identity mapping
+	s.weight_decay = 1e-5  # strong weight decay as a prior to the identity mapping
 	s.regularization_type = 'L2'
 	s.clip_gradients = 5
 
