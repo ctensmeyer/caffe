@@ -292,7 +292,7 @@ def get_activations(model, transforms, lmdb_files, args):
 			output_probs[transform][iter_num, :] = model.blobs['prob'].data[idx, :]
 			classifications[transform][iter_num] = np.argmax(model.blobs['prob'].data[idx, :])
 
-		if iter_num > 0 and iter_num % 10 == 0:
+		if iter_num > 0 and iter_num % 1000 == 0:
 			log(args, "%.2f%% (%d/%d) Batches" % (100. * iter_num / num_images, iter_num, num_images))
 	labels = np.asarray(labels)
 

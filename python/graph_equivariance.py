@@ -9,6 +9,10 @@ matplotlib.use('Agg')
 import matplotlib.pylab as plt
 from utils import get_transforms, safe_mkdir
 
+
+ERROR_ON_NOT_FOUND = False
+SMOOTH = 0.02
+
 SPLITS = ['train', 'test']
 #MODEL_TYPES = ['linear', 'mlp']
 MODEL_TYPES = ['linear']
@@ -60,11 +64,11 @@ def plot_equivariances(equivariance_sequences, invariance_sequences, out_dir, la
 
 
 # compute the elementwise reduction in error of l2 wrt l1
-def compute_reduction(l1, l2):
-	return [((1 - x1) - (1 - x2)) / (1 - x1) for x1, x2 in zip(l1, l2)]
+def compute_reduction(l1, l2, eps=SMOOTH):
+	return [((1 - x1) - (1 - x2)) / (1 - x1 + SMOOTH) if x1 < (1 + SMOOTH) else 0 for x1, x2 in zip(l1, l2)]
 
 
-def plot_reduction(equivariance_sequences, invariance_sequences, out_dir, labels, title_prefix):
+def plot_reductions(equivariance_sequences, invariance_sequences, out_dir, labels, title_prefix):
 	out_dir = os.path.join(out_dir, 'reduction_plots')
 	safe_mkdir(out_dir)
 	for model_type in MODEL_TYPES:
@@ -130,7 +134,7 @@ def reorder_center_transforms(transforms):
 
 
 def reorder_transforms(transforms):
-	center_transforms = ('rotation', 'crop', 'shift')
+	center_transforms = ('rotation', 'crop', 'shift', 'shear')
 	if transforms[-1].startswith(center_transforms):
 		return reorder_center_transforms(transforms)
 	#elif transforms[-1].startswith("shear"):
@@ -140,14 +144,20 @@ def reorder_transforms(transforms):
 
 def load_metrics(transforms, in_dir):
 	all_metrics = list()
+	included_transforms = list()
 	for transform in transforms:
 		file_path = os.path.join(in_dir, transform.replace(' ', '_') + '.txt')
 		if not os.path.exists(file_path):
-			raise Exception("File %s does not exist" % file_path)
+			if ERROR_ON_NOT_FOUND:
+				raise Exception("File %s does not exist" % file_path)
+			else:
+				print "File %s does not exist" % file_path
+				continue
 		file_contents = open(file_path, 'r').read()
 		metrics = ast.literal_eval(file_contents)
 		all_metrics.append( (transform, metrics) )
-	return all_metrics
+		included_transforms.append(transform)
+	return all_metrics, included_transforms
 
 
 # train_v_test/metric
@@ -189,13 +199,13 @@ def format_labels(transforms):
 		if transform == 'none':
 			labels.append('0')
 		elif transform.startswith('elastic'):
-			labels.append(".1f%/.1f%" % (tokens[1], tokens[2]))
+			labels.append("%.1f/%.1f" % (float(tokens[1]), float(tokens[2])))
 		elif transform.startswith('perspective'):
 			labels.append(str(idx))
 		elif transform.startswith('rotation'):
-			labels.append(str(int(tokens[1])))
+			labels.append(str(int(float(tokens[1]))))
 		elif transform.startswith('shear'):
-			labels.append(str(int(tokens[1])) + " " + tokens[2])
+			labels.append(str(int(float(tokens[1]))) + " " + tokens[2])
 		else:
 			labels.append(transform.split()[1][:3])
 	return labels, transforms[-1].split()[0]
@@ -205,7 +215,7 @@ def main(transform_file, in_dir, out_dir):
 	safe_mkdir(out_dir)
 	transforms, _ = get_transforms(transform_file)
 	transforms = reorder_transforms(transforms)
-	all_metrics = load_metrics(transforms, in_dir)
+	all_metrics, transforms = load_metrics(transforms, in_dir)
 	label_names, title_prefix = format_labels(transforms)
 	invariance_sequences = format_invariances(all_metrics)
 	equivariance_sequences = format_equivariances(all_metrics)

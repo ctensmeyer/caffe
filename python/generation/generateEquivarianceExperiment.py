@@ -3,7 +3,7 @@ import createNetwork
 
 
 ########################
-datasets = ['rvl_cdip']
+datasets = ['rvl_cdip', 'imagenet']
 #######################
 MAPPINGS = ['identity', 'linear']
 
@@ -56,17 +56,16 @@ d_l_tparams = {
 			  dict(color=[-15, 1]), 
 			  dict(color=[-10, 1]), 
 			  dict(color=[-5, 1]), 
-			  dict(color=[0, 1]), 
 			  dict(color=[5, 1]), 
 			  dict(color=[10, 1]), 
 			  dict(color=[15, 1]), 
 			 ],
 	'noise': [dict(), 
-			  dict(noise=[3, 4]), 
-			  dict(noise=[7, 8]), 
-			  dict(noise=[11, 12]), 
-			  dict(noise=[15, 16]), 
-			  dict(noise=[19, 20]), 
+			  dict(noise=[3.9, 4]), 
+			  dict(noise=[7.9, 8]), 
+			  dict(noise=[11.9, 12]), 
+			  dict(noise=[15.9, 16]), 
+			  dict(noise=[19.9, 20]), 
 			 ],
 	'perspective': [dict(), 
 			  		dict(perspective=[-5.20e-05, -4.90e-05, -5.12e-05, 5.07e-05, 4.55e-05, -5.06e-05, 4.74e-05, 4.60e-05]),
@@ -82,36 +81,22 @@ d_l_tparams = {
 			  	 dict(rotation=[9,11,1]), 
 			  	 dict(rotation=[14,16,0]), 
 			  	 dict(rotation=[14,16,1]), 
-			  	 dict(rotation=[19,21,0]), 
-			  	 dict(rotation=[19,21,1]), 
 			    ],
 	'shear': [dict(), 
-			  dict(shear=[4,5,0,0]), 
-			  dict(shear=[4,5,0,1]), 
-			  dict(shear=[4,5,1,0]), 
-			  dict(shear=[4,5,1,1]), 
-			  dict(shear=[9,10,0,0]), 
-			  dict(shear=[9,10,0,1]), 
-			  dict(shear=[9,10,1,0]), 
-			  dict(shear=[9,10,1,1]), 
-			  dict(shear=[14,15,0,0]), 
-			  dict(shear=[14,15,0,1]), 
-			  dict(shear=[14,15,1,0]), 
-			  dict(shear=[14,15,1,1]), 
-			  dict(shear=[19,20,0,0]), 
-			  dict(shear=[19,20,0,1]), 
-			  dict(shear=[19,20,1,0]), 
-			  dict(shear=[19,20,1,1]), 
+			  dict(shear=[4,6,0,0]), 
+			  dict(shear=[4,6,1,0]), 
+			  dict(shear=[9,11,0,1]), 
+			  dict(shear=[9,11,1,1]), 
+			  dict(shear=[14,16,1,0]), 
+			  dict(shear=[19,21,1,1]), 
 			 ],
 	'elastic': [dict(), 
-			  	dict(elastic=[2,4,5]), 
-			  	dict(elastic=[2,9,10]), 
-			  	dict(elastic=[2.5,4,5]), 
-			  	dict(elastic=[2.5,9,10]), 
-			  	dict(elastic=[3,4,5]), 
-			  	dict(elastic=[3,9,10]), 
-			  	dict(elastic=[3.5,4,5]), 
-			  	dict(elastic=[3.5,9,10]), 
+			  	dict(elastic=[2.5,4.9,5]), 
+			  	dict(elastic=[2.5,9.9,10]), 
+			  	dict(elastic=[3,4.9,5]), 
+			  	dict(elastic=[3,9.9,10]), 
+			  	dict(elastic=[3.5,4.9,5]), 
+			  	dict(elastic=[3.5,9.9,10]), 
 			   ],
 	'blur': [dict(), 
 			 dict(blur=[0.4, 0.5]), 
@@ -130,7 +115,7 @@ crop_tparams = [dict(crop=['center']),
 			   ]
 
 def equivarianceTestExperiments(ds):
-	group = "equivariance_test"
+	group = "equivariance_test2"
 	tags = get_tags(ds)
 
 	rotate_params = d_l_tparams['rotation']
@@ -142,19 +127,19 @@ def equivarianceTestExperiments(ds):
 				l_tparams=rotate_params, ce_loss_weight=loss, l2_loss_weight=50*loss, batch_size=10)
 
 
-	for mapping in ['linear']:
-		for batch in [8, 16, 32]:
-			name = "rotate_batch_%s_%d" % (mapping, batch)
-			print "createEquivarianceExperiment(%r, %r, %r, %r)" % (ds, tags, group, name)
-			createNetwork.createEquivarianceExperiment(ds, tags, group, name, num_experiments=1, mapping=mapping, 
-				l_tparams=[dict(rotation=[0, 15, 0.5])], batch_size=batch, ce_loss_weight=loss, l2_loss_weight=50*loss)
+	#for mapping in ['linear']:
+	#	for batch in [8, 16, 32]:
+	#		name = "rotate_batch_%s_%d" % (mapping, batch)
+	#		print "createEquivarianceExperiment(%r, %r, %r, %r)" % (ds, tags, group, name)
+	#		createNetwork.createEquivarianceExperiment(ds, tags, group, name, num_experiments=1, mapping=mapping, 
+	#			l_tparams=[dict(rotation=[0, 15, 0.5])], batch_size=batch, ce_loss_weight=loss, l2_loss_weight=50*loss)
 
-	for mapping in ['linear']:
-		for batch in [8, 16, 32]:
-			name = "base_batch_%s_%d" % (mapping, batch)
-			print "createEquivarianceExperiment(%r, %r, %r, %r)" % (ds, tags, group, name)
-			createNetwork.createEquivarianceExperiment(ds, tags, group, name, num_experiments=1, mapping=mapping, 
-				l_tparams=[{}], batch_size=batch, ce_loss_weight=loss, l2_loss_weight=50*loss)
+	#for mapping in ['linear']:
+	#	for batch in [8, 16, 32]:
+	#		name = "base_batch_%s_%d" % (mapping, batch)
+	#		print "createEquivarianceExperiment(%r, %r, %r, %r)" % (ds, tags, group, name)
+	#		createNetwork.createEquivarianceExperiment(ds, tags, group, name, num_experiments=1, mapping=mapping, 
+	#			l_tparams=[{}], batch_size=batch, ce_loss_weight=loss, l2_loss_weight=50*loss)
 
 	for mapping in ['linear']:
 		for loss in [0.3]:
@@ -166,34 +151,48 @@ def equivarianceTestExperiments(ds):
 				createNetwork.createEquivarianceExperiment(ds, tags, group, name, num_experiments=1, mapping=mapping, 
 					l_tparams=params, ce_loss_weight=loss, l2_loss_weight=50*loss, batch_size=10)
 
-def equivarianceCropExperiments(ds):
-	group = "equivariance"
-	tags = get_tags(ds)
+	rotate_params = d_l_tparams['rotation']
+	loss = 0
+	for mapping in ['identity']:
+		for degree in [5, 10, 15, 20]:
+			name = "measure_%d" % degree
+			print "createEquivarianceExperiment(%r, %r, %r, %r)" % (ds, tags, group, name)
+			params = list(rotate_params)
+			params[0] = dict(rotation=[0, degree, 0.5])
+			createNetwork.createEquivarianceExperiment(ds, tags, group, name, num_experiments=1, mapping=mapping, 
+				l_tparams=params, ce_loss_weight=loss, l2_loss_weight=50*loss, batch_size=10)
 
-	for mapping in MAPPINGS:
-		for loss in [1.]:
-			name = "crop256_%s_%d" % (mapping, loss)
+def equivarianceCropExperiments(ds):
+	group = "equivariance2"
+	tags = get_tags(ds, 256)
+
+	#for mapping in MAPPINGS:
+	for mapping in ['linear']:
+	#for mapping in ['identity']:
+		for loss in [.3]:
+			name = "crop256_%s_%.1f" % (mapping, loss)
 			print "createEquivarianceExperiment(%r, %r, %r, %r)" % (ds, tags, group, name)
 			createNetwork.createEquivarianceExperiment(ds, tags, group, name, num_experiments=1, mapping=mapping, 
-				l_tparams=crop_tparams, ce_loss_weight=loss, l2_loss_weight=50*loss)
+				l_tparams=crop_tparams, ce_loss_weight=loss, l2_loss_weight=50*loss, batch_size=10)
 
 def equivarianceExperiments(ds):
-	group = "equivariance"
+	group = "equivariance2"
 	tags = get_tags(ds)
 
 	for name_base, l_tparams in d_l_tparams.iteritems():
-		for mapping in MAPPINGS:
-			#for loss in [1., 2.]:
-			for loss in [1.]:
-				name = "%s_%s_%d" % (name_base, mapping, loss)
+		#for mapping in MAPPINGS:
+		for mapping in ['linear']:
+		#for mapping in ['identity']:
+			for loss in [0.3]:
+				name = "%s_%s_%.1f" % (name_base, mapping, loss)
 				print "createEquivarianceExperiment(%r, %r, %r, %r)" % (ds, tags, group, name)
 				createNetwork.createEquivarianceExperiment(ds, tags, group, name, num_experiments=1, mapping=mapping, 
-					l_tparams=l_tparams, ce_loss_weight=loss, l2_loss_weight=50*loss)
+					l_tparams=l_tparams, ce_loss_weight=loss, l2_loss_weight=50*loss, batch_size=10)
 
 
 if __name__ == "__main__":
 	for ds in datasets:
-		#equivarianceExperiments(ds)
-		#equivarianceCropExperiments(ds)
-		equivarianceTestExperiments(ds)
+		equivarianceExperiments(ds)
+		equivarianceCropExperiments(ds)
+		#equivarianceTestExperiments(ds)
 

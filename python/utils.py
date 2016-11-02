@@ -118,7 +118,7 @@ def apply_shift(im, tokens):
 		im = im + int(tokens[1])
 	else:
 		for c in xrange(im.shape[2]):
-			im[:,:,c] = im[:,:,c] + int(tokens[c+1])
+			im[:,:,c] = im[:,:,c] + int(tokens[min(c+1, len(tokens) - 1)])
 	im = np.clip(im, 0, 255)
 	im = im.astype(np.uint8) 
 	return im
