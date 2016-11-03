@@ -22,6 +22,19 @@ SPLITS = ['train', 'test']
 
 SCALE = 100
 
+color_names = {
+'black': 'baseline',
+'red': 'color_jitter',
+'blue': 'crop',
+'green': 'elastic',
+'orange': 'blur',
+'purple': 'noise',
+'brown': 'mirror',
+'cyan': 'perspective',
+'olive': 'rotation',
+'darkgray': 'shear'
+}
+
 color_sizes = {
 'baseline' : ('black', 30),
 
@@ -118,15 +131,16 @@ def get_color_sizes(net_dirs):
 	return colors, sizes
 
 def get_random_knn(groups):
-	all_rnebs = list()
-	for x in xrange(100):
-		dist_mat = np.random.random( (num_net_dirs, num_net_dirs) )
-		sym_dist_mat = (dist_mat + dist_mat.T) / 2
-		nebs = num_knns(sym_dist_mat, groups)
-		all_rnebs.append(nebs)
+	#all_rnebs = list()
+	#for x in xrange(100):
+	#	dist_mat = np.random.random( (num_net_dirs, num_net_dirs) )
+	#	sym_dist_mat = (dist_mat + dist_mat.T) / 2
+	#	nebs = num_knns(sym_dist_mat, groups)
+	#	all_rnebs.append(nebs)
 
-	rnebs = np.average(np.asarray(all_rnebs), axis=0)
-	return rnebs
+	#rnebs = np.average(np.asarray(all_rnebs), axis=0)
+	#return rnebs
+	return [float(k) / (groups.shape[0] - 1) for k in xrange(groups.shape[0])]
 				
 
 ROOT='/fslhome/waldol1/fsl_groups/fslg_nnml/compute/experiments/preprocessing/nets'
@@ -190,7 +204,7 @@ for split in SPLITS:
 
 					nebs = num_knns(sym_dist_mat, sub_group)
 					rnebs = get_random_knn(sub_group)
-					out_im = os.path.join(sub_out_dir, "%s_%s.png" % (color, metric))
+					out_im = os.path.join(sub_out_dir, "%s_%s.png" % (color_names[color], metric))
 					graph_nebs(out_im, nebs, rnebs)
 
 				# pairwise embeddings 
@@ -217,7 +231,7 @@ for split in SPLITS:
 						sub_sym_dist_mat = sub_sym_dist_mat[:, indices]
 
 						embedding = tsne.fit_transform(sub_sym_dist_mat)
-						out_im = os.path.join(sub_out_dir, "embedding_%s_%s.png" % (color1, color2))
+						out_im = os.path.join(sub_out_dir, "embedding_%s_%s.png" % (color_names[color1], color_names[color2]))
 						graph_embedding(out_im, embedding, sub_colors, sub_sizes)
 
 

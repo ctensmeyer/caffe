@@ -334,7 +334,7 @@ def measure_agreement(a, b):
 	return np.sum(a == b) / float(a.shape[0])
 
 
-def measure_invariances(all_features, all_output_probs, all_classifications, labels, transforms, args):
+def measure_invariances(all_features, all_output_probs, all_classifications, labels, transforms, do_first, args):
 	# Avg L2 distance between features
 	# % agreement on predicted labels
 	# Avg sqrt(Jensen Shannon Divergence) between output_probs
@@ -346,6 +346,8 @@ def measure_invariances(all_features, all_output_probs, all_classifications, lab
 
 	correct_indices = (original_classifications == labels)
 	for transform in transforms:
+		if not do_first and transform == transforms[0]:
+			continue
 		transform_features = all_features[transform]
 		transform_output_probs = all_output_probs[transform]
 		transform_classifications = all_classifications[transform]
@@ -442,7 +444,7 @@ def init_empty_metrics(transforms):
 
 
 def measure_equivariances(train_features, all_train_labels, train_classifications, train_output_probs,
-		test_features, all_test_labels, test_classifications, test_output_probs, transforms, model, args):
+		test_features, all_test_labels, test_classifications, test_output_probs, transforms, model, do_first, args):
 	all_train_metrics = init_empty_metrics(transforms) 
 	all_test_metrics = init_empty_metrics(transforms)
 
@@ -459,8 +461,8 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 	classification_bias = last_layer_params[1].data
 
 	for transform in transforms:
-		#if transform == transforms[0]:
-		#	continue
+		if not do_first and transform == transforms[0]:
+			continue
 		#for data in ['', 'c_']:
 		for data in ['']:
 			if data == 'c_':
@@ -615,8 +617,9 @@ def filter_existing(transforms, out_dir):
 	for transform in transforms[1:]:
 		if not os.path.exists(os.path.join(out_dir, "%s.txt" % transform.replace(' ', '_'))):
 			filtered_transforms.append(transform)
+	do_first =  not os.path.exists(os.path.join(out_dir, "%s.txt" % transforms[0].replace(' ', '_')))
 	
-	return filtered_transforms
+	return filtered_transforms, do_first
 
 def write_output(out_dir, transform, train_invariance_metrics, test_invariance_metrics,
 			train_equivariance_metrics, test_equivariance_metrics):
@@ -641,7 +644,7 @@ def main(args):
 	all_transforms, _ = get_transforms(args.transform_file)
 
 	# don't redo work that we have already done
-	all_transforms = filter_existing(all_transforms, args.out_dir)
+	all_transforms, do_first = filter_existing(all_transforms, args.out_dir)
 	if len(all_transforms) <= 1:
 		log(args, "No transforms to do.  Exiting...")
 		exit()
@@ -674,18 +677,20 @@ def main(args):
 		test_classifications.update(base_test_classifications)
 
 		log(args, "Measuring invariances...")
-		train_invariance_metrics = measure_invariances(train_features, train_output_probs, train_classifications, train_labels, transforms, args)
-		test_invariance_metrics = measure_invariances(test_features, test_output_probs, test_classifications, test_labels, transforms, args)
+		train_invariance_metrics = measure_invariances(train_features, train_output_probs, train_classifications, train_labels, transforms, do_first, args)
+		test_invariance_metrics = measure_invariances(test_features, test_output_probs, test_classifications, test_labels, transforms, do_first, args)
 		log(args, "Done...")
 
 		setup_scratch_space(args)
 		log(args, "Measuring equivariances...")
 		train_equivariance_metrics, test_equivariance_metrics = measure_equivariances(train_features, train_labels, train_classifications, train_output_probs, 
-				test_features, test_labels, test_classifications, test_output_probs, transforms, model, args)
+				test_features, test_labels, test_classifications, test_output_probs, transforms, model, do_first, args)
 
-		for transform in transforms:
+		for transform in transforms[(0 if do_first else 1):]:
 			write_output(args.out_dir, transform, train_invariance_metrics[transform], test_invariance_metrics[transform],
 					train_equivariance_metrics[transform], test_equivariance_metrics[transform])
+
+		do_first = False
 
 	log(args, "Done Measure Equivariances")
 
