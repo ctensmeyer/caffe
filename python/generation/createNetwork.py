@@ -157,7 +157,7 @@ def convLayerOnly(prev, **kwargs):
 
 
 def ipLayer(prev, param_name=None, **kwargs):
-	if param_name in kwargs:
+	if param_name:
 		name1 = param_name + '_weights'
 		name2 = param_name + '_bias'
 		return L.InnerProduct(prev, 
@@ -469,13 +469,13 @@ MAX_ITER['rvl_cdip_100'] = 150000
 STEP_SIZE['rvl_cdip_100'] = 50000
 
 SOLVER_PARAM = {#"test_iter": 1000, 
-				"test_interval": 1000, 
+				"test_interval": 5000, 
 				"lr_policy": '"step"',
 				"gamma": 0.1,
-				"display": 20,
+				"display": 100,
 				"momentum": 0.9,
 				"weight_decay": 0.0005,
-				"snapshot": 1000,
+				"snapshot": 5000,
 				"solver_mode": "GPU"}
 
 # this is for validation sets, not test sets.  Test set iterations are specified in train.sh
@@ -563,7 +563,7 @@ def createPerspectiveParam(sig):
 	return dict(max_sigma=sig)
 	
 def createPerspectiveParamE(params):
-	return dict(values=params[0])
+	return dict(values=params)
 
 def createElasticDeformationParam(elastic_sigma, elastic_max_alpha):
 	return dict(sigma=elastic_sigma, max_alpha=elastic_max_alpha)
@@ -936,7 +936,7 @@ def createBinarizeNetwork(train_input_sources=[], train_label_sources=[], train_
 	return n.to_proto()
 
 
-def createTransformParamE(seed=None, **kwargs):
+def createTransformParamE(seed=None, val=False, **kwargs):
 	params = []
 
 	# gauss noise
@@ -965,10 +965,18 @@ def createTransformParamE(seed=None, **kwargs):
 
 	# rotate
 	if 'rotation' in kwargs:
+		if val:
+			kwargs = dict(**kwargs)
+			kwargs['rotation'][0] = 0.5 * (kwargs['rotation'][0] + kwargs['rotation'][1])
+			kwargs['rotation'][1] = kwargs['rotation'][0] + 0.01;
 		params.append(dict(rotate_params=createRotateParamE(kwargs['rotation'])))
 
 	# shear
 	if 'shear' in kwargs:
+		if val:
+			kwargs = dict(**kwargs)
+			kwargs['shear'][0] = 0.5 * (kwargs['shear'][0] + kwargs['shear'][1])
+			kwargs['shear'][1] = kwargs['shear'][0] + 0.01;
 		params.append(dict(shear_params=createShearParamE(kwargs['shear']))) 
 	
 	# blur
@@ -989,18 +997,21 @@ def createTransformParamE(seed=None, **kwargs):
 	return p
 	
 
-def createEquivarianceNetwork(sources=[], val_sources=[], num_output=1, batch_size=8, deploy=False, seed=None, shift_channels=None,
+def createEquivarianceNetwork(sources=[], val_sources=[], num_output=1, batch_size=8, deploy=False, seed_t=None, shift_channels=None,
 					scale_channels=None, val_batch_size=VAL_BATCH_SIZE, l_tparams=[{}], mapping='identity', total_l2_loss_weight=2.,
-					total_non_first_ce_loss_weight=1, num_hidden=1000):
+					total_non_first_ce_loss_weight=1, num_hidden=1000, seed_d=None):
 	n = caffe.NetSpec()	
-	data_param = dict(backend=P.Data.LMDB)
 
-	if seed is None:
-		seed = random.randint(0, 2147483647)
+	if seed_t is None:
+		seed_t = random.randint(0, 2147483647)
+	if seed_d is None:
+		seed_d = random.randint(0, 2147483647)
+
+	data_param = dict(backend=P.Data.LMDB, seed=seed_d)
 
 	# divide the total loss among the non-default individual transforms
-	l2_loss_weight = total_l2_loss_weight / (len(l_tparams) - 1)
-	non_first_ce_loss_weight = total_non_first_ce_loss_weight / (len(l_tparams) - 1)
+	l2_loss_weight = total_l2_loss_weight / (len(l_tparams) - 1) if len(l_tparams) > 1 else 0
+	non_first_ce_loss_weight = total_non_first_ce_loss_weight / (len(l_tparams) - 1) if len(l_tparams) > 1 else 0
 	
 	for t_idx, tparams in enumerate(l_tparams):
 		
@@ -1010,22 +1021,26 @@ def createEquivarianceNetwork(sources=[], val_sources=[], num_output=1, batch_si
 			cur_layer = data
 
 		elif len(sources) == 1:
-			n.data, n.labels = L.DocData(sources = [sources[0]], include=dict(phase=caffe.TRAIN), batch_size=batch_size, 
-					image_transform_param=createTransformParamE(seed=seed, shift=shift_channels[0], scale=scale_channels[0], **tparams), 
-					label_names=["dbid"], ntop=2, **data_param)
+			data, labels = L.DocData(sources = [sources[0]], include=dict(phase=caffe.TRAIN), batch_size=batch_size, 
+					image_transform_param=createTransformParamE(seed=seed_t, shift=shift_channels[0], scale=scale_channels[0], **tparams), 
+					label_names=["dbid"], ntop=2, rand_advance_skip=3,**data_param)
+			setattr(n, "data_%d" % t_idx, data)
+			setattr(n, "labels_%d" % t_idx, labels)
 
 			if val_sources:
-				n.VAL_data, n.VAL_labels = L.DocData(sources = [val_sources[0]], include=dict(phase=caffe.TEST), batch_size=val_batch_size,
-						image_transform_param=createTransformParamE(shift=shift_channels[0], scale=scale_channels[0]), 
+				val_data, val_labels = L.DocData(sources = [val_sources[0]], include=dict(phase=caffe.TEST), batch_size=val_batch_size,
+						image_transform_param=createTransformParamE(shift=shift_channels[0], scale=scale_channels[0], val=True, **tparams), 
 						label_names=["dbid"], ntop=2, **data_param)
+				setattr(n, "VAL_data_%d" % t_idx, val_data)
+				setattr(n, "VAL_labels_%d" % t_idx, val_labels)
 
 		else:
 			first, labels = L.DocData(sources = [sources[0]], include=dict(phase=caffe.TRAIN), batch_size=batch_size, 
-					image_transform_param=createTransformParamE(seed=seed, shift=shift_channels[0], scale=scale_channels[0], **tparams), 
-					label_names=["dbid"], ntop=2, **data_param)
+					image_transform_param=createTransformParamE(seed=seed_t, shift=shift_channels[0], scale=scale_channels[0], **tparams), 
+					label_names=["dbid"], ntop=2, rand_advance_skip=3, **data_param)
 
-			inputs = map(lambda s, t: L.DocData(sources=[s], include=dict(phase=caffe.TRAIN), batch_size=batch_size, 
-				image_transform_param=createTransformParamE(seed=seed, shift=t[0], scale=t[1], **tparams),
+			inputs = map(lambda s, t: L.DocData(sources=[s], include=dict(phase=caffe.TRAIN), batch_size=batch_size, rand_advance_skip=3,
+				image_transform_param=createTransformParamE(seed=seed_t, shift=t[0], scale=t[1], **tparams),
 				**data_param), 
 				sources[1:], 
 				zip(shift_channels[1:], scale_channels[1:]))
@@ -1034,15 +1049,14 @@ def createEquivarianceNetwork(sources=[], val_sources=[], num_output=1, batch_si
 			data = L.Concat(first, *inputs, include=dict(phase=caffe.TRAIN))
 			setattr(n, "data_%d" % t_idx, data)
 			setattr(n, "labels_%d" % t_idx, labels)
-			cur_layer = data
 
 			if val_sources:
 				val_first, val_labels = L.DocData(sources = [val_sources[0]], include=dict(phase=caffe.TEST), batch_size=val_batch_size,
-						image_transform_param=createTransformParamE(seed=seed, shift=shift_channels[0], scale=scale_channels[0], **tparams), 
+						image_transform_param=createTransformParamE(seed=seed_t, shift=shift_channels[0], scale=scale_channels[0], val=True, **tparams), 
 						label_names=["dbid"], ntop=2, **data_param)
 
 				val_inputs = map(lambda s, t: L.DocData(sources=[s], include=dict(phase=caffe.TEST), batch_size=val_batch_size, 
-					image_transform_param=createTransformParamE(seed=seed, shift=t[0], scale=t[1], **tparams), 
+					image_transform_param=createTransformParamE(seed=seed_t, shift=t[0], scale=t[1], **tparams), 
 					**data_param), 
 					val_sources[1:], zip(shift_channels[1:],scale_channels[1:]))
 		
@@ -1050,28 +1064,34 @@ def createEquivarianceNetwork(sources=[], val_sources=[], num_output=1, batch_si
 				setattr(n, "VAL_data_%d" % t_idx, val_data)
 				setattr(n, "VAL_labels_%d" % t_idx, val_labels)
 
+		cur_layer = data
 		layers = BEFORE_LAYERS
 		for layer_func, kwargs in layers:
 			kwargs = kwargs.copy()
 			kwargs['name'] = kwargs['name'] + "-%d" % t_idx
 			cur_layer = layer_func(cur_layer, **kwargs)
+			
 
 		if t_idx:
+			l2_loss = L.EuclideanLoss(cur_layer, layer_to_predict, loss_weight=l2_loss_weight/2, 
+				name="invar_map_%d_loss" % t_idx, loss_param=dict(normalize=True)) 
+			setattr(n, "l2_in_loss_%d" % t_idx, l2_loss)
+
 			if mapping == 'identity':
 				pass
 			elif mapping == 'linear':
-				linear_layer = ipLayer(cur_layer, name="linear_mapping-%d" % t-idx, num_output=4096)
+				linear_layer = ipLayer(cur_layer, name="linear_mapping-%d" % t_idx, num_output=4096)
 				cur_layer = L.Eltwise(linear_layer, cur_layer)  # residual layer
 			elif mapping == 'mlp':
-				mlp_layer = ipLayer(cur_layer, name="hidden_mapping-%d" % t-idx, num_output=num_hidden)
+				mlp_layer = ipLayer(cur_layer, name="hidden_mapping-%d" % t_idx, num_output=num_hidden)
 				mlp_layer = L.ReLU(mlp_layer, in_place=True)
-				mlp_layer = ipLayer(mlp_layer, name="linear_mapping-%d" % t-idx, num_output=4096)
+				mlp_layer = ipLayer(mlp_layer, name="linear_mapping-%d" % t_idx, num_output=4096)
 				cur_layer = L.Eltwise(mlp_layer, cur_layer)  # residual layer
 
 			cur_layer = L.ReLU(cur_layer, in_place=True)
 			l2_loss = L.EuclideanLoss(cur_layer, layer_to_predict, loss_weight=l2_loss_weight, 
 				name="%s_map_%d_loss" % (mapping, t_idx), loss_param=dict(normalize=True)) 
-			setattr(n, "l2_loss_%d" % t_idx, l2_loss)
+			setattr(n, "l2_eq_loss_%d" % t_idx, l2_loss)
 		else:
 			# this is the transform (or lack thereof) each other is trying to predict
 			layer_to_predict = L.ReLU(cur_layer, in_place=False)
@@ -1083,7 +1103,7 @@ def createEquivarianceNetwork(sources=[], val_sources=[], num_output=1, batch_si
 			kwargs['name'] = kwargs['name'] + "-%d" % t_idx
 			cur_layer = layer_func(cur_layer, **kwargs)
 
-		top = ipLayer(cur_layer, name="top-%d" % t_idx, num_output=num_output)
+		top = ipLayer(cur_layer, name="top-%d" % t_idx, num_output=num_output, param_name='fc8')
 		if deploy:
 			n.prob = L.Softmax(top, name='prob')
 		else:
@@ -1464,7 +1484,8 @@ def createExperiment(ds, tags, group, experiment, num_experiments=1, pool=None, 
 		
 
 def createEquivarianceExperiment(ds, tags, group, experiment, num_experiments=1, shift='mean', scale=(1.0/255), 
-								mapping='linear', l_tparams=[{}], l2_loss_weight=2., ce_loss_weight=1., im_size=227):
+								mapping='linear', l_tparams=[{}], l2_loss_weight=2., ce_loss_weight=1., im_size=227,
+								batch_size=8):
 
 	# Check if tags are all the same size or not
 	# If they aren't we are doing multi-scale training, and need to stick them all
@@ -1494,9 +1515,9 @@ def createEquivarianceExperiment(ds, tags, group, experiment, num_experiments=1,
 
 		#common parameters
 		params = dict(sources=list(sources_tr), num_output=OUTPUT_SIZES[ds], shift_channels=shift, scale_channels=scale, 
-					batch_size=8, mapping='mapping', l_tparams=l_tparams, total_l2_loss_weight=l2_loss_weight,
+					batch_size=batch_size, mapping=mapping, l_tparams=l_tparams, total_l2_loss_weight=l2_loss_weight,
 					total_non_first_ce_loss_weight=ce_loss_weight)
-		params['val_batch_size'] = (VAL_BATCH_SIZE / 5) if ds != 'imagenet' else (50 / 5)
+		params['val_batch_size'] = 4 if ds != 'imagenet' else 5
 
 		#create train_val file
 		train_val = os.path.join(out_dir, TRAIN_VAL)
@@ -1537,15 +1558,18 @@ def createEquivarianceExperiment(ds, tags, group, experiment, num_experiments=1,
 		solver = os.path.join(out_dir, SOLVER)
 		with open(solver, "w") as f:
 			f.write("net: \"%s\"\n" % (train_val_solver))
-			f.write("base_lr: %f\n" % 0.001)
-			f.write("max_iter: %d\n" % 450000)
-			f.write("stepsize: %d\n" % 100000)
-			f.write("test_iter: %d\n" % 5000) 
+			#f.write("base_lr: %f\n" % 0.003)
+			f.write("base_lr: %f\n" % 0.0005)
+			#f.write("max_iter: %d\n" % 500000)
+			f.write("max_iter: %d\n" % 150000)
+			#f.write("stepsize: %d\n" % 150000)
+			f.write("stepsize: %d\n" % 60000)
+			f.write("test_iter: %d\n" % 10000) 
 			f.write("test_interval: %d\n" % 5000) 
 			f.write("snapshot: %d\n" % 5000) 
 			f.write("lr_policy: \"%s\"\n" % "step") 
 			f.write("gamma: %f\n" % 0.1) 
-			f.write("display: %d\n" % 20) 
+			f.write("display: %d\n" % 100) 
 			f.write("momentum: %f\n" % 0.9) 
 			f.write("solver_mode: %s\n" % 'GPU') 
 			f.write("snapshot_prefix: \"%s\"" % (snapshot_solver))

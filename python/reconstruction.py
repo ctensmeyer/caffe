@@ -139,6 +139,32 @@ def fprop(model, ims, args):
 	model.forward()
 
 
+def scale_shift_im(im, slice_idx, args):
+
+	# find the correct mean values.  
+	means_tokens = args.means.split(args.delimiter)
+	mean_idx = min(slice_idx, len(means_tokens) - 1)
+	mean_vals = np.asarray(map(int, means_tokens[mean_idx].split(',')))
+
+	# find the correct scale value
+	scale_tokens = args.scales.split(args.delimiter)
+	scale_idx = min(slice_idx, len(scale_tokens) - 1)
+	scale_val = float(scale_tokens[scale_idx]) 
+
+	preprocessed_im = scale_val * (im - mean_vals)
+	return preprocessed_im
+
+
+def save_image(im, num, args):
+	# undo preprocessing.  Right now assume single channel reconstruction
+	mean = int(args.means)
+	scale = float(args.scales)
+	im = im / scale + mean
+
+	out_file = os.path.join(args.out_dir, "%d.png" % num)
+	cv2.imwrite(out_file, im)
+	
+
 
 def main(args):
 	model = init_model(args.network_file, args.weight_file, gpu=args.gpu)
@@ -147,33 +173,22 @@ def main(args):
 	max_images = min(args.max_images, dbs[0][0].stat()['entries'])
 	max_iters = (max_images + args.batch_size - 1) / args.batch_size
 
-	blobs = args.blobs.split(args.delimiter)
-	activations = {blob: list() for blob in blobs}
-	all_labels = list()
+	image_num = 0
 
+	safe_mkdir(args.out_dir)
 	for iter_num in xrange(max_iters):
 		ims, labels = get_batch(dbs, args)
 
 		fprop(model, ims, args)
-		for blob in blobs:
-			batch_activations = model.blobs[blob].data
-			if batch_activations.ndim > 2:
-				# pool over spatial regions
-				batch_activations = np.max(batch_activations, axis=(2,3))
-			activations[blob].append(np.copy(batch_activations))
-		all_labels.extend(labels)
+		for idx in xrange(len(labels)):
+			reconstruction = model.blobs[args.blob].data[idx]
+			save_image(reconstruction, image_num, args)
+
+			image_num += 1
 
 		if iter_num > 0 and iter_num % 10 == 0:
 			print "%.2f%% (%d/%d) Batches" % (100. * iter_num / max_iters, iter_num, max_iters)
 
-	labels = np.asarray(all_labels, dtype=np.float32)
-	print labels.shape
-	with h5py.File(args.out_hdf5, 'w') as f:
-		f['labels'] = labels
-		for blob in blobs:
-			arr = np.concatenate(activations[blob], axis=0)
-			print arr.shape
-			f[blob] = arr
 
 	close_dbs(dbs)
 
@@ -186,12 +201,12 @@ def get_args():
 				help="Caffe network file")
 	parser.add_argument("weight_file", 
 				help="Caffe weights file")
-	parser.add_argument("blobs", 
-				help="Comma separated list of blobs to include")
+	parser.add_argument("blob", 
+				help="Blob name of the reconstruction")
 	parser.add_argument("lmdbs", 
 				help="LMDBs of images (encoded DocDatums), files separated by a delimiter (default :)")
-	parser.add_argument("out_hdf5",
-				help="Output db of where to store the activations")
+	parser.add_argument("out_dir",
+				help="Output dir where to store the images")
 
 	parser.add_argument("-m", "--means", type=str, default="",
 				help="Optional mean values per the channel (e.g. 127 for grayscale or 182,192,112 for BGR)")
@@ -199,9 +214,9 @@ def get_args():
 				help='Number of channels to take from each slice')
 	parser.add_argument("-a", "--scales", type=str, default=str(1.0 / 255),
 				help="Optional scale factor")
-	parser.add_argument("--max-images", default=40000, type=int, 
+	parser.add_argument("--max-images", default=100, type=int, 
 				help="Max number of images for processing")
-	parser.add_argument("-b", "--batch-size", default=100, type=int, 
+	parser.add_argument("-b", "--batch-size", default=10, type=int, 
 				help="Max number of image processed at once")
 	parser.add_argument("--gpu", type=int, default=0,
 				help="GPU to use for running the models")

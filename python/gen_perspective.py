@@ -1,8 +1,8 @@
 
 import random
 
-N = 20
-interval=0.0000075
+N = 10
+interval=0.00002
 cur = interval
 
 for _ in xrange(N):

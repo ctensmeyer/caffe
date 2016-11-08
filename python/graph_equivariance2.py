@@ -9,8 +9,6 @@ matplotlib.use('Agg')
 import matplotlib.pylab as plt
 from utils import get_transforms, safe_mkdir
 
-
-ERROR_ON_NOT_FOUND = False
 SMOOTH = 0.02
 
 SPLITS = ['train', 'test']
@@ -36,19 +34,54 @@ def plot_lines(x_labels, title, line_dict, out_file):
 	plt.clf()
 
 
-def plot_invariances(invariance_sequences, out_dir, labels, title_prefix):
+def plot_invariances(l_name, l_in_seq, out_dir, labels, title_prefix):
 	out_dir = os.path.join(out_dir, 'invariance_plots')
 	safe_mkdir(out_dir)
 	for split in SPLITS:
 		sdir = os.path.join(out_dir, split)
 		safe_mkdir(sdir)
 		for metric in ALL_METRICS:
-			line_dict = {metric: invariance_sequences[split][metric]}
+			line_dict = {name: invariance_sequences[split][metric] for name, invariance_sequences in zip(l_name, l_in_seq)}
 			out_file = os.path.join(sdir, metric + '.png')
 			plot_lines(labels, "%s %s Invariance" % (title_prefix, metric), line_dict, out_file)
 
 
-def plot_equivariances(equivariance_sequences, invariance_sequences, out_dir, labels, title_prefix):
+def plot_compare(l_name, l_eq_seq, l_in_seq, out_dir, labels, title_prefix):
+	out_dir = os.path.join(out_dir, 'compare_plots')
+	safe_mkdir(out_dir)
+	for model_type in MODEL_TYPES:
+		for loss in LOSS_TYPES:
+			for split in SPLITS:
+				sdir = os.path.join(out_dir, model_type, loss, split)
+				safe_mkdir(sdir)
+				for metric in ALL_METRICS:
+					line_dict = {"in_%s" % name: invariance_sequences[split][metric] for name, invariance_sequences in zip(l_name, l_in_seq)}
+					line_dict.update({"eq_%s" % name: equivariance_sequences[model_type][loss][split][metric] for name, equivariance_sequences in zip(l_name, l_eq_seq)})
+					out_file = os.path.join(sdir, metric + '.png')
+					plot_lines(labels, "%s %s Equivariance compare" % (title_prefix, metric), line_dict, out_file)
+
+
+# compute the elementwise reduction in error of l2 wrt l1
+def compute_reduction(l1, l2, eps=SMOOTH):
+	return [((1 - x1) - (1 - x2)) / (1 - x1 + SMOOTH) if x1 < (1 + SMOOTH) else 0 for x1, x2 in zip(l1, l2)]
+	
+
+def plot_reduction(l_name, l_eq_seq, l_in_seq, out_dir, labels, title_prefix):
+	out_dir = os.path.join(out_dir, 'reduction_plots')
+	safe_mkdir(out_dir)
+	for model_type in MODEL_TYPES:
+		for loss in LOSS_TYPES:
+			for split in SPLITS:
+				sdir = os.path.join(out_dir, model_type, loss, split)
+				safe_mkdir(sdir)
+				for metric in ALL_METRICS:
+					line_dict = {name: compute_reduction(in_seq[split][metric], eq_seq[model_type][loss][split][metric]) 
+						for name, in_seq, eq_seq in zip(l_name, l_in_seq, l_eq_seq)}
+					out_file = os.path.join(sdir, metric + '.png')
+					plot_lines(labels, "%s %s Reduction compare" % (title_prefix, metric), line_dict, out_file)
+
+
+def plot_equivariances(l_name, l_eq_seq, out_dir, labels, title_prefix):
 	out_dir = os.path.join(out_dir, 'equivariance_plots')
 	safe_mkdir(out_dir)
 	for model_type in MODEL_TYPES:
@@ -57,73 +90,9 @@ def plot_equivariances(equivariance_sequences, invariance_sequences, out_dir, la
 				sdir = os.path.join(out_dir, model_type, loss, split)
 				safe_mkdir(sdir)
 				for metric in ALL_METRICS:
-					line_dict = {metric: equivariance_sequences[model_type][loss][split][metric],
-								 "invariance_%s" % metric: invariance_sequences[split][metric]}
+					line_dict = {name: equivariance_sequences[model_type][loss][split][metric] for name, equivariance_sequences in zip(l_name, l_eq_seq)}
 					out_file = os.path.join(sdir, metric + '.png')
 					plot_lines(labels, "%s %s Equivariance" % (title_prefix, metric), line_dict, out_file)
-
-
-# compute the elementwise reduction in error of l2 wrt l1
-def compute_reduction(l1, l2, eps=SMOOTH):
-	return [((1 - x1) - (1 - x2)) / (1 - x1 + SMOOTH) if x1 < (1 + SMOOTH) else 0 for x1, x2 in zip(l1, l2)]
-
-
-def plot_reductions(equivariance_sequences, invariance_sequences, out_dir, labels, title_prefix):
-	out_dir = os.path.join(out_dir, 'reduction_plots')
-	safe_mkdir(out_dir)
-	for model_type in MODEL_TYPES:
-		for loss in LOSS_TYPES:
-			for split in SPLITS:
-				sdir = os.path.join(out_dir, model_type, loss, split)
-				safe_mkdir(sdir)
-				for metric in NORM_METRICS:
-					eq_seq = equivariance_sequences[model_type][loss][split][metric]
-					in_seq = invariance_sequences[split][metric]
-
-					# compute relative reduction in metric error
-					red_seq = compute_reduction(in_seq, eq_seq)
-					line_dict = {metric: red_seq}
-					out_file = os.path.join(sdir, metric + '.png')
-					plot_lines(labels, "%s %s Equivariance" % (title_prefix, metric), line_dict, out_file)
-
-
-def plot_loss_equivariance_compare(equivariance_sequences, out_dir, labels, title_prefix):
-	out_dir = os.path.join(out_dir, 'loss_compare_equivariance_plots')
-	safe_mkdir(out_dir)
-	for model_type in MODEL_TYPES:
-		for split in SPLITS:
-			sdir = os.path.join(out_dir, model_type, split)
-			safe_mkdir(sdir)
-			for metric in ALL_METRICS:
-				line_dict = {"%s_%s" % (metric, loss): equivariance_sequences[model_type][loss][split][metric] for loss in LOSS_TYPES}
-				out_file = os.path.join(sdir, metric + '.png')
-				plot_lines(labels, "%s %s Equivariance Loss Compare" % (title_prefix, metric), line_dict, out_file)
-
-
-def plot_split_equivariance_compare(equivariance_sequences, out_dir, labels, title_prefix):
-	out_dir = os.path.join(out_dir, 'split_compare_equivariance_plots')
-	safe_mkdir(out_dir)
-	for model_type in MODEL_TYPES:
-		for loss in LOSS_TYPES:
-			sdir = os.path.join(out_dir, model_type, loss)
-			safe_mkdir(sdir)
-			for metric in ALL_METRICS:
-				line_dict = {"%s_%s" % (metric, split): equivariance_sequences[model_type][loss][split][metric] for split in SPLITS}
-				out_file = os.path.join(sdir, metric + '.png')
-				plot_lines(labels, "%s %s Equivariance Split Compare" % (title_prefix, metric), line_dict, out_file)
-
-
-def plot_model_equivariance_compare(equivariance_sequences, out_dir, labels, title_prefix):
-	out_dir = os.path.join(out_dir, 'model_compare_equivariance_plots')
-	safe_mkdir(out_dir)
-	for loss in LOSS_TYPES:
-		for split in SPLITS:
-			sdir = os.path.join(out_dir, loss, split)
-			safe_mkdir(sdir)
-			for metric in ALL_METRICS:
-				line_dict = {"%s_%s" % (metric, model_type): equivariance_sequences[model_type][loss][split][metric] for model_type in MODEL_TYPES}
-				out_file = os.path.join(sdir, metric + '.png')
-				plot_lines(labels, "%s %s Equivariance Model Compare" % (title_prefix, metric), line_dict, out_file)
 
 
 def reorder_center_transforms(transforms):
@@ -144,20 +113,14 @@ def reorder_transforms(transforms):
 
 def load_metrics(transforms, in_dir):
 	all_metrics = list()
-	included_transforms = list()
 	for transform in transforms:
 		file_path = os.path.join(in_dir, transform.replace(' ', '_') + '.txt')
 		if not os.path.exists(file_path):
-			if ERROR_ON_NOT_FOUND:
-				raise Exception("File %s does not exist" % file_path)
-			else:
-				print "File %s does not exist" % file_path
-				continue
+			raise Exception("File %s does not exist" % file_path)
 		file_contents = open(file_path, 'r').read()
 		metrics = ast.literal_eval(file_contents)
 		all_metrics.append( (transform, metrics) )
-		included_transforms.append(transform)
-	return all_metrics, included_transforms
+	return all_metrics
 
 
 # train_v_test/metric
@@ -211,28 +174,34 @@ def format_labels(transforms):
 	return labels, transforms[-1].split()[0]
 
 
-def main(transform_file, in_dir, out_dir):
+def main(out_dir, net_dirs):
 	safe_mkdir(out_dir)
-	transforms, _ = get_transforms(transform_file)
-	transforms = reorder_transforms(transforms)
-	all_metrics, transforms = load_metrics(transforms, in_dir)
-	label_names, title_prefix = format_labels(transforms)
-	invariance_sequences = format_invariances(all_metrics)
-	equivariance_sequences = format_equivariances(all_metrics)
+	l_name, l_eq_seq, l_in_seq = list(), list(), list()
+	for net_dir in net_dirs:
+		in_dir = os.path.join(net_dir, 'equivariance', 'results')
+		transform_file = os.path.join(net_dir, 'equivariance_transforms.txt')
+		name = net_dir.split('/')[-2]
 
-	plot_invariances(invariance_sequences, out_dir, label_names, title_prefix)
-	plot_equivariances(equivariance_sequences, invariance_sequences, out_dir, label_names, title_prefix)
-	plot_reductions(equivariance_sequences, invariance_sequences, out_dir, label_names, title_prefix)
-	#plot_loss_equivariance_compare(equivariance_sequences, out_dir, label_names, title_prefix)
-	#plot_model_equivariance_compare(equivariance_sequences, out_dir, label_names, title_prefix)
-	plot_split_equivariance_compare(equivariance_sequences, out_dir, label_names, title_prefix)
+		transforms, _ = get_transforms(transform_file)
+		transforms = reorder_transforms(transforms)
+		all_metrics = load_metrics(transforms, in_dir)
+		label_names, title_prefix = format_labels(transforms)
+		invariance_sequences = format_invariances(all_metrics)
+		equivariance_sequences = format_equivariances(all_metrics)
 
+		l_name.append(name)
+		l_eq_seq.append(equivariance_sequences)
+		l_in_seq.append(invariance_sequences)
+
+	plot_invariances(l_name, l_in_seq, out_dir, label_names, title_prefix)
+	plot_equivariances(l_name, l_eq_seq, out_dir, label_names, title_prefix)
+	plot_compare(l_name, l_eq_seq, l_in_seq, out_dir, label_names, title_prefix)
+	plot_reduction(l_name, l_eq_seq, l_in_seq, out_dir, label_names, title_prefix)
 	
 
 if __name__ == "__main__":
-	transform_file = sys.argv[1]
-	in_dir = sys.argv[2]
-	out_dir = sys.argv[3]
+	out_dir = sys.argv[1]
+	net_dirs = sys.argv[2:]
 
-	main(transform_file, in_dir, out_dir)
+	main(out_dir, net_dirs)
 

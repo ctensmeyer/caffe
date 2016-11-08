@@ -111,6 +111,19 @@ def apply_mirror(im, tokens):
 		print "Unrecongized mirror operation %r" % tokens
 		exit(1)
 
+
+def apply_shift(im, tokens):
+	im = im.astype(int)  # protect against over-flow wrapping
+	if im.shape == 2:
+		im = im + int(tokens[1])
+	else:
+		for c in xrange(im.shape[2]):
+			im[:,:,c] = im[:,:,c] + int(tokens[min(c+1, len(tokens) - 1)])
+	im = np.clip(im, 0, 255)
+	im = im.astype(np.uint8) 
+	return im
+
+
 def apply_color_jitter(im, tokens):
 	sigma, seed = float(tokens[1]), int(tokens[2])
 	np.random.seed(seed)
@@ -213,6 +226,8 @@ def apply_transform(im, transform_str):
 		return apply_perspective(im, tokens)
 	elif tokens[0] == 'color_jitter':
 		return apply_color_jitter(im, tokens)
+	elif tokens[0] == 'shift':
+		return apply_shift(im, tokens)
 	elif tokens[0] == 'elastic':
 		return apply_elastic_deformation(im, tokens)
 	elif tokens[0] == 'none':

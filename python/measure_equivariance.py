@@ -23,12 +23,15 @@ from utils import get_transforms, apply_all_transforms, safe_mkdir
 
 #LOSS_TYPES = ['l2', 'ce_soft', 'ce_hard']
 LOSS_TYPES = ['l2']
+#MODEL_TYPES = ['linear', 'mlp']
+MODEL_TYPES = ['linear']
 
 
 def setup_scratch_space(args):
 	#safe_mkdir("./tmp")
 	#args.tmp_dir = "./tmp"
 	args.tmp_dir = tempfile.mkdtemp()
+	log(args, "Using tmp space: " + args.tmp_dir)
 	args.train_file = os.path.join(args.tmp_dir, "train_val.prototxt")
 	args.train_db = os.path.join(args.tmp_dir, "train.h5")
 	args.train_db_list = os.path.join(args.tmp_dir, "train_list.txt")
@@ -80,7 +83,6 @@ def equivariance_proto(args, num_features, num_classes, loss='l2', mlp=False):
 		n.residual = L.InnerProduct(n.input_features, num_output=num_features, name='residual',
 			weight_filler={'type': 'gaussian', 'std': 0.001,})
 		n.combined = L.Eltwise(n.input_features, n.residual, name='combined')
-		n.combined = L.Eltwise(n.input_features, n.residual, name='combined')
 		n.reconstruction = L.ReLU(n.combined, name='reconstruction')  # assumes that target_features are rectified
 
 	# caffe will automatically insert split layers when two or more layers have the same bottom, but
@@ -121,8 +123,8 @@ def create_solver(args, num_train_instances, num_test_instances):
 
 	#s.solver_type = caffe.proto.caffe_pb2.SolverType.SGD  # why isn't it working?  Default anyway
 	s.momentum = 0.9
-	s.weight_decay = 1e-4  # strong weight decay as a prior to the identity mapping
-	s.regularization_type = "L1"
+	s.weight_decay = 1e-5
+	s.regularization_type = "L2"
 
 	s.base_lr = args.learning_rate
 	s.monitor_test = True
@@ -290,7 +292,7 @@ def get_activations(model, transforms, lmdb_files, args):
 			output_probs[transform][iter_num, :] = model.blobs['prob'].data[idx, :]
 			classifications[transform][iter_num] = np.argmax(model.blobs['prob'].data[idx, :])
 
-		if iter_num > 0 and iter_num % 10 == 0:
+		if iter_num > 0 and iter_num % 1000 == 0:
 			log(args, "%.2f%% (%d/%d) Batches" % (100. * iter_num / num_images, iter_num, num_images))
 	labels = np.asarray(labels)
 
@@ -301,6 +303,7 @@ def get_activations(model, transforms, lmdb_files, args):
 			activations[transform] = activations[transform][p]
 			output_probs[transform] = output_probs[transform][p]
 			classifications[transform] = classifications[transform][p]
+	close_dbs(dbs)
 	return activations, output_probs, classifications, labels
 
 
@@ -308,6 +311,13 @@ def measure_avg_l2(a, b):
 	total_euclidean_dist = 0
 	for idx in xrange(a.shape[0]):
 		total_euclidean_dist += np.sqrt(np.sum((a[idx] - b[idx]) ** 2))
+	return total_euclidean_dist / a.shape[0]
+
+
+def measure_avg_mag(a):
+	total_euclidean_dist = 0
+	for idx in xrange(a.shape[0]):
+		total_euclidean_dist += np.sqrt(np.sum((a[idx] ** 2)))
 	return total_euclidean_dist / a.shape[0]
 	
 
@@ -324,7 +334,7 @@ def measure_agreement(a, b):
 	return np.sum(a == b) / float(a.shape[0])
 
 
-def measure_invariances(all_features, all_output_probs, all_classifications, labels, transforms, args):
+def measure_invariances(all_features, all_output_probs, all_classifications, labels, transforms, do_first, args):
 	# Avg L2 distance between features
 	# % agreement on predicted labels
 	# Avg sqrt(Jensen Shannon Divergence) between output_probs
@@ -336,12 +346,17 @@ def measure_invariances(all_features, all_output_probs, all_classifications, lab
 
 	correct_indices = (original_classifications == labels)
 	for transform in transforms:
+		if not do_first and transform == transforms[0]:
+			continue
 		transform_features = all_features[transform]
 		transform_output_probs = all_output_probs[transform]
 		transform_classifications = all_classifications[transform]
 
 		avg_l2 = measure_avg_l2(transform_features, original_features)
+		avg_mag = measure_avg_mag(original_features)
 		metrics[transform]['avg_l2'] = avg_l2
+		metrics[transform]['avg_norm_l2'] = avg_l2 / avg_mag
+		metrics[transform]['avg_norm_l2_sim'] = 1 - (avg_l2 / avg_mag)
 		#c_avg_l2 = measure_avg_l2(transform_features[correct_indices], original_features[correct_indices])
 		#metrics[transform]['c_avg_l2'] = c_avg_l2
 
@@ -351,12 +366,15 @@ def measure_invariances(all_features, all_output_probs, all_classifications, lab
 		#metrics[transform]['c_agreement'] = c_agreement
 
 		accuracy = measure_agreement(transform_classifications, labels)
+		original_accuracy = measure_agreement(original_classifications, labels)
 		metrics[transform]['accuracy'] = accuracy
+		metrics[transform]['norm_accuracy'] = accuracy / original_accuracy
 		#c_accuracy = measure_agreement(transform_classifications[correct_indices], labels[correct_indices])
 		#metrics[transform]['c_accuracy'] = c_accuracy
 
 		avg_jsd = measure_avg_jsd(transform_output_probs, original_output_probs)
 		metrics[transform]['avg_jsd'] = avg_jsd
+		metrics[transform]['avg_jss'] = 1 - avg_jsd
 		#c_avg_jsd = measure_avg_jsd(transform_output_probs[correct_indices], original_output_probs[correct_indices])
 		#metrics[transform]['c_avg_jsd'] = c_avg_jsd
 
@@ -418,7 +436,7 @@ def init_empty_metrics(transforms):
 	d = dict()
 	for transform in transforms:
 		d[transform] = dict()
-		for model_type in ['linear', 'mlp']:
+		for model_type in MODEL_TYPES:
 			d[transform][model_type] = dict()
 			for loss in LOSS_TYPES: #['l2', 'ce_soft', 'ce_hard']:
 				d[transform][model_type][loss] = dict()
@@ -426,7 +444,7 @@ def init_empty_metrics(transforms):
 
 
 def measure_equivariances(train_features, all_train_labels, train_classifications, train_output_probs,
-		test_features, all_test_labels, test_classifications, test_output_probs, transforms, model, args):
+		test_features, all_test_labels, test_classifications, test_output_probs, transforms, model, do_first, args):
 	all_train_metrics = init_empty_metrics(transforms) 
 	all_test_metrics = init_empty_metrics(transforms)
 
@@ -443,7 +461,7 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 	classification_bias = last_layer_params[1].data
 
 	for transform in transforms:
-		if transform == transforms[0]:
+		if not do_first and transform == transforms[0]:
 			continue
 		#for data in ['', 'c_']:
 		for data in ['']:
@@ -471,11 +489,16 @@ def measure_equivariances(train_features, all_train_labels, train_classification
 
 			# l2 training
 			# predict the transformed representation directly from the original representation
-			for model_type in ['linear', 'mlp']:
-				train_metrics, test_metrics = _measure_equivariance(model_type, 'l2', original_train_features, original_test_features,
-					transform_train_features, transform_test_features, train_labels, test_labels, transform_train_output_probs,
-					transform_test_output_probs, classification_weights, classification_bias, transform_train_classifications,
-					transform_test_classifications, args)
+			for model_type in MODEL_TYPES:
+				#train_metrics, test_metrics = _measure_equivariance(model_type, 'l2', original_train_features, original_test_features,
+				#	transform_train_features, transform_test_features, train_labels, test_labels, transform_train_output_probs,
+				#	transform_test_output_probs, classification_weights, classification_bias, transform_train_classifications,
+				#	transform_test_classifications, args)
+
+				train_metrics, test_metrics = _measure_equivariance(model_type, 'l2', transform_train_features, transform_test_features,
+					original_train_features, original_test_features, train_labels, test_labels, original_train_output_probs,
+					original_test_output_probs, classification_weights, classification_bias, original_train_classifications, 
+					original_test_classifications, args)
 				for metric, val in train_metrics.iteritems():
 					all_train_metrics[transform][model_type]['l2'][metric] = val
 				for metric, val in test_metrics.iteritems():
@@ -548,16 +571,22 @@ def score_model(model, target_features, target_output_probs,
 	metrics = dict()
 
 	avg_l2 = measure_avg_l2(reconstructed_features, target_features)
+	avg_mag = measure_avg_mag(target_features)
 	metrics['avg_l2'] = avg_l2
+	metrics['avg_norm_l2'] = avg_l2 / avg_mag
+	metrics['avg_norm_l2_sim'] = 1 - (avg_l2 / avg_mag)
 
 	agreement = measure_agreement(predicted_classifications, target_classifications)
 	metrics['agreement'] = agreement
 
 	accuracy = measure_agreement(predicted_classifications, target_labels)
+	original_accuracy = measure_agreement(target_classifications, target_labels)
 	metrics['accuracy'] = accuracy
+	metrics['norm_accuracy'] = accuracy / original_accuracy
 
 	avg_jsd = measure_avg_jsd(predicted_output_probs, target_output_probs)
 	metrics['avg_jsd'] = avg_jsd
+	metrics['avg_jss'] = 1 - avg_jsd
 
 	return metrics
 
@@ -588,8 +617,9 @@ def filter_existing(transforms, out_dir):
 	for transform in transforms[1:]:
 		if not os.path.exists(os.path.join(out_dir, "%s.txt" % transform.replace(' ', '_'))):
 			filtered_transforms.append(transform)
+	do_first =  not os.path.exists(os.path.join(out_dir, "%s.txt" % transforms[0].replace(' ', '_')))
 	
-	return filtered_transforms
+	return filtered_transforms, do_first
 
 def write_output(out_dir, transform, train_invariance_metrics, test_invariance_metrics,
 			train_equivariance_metrics, test_equivariance_metrics):
@@ -614,7 +644,7 @@ def main(args):
 	all_transforms, _ = get_transforms(args.transform_file)
 
 	# don't redo work that we have already done
-	all_transforms = filter_existing(all_transforms, args.out_dir)
+	all_transforms, do_first = filter_existing(all_transforms, args.out_dir)
 	if len(all_transforms) <= 1:
 		log(args, "No transforms to do.  Exiting...")
 		exit()
@@ -647,18 +677,20 @@ def main(args):
 		test_classifications.update(base_test_classifications)
 
 		log(args, "Measuring invariances...")
-		train_invariance_metrics = measure_invariances(train_features, train_output_probs, train_classifications, train_labels, transforms, args)
-		test_invariance_metrics = measure_invariances(test_features, test_output_probs, test_classifications, test_labels, transforms, args)
+		train_invariance_metrics = measure_invariances(train_features, train_output_probs, train_classifications, train_labels, transforms, do_first, args)
+		test_invariance_metrics = measure_invariances(test_features, test_output_probs, test_classifications, test_labels, transforms, do_first, args)
 		log(args, "Done...")
 
 		setup_scratch_space(args)
 		log(args, "Measuring equivariances...")
 		train_equivariance_metrics, test_equivariance_metrics = measure_equivariances(train_features, train_labels, train_classifications, train_output_probs, 
-				test_features, test_labels, test_classifications, test_output_probs, transforms, model, args)
+				test_features, test_labels, test_classifications, test_output_probs, transforms, model, do_first, args)
 
-		for transform in transforms:
+		for transform in transforms[(0 if do_first else 1):]:
 			write_output(args.out_dir, transform, train_invariance_metrics[transform], test_invariance_metrics[transform],
 					train_equivariance_metrics[transform], test_equivariance_metrics[transform])
+
+		do_first = False
 
 	log(args, "Done Measure Equivariances")
 
