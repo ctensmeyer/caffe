@@ -157,7 +157,7 @@ def convLayerOnly(prev, **kwargs):
 
 
 def ipLayer(prev, param_name=None, **kwargs):
-	if param_name in kwargs:
+	if param_name:
 		name1 = param_name + '_weights'
 		name2 = param_name + '_bias'
 		return L.InnerProduct(prev, 
@@ -563,7 +563,7 @@ def createPerspectiveParam(sig):
 	return dict(max_sigma=sig)
 	
 def createPerspectiveParamE(params):
-	return dict(values=params[0])
+	return dict(values=params)
 
 def createElasticDeformationParam(elastic_sigma, elastic_max_alpha):
 	return dict(sigma=elastic_sigma, max_alpha=elastic_max_alpha)
@@ -936,7 +936,7 @@ def createBinarizeNetwork(train_input_sources=[], train_label_sources=[], train_
 	return n.to_proto()
 
 
-def createTransformParamE(seed=None, **kwargs):
+def createTransformParamE(seed=None, val=False, **kwargs):
 	params = []
 
 	# gauss noise
@@ -965,10 +965,18 @@ def createTransformParamE(seed=None, **kwargs):
 
 	# rotate
 	if 'rotation' in kwargs:
+		if val:
+			kwargs = dict(**kwargs)
+			kwargs['rotation'][0] = 0.5 * (kwargs['rotation'][0] + kwargs['rotation'][1])
+			kwargs['rotation'][1] = kwargs['rotation'][0] + 0.01;
 		params.append(dict(rotate_params=createRotateParamE(kwargs['rotation'])))
 
 	# shear
 	if 'shear' in kwargs:
+		if val:
+			kwargs = dict(**kwargs)
+			kwargs['shear'][0] = 0.5 * (kwargs['shear'][0] + kwargs['shear'][1])
+			kwargs['shear'][1] = kwargs['shear'][0] + 0.01;
 		params.append(dict(shear_params=createShearParamE(kwargs['shear']))) 
 	
 	# blur
@@ -1021,7 +1029,7 @@ def createEquivarianceNetwork(sources=[], val_sources=[], num_output=1, batch_si
 
 			if val_sources:
 				val_data, val_labels = L.DocData(sources = [val_sources[0]], include=dict(phase=caffe.TEST), batch_size=val_batch_size,
-						image_transform_param=createTransformParamE(shift=shift_channels[0], scale=scale_channels[0], **tparams), 
+						image_transform_param=createTransformParamE(shift=shift_channels[0], scale=scale_channels[0], val=True, **tparams), 
 						label_names=["dbid"], ntop=2, **data_param)
 				setattr(n, "VAL_data_%d" % t_idx, val_data)
 				setattr(n, "VAL_labels_%d" % t_idx, val_labels)
@@ -1044,7 +1052,7 @@ def createEquivarianceNetwork(sources=[], val_sources=[], num_output=1, batch_si
 
 			if val_sources:
 				val_first, val_labels = L.DocData(sources = [val_sources[0]], include=dict(phase=caffe.TEST), batch_size=val_batch_size,
-						image_transform_param=createTransformParamE(seed=seed_t, shift=shift_channels[0], scale=scale_channels[0], **tparams), 
+						image_transform_param=createTransformParamE(seed=seed_t, shift=shift_channels[0], scale=scale_channels[0], val=True, **tparams), 
 						label_names=["dbid"], ntop=2, **data_param)
 
 				val_inputs = map(lambda s, t: L.DocData(sources=[s], include=dict(phase=caffe.TEST), batch_size=val_batch_size, 
@@ -1062,8 +1070,13 @@ def createEquivarianceNetwork(sources=[], val_sources=[], num_output=1, batch_si
 			kwargs = kwargs.copy()
 			kwargs['name'] = kwargs['name'] + "-%d" % t_idx
 			cur_layer = layer_func(cur_layer, **kwargs)
+			
 
 		if t_idx:
+			l2_loss = L.EuclideanLoss(cur_layer, layer_to_predict, loss_weight=l2_loss_weight/2, 
+				name="invar_map_%d_loss" % t_idx, loss_param=dict(normalize=True)) 
+			setattr(n, "l2_in_loss_%d" % t_idx, l2_loss)
+
 			if mapping == 'identity':
 				pass
 			elif mapping == 'linear':
@@ -1078,7 +1091,7 @@ def createEquivarianceNetwork(sources=[], val_sources=[], num_output=1, batch_si
 			cur_layer = L.ReLU(cur_layer, in_place=True)
 			l2_loss = L.EuclideanLoss(cur_layer, layer_to_predict, loss_weight=l2_loss_weight, 
 				name="%s_map_%d_loss" % (mapping, t_idx), loss_param=dict(normalize=True)) 
-			setattr(n, "l2_loss_%d" % t_idx, l2_loss)
+			setattr(n, "l2_eq_loss_%d" % t_idx, l2_loss)
 		else:
 			# this is the transform (or lack thereof) each other is trying to predict
 			layer_to_predict = L.ReLU(cur_layer, in_place=False)
@@ -1090,7 +1103,7 @@ def createEquivarianceNetwork(sources=[], val_sources=[], num_output=1, batch_si
 			kwargs['name'] = kwargs['name'] + "-%d" % t_idx
 			cur_layer = layer_func(cur_layer, **kwargs)
 
-		top = ipLayer(cur_layer, name="top-%d" % t_idx, num_output=num_output)
+		top = ipLayer(cur_layer, name="top-%d" % t_idx, num_output=num_output, param_name='fc8')
 		if deploy:
 			n.prob = L.Softmax(top, name='prob')
 		else:
@@ -1545,9 +1558,12 @@ def createEquivarianceExperiment(ds, tags, group, experiment, num_experiments=1,
 		solver = os.path.join(out_dir, SOLVER)
 		with open(solver, "w") as f:
 			f.write("net: \"%s\"\n" % (train_val_solver))
-			f.write("base_lr: %f\n" % 0.003)
-			f.write("max_iter: %d\n" % 500000)
-			f.write("stepsize: %d\n" % 150000)
+			#f.write("base_lr: %f\n" % 0.003)
+			f.write("base_lr: %f\n" % 0.0005)
+			#f.write("max_iter: %d\n" % 500000)
+			f.write("max_iter: %d\n" % 150000)
+			#f.write("stepsize: %d\n" % 150000)
+			f.write("stepsize: %d\n" % 60000)
 			f.write("test_iter: %d\n" % 10000) 
 			f.write("test_interval: %d\n" % 5000) 
 			f.write("snapshot: %d\n" % 5000) 
