@@ -558,6 +558,7 @@ message ProbImageTransformParameter {
   repeated ColorJitterTransformParameter color_jitter_params = 21;
   repeated ElasticDeformationTransformParameter elastic_deformation_params = 22;
   repeated ZeroBorderTransformParameter zero_border_params = 23;
+  repeated HSVTransformParameter hsv_params = 24;
 
   // the number of values for each of these fields should match the number
   // of values for the corresponding fields 1-5.  If left unspecificed,
@@ -575,6 +576,7 @@ message ProbImageTransformParameter {
   repeated float color_jitter_prob_weights = 31;
   repeated float elastic_deformation_prob_weights = 32;
   repeated float zero_border_prob_weights = 33;
+  repeated float hsv_prob_weights = 34;
 }
 
 message ResizeTransformParameter {
@@ -716,6 +718,9 @@ message ElasticDeformationTransformParameter {
 
 message ZeroBorderTransformParameter {
   optional int32 zero_len = 1 [default = 0];
+}
+
+message HSVTransformParameter {
 }
 
 // Message that stores parameters shared by loss layers

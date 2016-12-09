@@ -275,6 +275,19 @@ class ZeroBorderImageTransformer : public ImageTransformer<Dtype> {
   int zero_len_;
 };
 
+template <typename Dtype>
+class HSVImageTransformer : public ImageTransformer<Dtype> {
+ public:
+  explicit HSVImageTransformer(HSVTransformParameter param) :
+    param_(param) { };
+  virtual ~HSVImageTransformer() {};
+
+  virtual void Transform(const cv::Mat& in, cv::Mat& out);
+
+ protected:
+  HSVTransformParameter param_;
+};
+
 }  // namespace caffe
 
 #endif  // CAFFE_IMAGE_TRANSFORMER_HPP_

@@ -195,6 +195,20 @@ ImageTransformer<Dtype>* CreateImageTransformer(ImageTransformationParameter par
 	  weights.push_back(weight);
 	}
 
+	// HSV
+	for (int j = 0; j < prob_param.hsv_params_size(); j++) {
+	  HSVTransformParameter hsv_param = prob_param.hsv_params(j); 
+	  if (j < prob_param.hsv_prob_weights_size()) {
+	    weight = prob_param.hsv_prob_weights(j);
+	  } else {
+	    weight = 1;
+	  }
+	  ImageTransformer<Dtype>* transformer = new HSVImageTransformer<Dtype>(hsv_param);
+	  transformer->InitRand(rng_seed);
+	  prob_transformers->push_back(transformer);
+	  weights.push_back(weight);
+	}
+
     ImageTransformer<Dtype>* prob_transformer = new ProbImageTransformer<Dtype>(prob_transformers, weights);
 	prob_transformer->InitRand(rng_seed);
 	transformers->push_back(prob_transformer);
