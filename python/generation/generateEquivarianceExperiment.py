@@ -3,7 +3,8 @@ import createNetwork
 
 
 ########################
-datasets = ['rvl_cdip', 'imagenet']
+#datasets = ['rvl_cdip', 'imagenet']
+datasets = ['imagenet']
 #######################
 MAPPINGS = ['identity', 'linear']
 
@@ -187,12 +188,12 @@ def equivarianceExperiments(ds):
 				name = "%s_%s_%.1f" % (name_base, mapping, loss)
 				print "createEquivarianceExperiment(%r, %r, %r, %r)" % (ds, tags, group, name)
 				createNetwork.createEquivarianceExperiment(ds, tags, group, name, num_experiments=1, mapping=mapping, 
-					l_tparams=l_tparams, ce_loss_weight=loss, l2_loss_weight=50*loss, batch_size=10)
+					l_tparams=l_tparams[:6], ce_loss_weight=loss, l2_loss_weight=50*loss, batch_size=10)
 
 
 if __name__ == "__main__":
 	for ds in datasets:
 		equivarianceExperiments(ds)
-		equivarianceCropExperiments(ds)
+		#equivarianceCropExperiments(ds)
 		#equivarianceTestExperiments(ds)
 
