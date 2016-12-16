@@ -20,18 +20,23 @@ ROOT="/fslgroup/fslg_nnml/compute"
 
 SIZES=[512,384,256,150,100,64,32]
 
-OUTPUT_SIZES = {"andoc_1m": 974, "andoc_1m_10": 974, "andoc_1m_50": 974, "rvl_cdip": 16, "rvl_cdip_10": 16, "rvl_cdip_100": 16, "imagenet": 1000}
+OUTPUT_SIZES = {"andoc_1m": 974, "andoc_1m_10": 974, "andoc_1m_50": 974, "andoc_1m_half": 974, "rvl_cdip": 16, "rvl_cdip_10": 16, "rvl_cdip_100": 16, "rvl_cdip_half": 16, "imagenet": 1000, "combined": (974 + 16)}
 
 MEAN_VALUES = { "andoc_1m": {"binary": [194], "binary_invert": [61], "gray": [175], "gray_invert": [80], "gray_padded": [None], "color": [178,175,166], "color_invert": [77,80,89], "color_padded": [126,124,118], "color_multiple": [178,175,166]},
-				"rvl_cdip": {"binary": [233], "binary_invert": [22], "gray": [234], "gray_padded": [239], "gray_invert": [21], "gray_multiple": [234]},
-				"imagenet": {"color": [104,117,123]},
+				"rvl_cdip": {"binary": [233], "binary_invert": [22], "gray": [234], "color": [234, 234, 234], "gray_padded": [239], "gray_invert": [21], "gray_multiple": [234],
+							 "dsurf": [128]},
+				"imagenet": {"color": [104,117,123], "gray": [114]},
+				"combined": {"color": [194, 191, 185], "gray": [191]}
 			  }
 MEAN_VALUES['rvl_cdip_10'] = MEAN_VALUES['rvl_cdip']
 MEAN_VALUES['rvl_cdip_100'] = MEAN_VALUES['rvl_cdip']
+MEAN_VALUES['rvl_cdip_half'] = MEAN_VALUES['rvl_cdip']
 MEAN_VALUES['andoc_1m_10'] = MEAN_VALUES['andoc_1m']
 MEAN_VALUES['andoc_1m_50'] = MEAN_VALUES['andoc_1m']
+MEAN_VALUES['andoc_1m_half'] = MEAN_VALUES['andoc_1m']
 
-DEFAULT_TEST_TRANSFORMS = [10]
+#DEFAULT_TEST_TRANSFORMS = [10]
+DEFAULT_TEST_TRANSFORMS = []
 
 
 def lmdb_num_entries(db_path):
@@ -70,9 +75,10 @@ def LMDB_MULTIPLE_PATH(dataset, tag, split):
 			r_dir = os.path.join(par_dir, s_dir)
 			lmdbs[s].append(r_dir)
 		
-		if dataset == 'rvl_cdip_10' or dataset == 'rvl_cdip_100':
+		# use the same val/test lmdbs for the smaller versions of rvl_cdip and andoc_1m
+		if dataset.startswith('rvl_cdip'):
 			dataset = 'rvl_cdip'
-		if dataset == 'andoc_1m_10' or dataset == 'andoc_1m_50':
+		if dataset.startswith('andoc_1m'):
 			dataset = 'andoc_1m'
 
 	return lmdbs['train_lmdb'], lmdbs['val_lmdb'], lmdbs['test_lmdb']
@@ -82,9 +88,9 @@ def LMDB_PATH(dataset, tag, split):
 	#return map(lambda s: os.path.join(ROOT, "lmdb", dataset, tag, split, s), ["train_lmdb", "val_lmdb", "test_lmdb"])
 	lmdbs = list()
 	lmdbs.append(os.path.join(ROOT, "lmdb", dataset, tag, split, "train_lmdb"))
-	if dataset == 'rvl_cdip_10' or dataset == 'rvl_cdip_100':
+	if dataset.startswith('rvl_cdip'):
 		dataset = 'rvl_cdip'
-	if dataset == 'andoc_1m_10' or dataset == 'andoc_1m_50':
+	if dataset.startswith('andoc_1m'):
 		dataset = 'andoc_1m'
 	for s in ['val_lmdb', 'test_lmdb']:
 		lmdbs.append(os.path.join(ROOT, "lmdb", dataset, tag, split, s))
@@ -125,11 +131,11 @@ def getNumChannels(tags):
 	return channels
 
 
-def poolLayer(prev, **kwargs):
+def poolLayer(prev, bn=False, **kwargs):
 	return L.Pooling(prev, pool=P.Pooling.MAX, **kwargs)
 
 
-def convLayer(prev, lrn=False, param_name=None, **kwargs):
+def convLayer(prev, lrn=False, param_name=None, bn=False, **kwargs):
 	if param_name:
 		name1 = param_name + '_kernels'
 		name2 = param_name + '_bias'
@@ -138,25 +144,29 @@ def convLayer(prev, lrn=False, param_name=None, **kwargs):
 	else:
 		conv = L.Convolution(prev, param=[dict(lr_mult=1), dict(lr_mult=2)], 
 			weight_filler=dict(type='msra'), **kwargs)
-	relu = L.ReLU(conv, in_place=True)
+	if bn:
+		bn = L.BatchNorm(conv)
+		relu = L.ReLU(bn, in_place=True)
+	else:
+		relu = L.ReLU(conv, in_place=True)
 	if lrn:
 		# optional Local Response Normalization
 		relu = L.LRN(relu, lrn_param={'local_size': min(kwargs['num_output'] / 3, 5), 'alpha': 0.0001, 'beta': 0.75})
 	return relu
 
 
-def convLayerSigmoid(prev, **kwargs):
+def convLayerSigmoid(prev, bn=False, **kwargs):
 	conv = L.Convolution(prev, param=[dict(lr_mult=1), dict(lr_mult=2)], weight_filler=dict(type='msra'), **kwargs)
 	sigmoid = L.Sigmoid(conv, in_place=True)
 	return sigmoid
 
 
-def convLayerOnly(prev, **kwargs):
+def convLayerOnly(prev, bn=False, **kwargs):
 	conv = L.Convolution(prev, param=[dict(lr_mult=1), dict(lr_mult=2)], weight_filler=dict(type='msra'), **kwargs)
 	return conv
 
 
-def ipLayer(prev, param_name=None, **kwargs):
+def ipLayer(prev, param_name=None, bn=False, **kwargs):
 	if param_name:
 		name1 = param_name + '_weights'
 		name2 = param_name + '_bias'
@@ -169,9 +179,13 @@ def ipLayer(prev, param_name=None, **kwargs):
 			weight_filler=dict(type='msra'), bias_filler=dict(type='constant'), **kwargs) 
 
 
-def fcLayer(prev, **kwargs):
+def fcLayer(prev, bn=False, **kwargs):
 	fc = ipLayer(prev, **kwargs)
-	relu = L.ReLU(fc, in_place=True)
+	if bn:
+		bn = L.BatchNorm(fc)
+		relu = L.ReLU(bn, in_place=True)
+	else:
+		relu = L.ReLU(fc, in_place=True)
 	return relu
 
 
@@ -454,16 +468,19 @@ DEPLOY_FILE = "deploy.prototxt"
 SOLVER = "solver.prototxt"
 SNAPSHOT_FOLDER = "snapshots"
 
-LEARNING_RATES = {"andoc_1m": 0.005, "rvl_cdip": 0.003, "imagenet": 0.01}
-BATCH_SIZE = {"andoc_1m": 128, "rvl_cdip": 32, "imagenet": 256}
-MAX_ITER = {"andoc_1m": 250000, "rvl_cdip": 500000, "imagenet": 450000}
-STEP_SIZE = {"andoc_1m": 100000, "rvl_cdip": 150000, "imagenet": 100000}
+LEARNING_RATES = {"combined": 0.005, "andoc_1m": 0.005, "rvl_cdip": 0.003, "imagenet": 0.01}
+BATCH_SIZE = {"combined": 128, "andoc_1m": 128, "rvl_cdip": 32, "imagenet": 256}
+MAX_ITER = {"combined": 350000, "andoc_1m": 250000, "rvl_cdip": 500000, "imagenet": 450000}
+STEP_SIZE = {"combined": 150000, "andoc_1m": 100000, "rvl_cdip": 150000, "imagenet": 100000}
 
 for d in [LEARNING_RATES, BATCH_SIZE, MAX_ITER, STEP_SIZE]:
 	d['rvl_cdip_10'] = d['rvl_cdip']
 	d['rvl_cdip_100'] = d['rvl_cdip']
+	d['rvl_cdip_half'] = d['rvl_cdip']
 	d['andoc_1m_10'] = d['andoc_1m']
 	d['andoc_1m_50'] = d['andoc_1m']
+	d['andoc_1m_half'] = d['andoc_1m']
+
 
 MAX_ITER['rvl_cdip_100'] = 150000
 STEP_SIZE['rvl_cdip_100'] = 50000
@@ -618,8 +635,20 @@ def createTransformParam(phase, seed=None, test_transforms = DEFAULT_TEST_TRANSF
 		transforms = {}
 		for t in tt:
 			transforms[t] = []
-		if not kwargs.get('crop'):
-			transforms[1] = ['none']
+		#if not kwargs.get('crop'):
+		#	transforms[1] = ['none']
+
+
+	# resize
+	if (phase == caffe.TRAIN or deploy) and 'sizes' in kwargs:
+		sizes = kwargs['sizes']
+		params.append(dict(resize_params = {'size': [sizes[0], sizes[-1]]}))
+		if deploy:
+			all_ts = list()
+			for size in sizes:
+				transforms[size] = ["resize %d %d" % (size, size)]
+				all_ts.append(transforms[size][0])
+			transforms['all'] = all_ts
 
 	#noise
 	if (phase == caffe.TRAIN or deploy) and 'noise_std' in kwargs:
@@ -717,6 +746,9 @@ def createTransformParam(phase, seed=None, test_transforms = DEFAULT_TEST_TRANSF
 
 		if len(p) > 0:
 			params.append(p)
+
+	if kwargs.get('crop_perc'):
+		params.append(dict(crop_params = dict(size_perc=[kwargs.get('crop_perc'), 1.])))
 
 	#crop
 	if kwargs.get('crop'):
@@ -1122,7 +1154,8 @@ def createEquivarianceNetwork(sources=[], val_sources=[], num_output=1, batch_si
 
 
 def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=False, pool=None, batch_size=32, deploy=False, 
-					seed=None, shift_channels=None, scale_channels=None, multiple=False, val_batch_size=VAL_BATCH_SIZE, **tparams):
+					seed=None, shift_channels=None, scale_channels=None, multiple=False, val_batch_size=VAL_BATCH_SIZE, bn=False,
+					dropout=True, lrn=True, **tparams):
 	n = caffe.NetSpec()	
 	#data
 	data_param = dict(backend=P.Data.LMDB)
@@ -1142,10 +1175,7 @@ def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=Fals
 
 		return trans
 
-	#if shift_channels != None:
 	shift_channels = checkTransform(shift_channels, 0)
-	
-	#if scale_channels != None:
 	scale_channels = checkTransform(scale_channels, 1.0)
 
 	if seed == None:
@@ -1159,7 +1189,7 @@ def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=Fals
 
 			#print len(sources)
 			inputs = map(lambda s, t: L.DocData(sources=[s], include=dict(phase=caffe.TRAIN), batch_size=batch_size, 
-				image_transform_param=createTransformParam(caffe.TRAIN, seed=seed, shift=t[0], scale=t[1], **tparams) ,**data_param), sources[1:], 
+				image_transform_param=createTransformParam(caffe.TRAIN, seed=seed, shift=t[0], scale=t[1], **tparams), **data_param), sources[1:], 
 				zip(shift_channels[1:], scale_channels[1:]))
 		
 			#print inputs
@@ -1223,10 +1253,13 @@ def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=Fals
 			if not mult:
 				mult = tparams.get('conv_width_mult')
 			kwargs['num_output'] = int(mult * kwargs['num_output'])
+		if kwargs.get('num_output'):
+			kwargs['bn'] = bn
+		if 'norm' in kwargs['name'] and not lrn:
+			continue
 		layer = t(layer, **kwargs)
 
 	if pool is not None:
-		#print "ADDING PADDING"
 		# add in a padding to powers of 2 so that we guarentee the same size output
 		layer = L.Padding(layer, pad_to_power_of_2=True, name="padding")
 		if pool == 'spp':
@@ -1247,6 +1280,10 @@ def createNetwork(sources, size, val_sources=None,  num_output=1000, concat=Fals
 			if not mult:
 				mult = tparams.get('fc_width_mult')
 			kwargs['num_output'] = int(mult * kwargs['num_output'])
+		if kwargs.get('num_output'):
+			kwargs['bn'] = bn
+		if 'dropout' in kwargs['name'] and not dropout:
+			continue
 		layer = t(layer, **kwargs)
 
 	#Output Layer
@@ -1373,12 +1410,12 @@ def createBinarizeExperiment(ds, tags, group, experiment, num_experiments=1, wfm
 			f.write("snapshot_prefix: \"%s\"" % (snapshot_solver))
 	
 
-def createExperiment(ds, tags, group, experiment, num_experiments=1, pool=None, multiple=False, shift=None, scale=None, **tparams):
+def createExperiment(ds, tags, group, experiment, num_experiments=1, pool=None, multiple=False, dsurf=False, 
+		shift=None, scale=None, bn=False, dropout=True, lrn=True, **tparams):
 
 	# Check if tags are all the same size or not
 	# If they aren't we are doing multi-scale training, and need to stick them all
 	# in the same doc data layer 
-	# TODO: Pyramid input
 	if not isinstance(tags, list):
 		tags = [tags]
 	sizes = map(getSizeFromTag, tags)
@@ -1390,7 +1427,12 @@ def createExperiment(ds, tags, group, experiment, num_experiments=1, pool=None, 
 	im_size = size
 	tags_noSize = map(getTagWithoutSize, tags)
 	if shift == "mean":
-		shift = map(lambda t: MEAN_VALUES[ds][t], tags_noSize)
+		shift = []
+		for t in tags_noSize:
+			if 'dsurf' in t:
+				shift += 22 * [MEAN_VALUES[ds][t]]
+			else:
+				shift += [MEAN_VALUES[ds][t]]
 
 	if tparams.get('crop'):
 		same_size = True
@@ -1413,10 +1455,14 @@ def createExperiment(ds, tags, group, experiment, num_experiments=1, pool=None, 
 		if not os.path.exists(tf):
 			os.makedirs(tf)
 		
-		if multiple:
+		if multiple or dsurf:
 			sources_tr, sources_val, sources_ts = [], [], []
 			for tag in tags:
-				tr, val, ts = LMDB_MULTIPLE_PATH(ds, tag, "1")
+				if 'multiple' in tag or 'dsurf' in tag:
+					tr, val, ts = LMDB_MULTIPLE_PATH(ds, tag, "1")
+				else:
+					# if we just have str, then the += lines will concatenate every character
+					tr, val, ts = tuple(map(lambda s: [s], LMDB_PATH(ds, tag, "1")))
 				sources_tr += tr
 				sources_val += val
 				sources_ts += ts
@@ -1428,8 +1474,13 @@ def createExperiment(ds, tags, group, experiment, num_experiments=1, pool=None, 
 		#common parameters
 		params = dict(sources=list(sources_tr), size=size, num_output=OUTPUT_SIZES[ds], concat=same_size, 
 					pool=pool, shift_channels=shift, scale_channels=scale, batch_size=BATCH_SIZE[ds], 
-					multiple=multiple, **tparams)
-		params['val_batch_size'] = VAL_BATCH_SIZE if ds != 'imagenet' else 50
+					multiple=multiple, dsurf=dsurf, bn=bn, dropout=dropout, lrn=lrn, **tparams)
+		if ds == "imagenet":
+			params['val_batch_size'] = 50
+		elif ds == "combined":
+			params['val_batch_size'] = 80
+		else:
+			params['val_batch_size'] = VAL_BATCH_SIZE 
 
 		#create train_val file
 		train_val = os.path.join(out_dir, TRAIN_VAL)
@@ -1470,17 +1521,23 @@ def createExperiment(ds, tags, group, experiment, num_experiments=1, pool=None, 
 		solver = os.path.join(out_dir, SOLVER)
 		with open(solver, "w") as f:
 			f.write("net: \"%s\"\n" % (train_val_solver))
-			f.write("base_lr: %f\n" % (LEARNING_RATES[ds]))
-			f.write("max_iter: %d\n" % (MAX_ITER[ds]))
-			f.write("stepsize: %d\n" % (STEP_SIZE[ds]))
 			if multiple:
 				f.write("test_iter: %d\n" % MULTIPLE_TEST_ITERS[ds][tag]) 
 			else:
 				f.write("test_iter: %d\n" % 1000)  # for all non-multiple datasets
+			f.write("snapshot_prefix: \"%s\"\n" % (snapshot_solver))
 			for param, val in SOLVER_PARAM.items():
 				f.write("%s: %s\n" % (param, str(val)))
 
-			f.write("snapshot_prefix: \"%s\"" % (snapshot_solver))
+			if group != 'finetune2':
+				f.write("base_lr: %f\n" % (LEARNING_RATES[ds]))
+				f.write("max_iter: %d\n" % (MAX_ITER[ds]))
+				f.write("stepsize: %d\n" % (STEP_SIZE[ds]))
+			else:
+				f.write("base_lr: %f\n" % 0.001)
+				f.write("max_iter: %d\n" % 100000)
+				f.write("stepsize: %d\n" % 40000)
+
 		
 
 def createEquivarianceExperiment(ds, tags, group, experiment, num_experiments=1, shift='mean', scale=(1.0/255), 

@@ -275,6 +275,33 @@ class ZeroBorderImageTransformer : public ImageTransformer<Dtype> {
   int zero_len_;
 };
 
+template <typename Dtype>
+class HSVImageTransformer : public ImageTransformer<Dtype> {
+ public:
+  explicit HSVImageTransformer(HSVTransformParameter param) :
+    param_(param) { };
+  virtual ~HSVImageTransformer() {};
+
+  virtual void Transform(const cv::Mat& in, cv::Mat& out);
+
+ protected:
+  HSVTransformParameter param_;
+};
+
+template <typename Dtype>
+class SaltPepperImageTransformer : public ImageTransformer<Dtype> {
+ public:
+  explicit SaltPepperImageTransformer(SaltPepperTransformParameter param) :
+    param_(param) { rand_mask_ = new Blob<Dtype>(); };
+  virtual ~SaltPepperImageTransformer() { delete rand_mask_; };
+
+  virtual void Transform(const cv::Mat& in, cv::Mat& out);
+
+ protected:
+  SaltPepperTransformParameter param_;
+  Blob<Dtype>* rand_mask_;
+};
+
 }  // namespace caffe
 
 #endif  // CAFFE_IMAGE_TRANSFORMER_HPP_

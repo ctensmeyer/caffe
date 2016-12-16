@@ -14,6 +14,21 @@ def safe_mkdir(_dir):
 		if exc.errno != errno.EEXIST:
 			raise
 
+
+def apply_salt(im, tokens):
+	perc_pixels, perc_salt, seed = float(tokens[1]), float(tokens[2]), float(tokens[3])
+	np.random.seed(seed)
+
+	flip_map = np.random.uniform(0, 1, im.shape)
+	salt_map = np.random.uniform(0, 1, im.shape)
+
+	out = np.copy(im)
+	out[np.logical_and(flip_map < perc_pixels, salt_map <= salt_perc)] = 255  # salt
+	out[np.logical_and(flip_map < perc_pixels and salt_map > salt_perc)] = 0     # pepper
+
+	return out
+
+
 def apply_elastic_deformation(im, tokens):
 	sigma, alpha, seed = float(tokens[1]), float(tokens[2]), int(tokens[3])
 	np.random.seed(seed)
@@ -226,6 +241,8 @@ def apply_transform(im, transform_str):
 		return apply_perspective(im, tokens)
 	elif tokens[0] == 'color_jitter':
 		return apply_color_jitter(im, tokens)
+	elif tokens[0] == 'salt':
+		return apply_salt(im, tokens)
 	elif tokens[0] == 'shift':
 		return apply_shift(im, tokens)
 	elif tokens[0] == 'elastic':
