@@ -16,7 +16,7 @@ def safe_mkdir(_dir):
 
 
 def apply_salt(im, tokens):
-	perc_pixels, perc_salt, seed = float(tokens[1]), float(tokens[2]), float(tokens[3])
+	perc_pixels, salt_perc, seed = float(tokens[1]), float(tokens[2]), int(tokens[3])
 	np.random.seed(seed)
 
 	flip_map = np.random.uniform(0, 1, im.shape)
@@ -24,7 +24,7 @@ def apply_salt(im, tokens):
 
 	out = np.copy(im)
 	out[np.logical_and(flip_map < perc_pixels, salt_map <= salt_perc)] = 255  # salt
-	out[np.logical_and(flip_map < perc_pixels and salt_map > salt_perc)] = 0     # pepper
+	out[np.logical_and(flip_map < perc_pixels, salt_map > salt_perc)] = 0     # pepper
 
 	return out
 
