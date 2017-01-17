@@ -115,6 +115,7 @@ def init_fds(args):
 	return fds
 
 
+
 def record_activation(model, layer, fd, args):
 	activations = model.blobs[layer].data
 	if activations.ndim > 2:
