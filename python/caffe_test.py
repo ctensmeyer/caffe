@@ -62,7 +62,7 @@ def set_transform_weights(args):
 	if args.tune_lmdbs == "":
 		# no lmdb is provided for tuning the weights
 		return None
-	transforms, fixed_transforms = get_transforms(args)
+	transforms, fixed_transforms = get_transforms(args.transform_file)
 	if not fixed_transforms:
 		# number of transforms varies by image, so no fixed set of weights
 		return None
@@ -226,7 +226,7 @@ def main(args):
 
 	# load transforms from file
 	log(args, "Loading transforms")
-	transforms, fixed_transforms = get_transforms(args)
+	transforms, fixed_transforms = get_transforms(args.transform_file)
 	log(args, "Fixed Transforms: %s" % str(fixed_transforms))
 
 	# get per-transform weights.  Can be none if transforms produce variable numbers of images, or
@@ -286,7 +286,8 @@ def main(args):
 		raise
 	finally:
 		close_dbs(test_dbs)
-		args.log.close()
+		if args.log_file:
+			args.log.close()
 		
 
 def check_args(args):
@@ -327,7 +328,7 @@ def get_args():
 				help='Number of channels to take from each slice')
 	parser.add_argument("-a", "--scales", type=str, default=str(1.0 / 255),
 				help="Optional scale factor")
-	parser.add_argument("-t", "--transform_file", type=str, default="",
+	parser.add_argument("-t", "--transform-file", type=str, default="",
 				help="File containing transformations to do")
 	parser.add_argument("-l", "--tune-lmdbs", type=str, default="",
 				help="Tune the weighted averaging to minmize CE loss on this data")

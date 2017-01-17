@@ -45,7 +45,7 @@ def get_image(cursor):
 
 	nparr = np.fromstring(doc_datum.image.data, np.uint8)
 	# load the image as is (do not force color/grayscale)
-	im = cv2.imdecode(nparr, -1)  
+	im = cv2.imdecode(nparr, 0)  
 	if im.ndim == 2:
 		# explicit single channel to match dimensions of color
 		im = im[:,:,np.newaxis]
@@ -88,7 +88,7 @@ def get_batch(cursor, batch_size=64, means=0, scale=1):
 
 def fprop(model, ims, args):
 	# batch up all transforms at once
-	model.blobs[args.input_layer].reshape(len(ims), ims[0].shape[3], ims[0].shape[1], ims[0].shape[2]) 
+	model.blobs[args.input_blob].reshape(len(ims), ims[0].shape[3], ims[0].shape[1], ims[0].shape[2]) 
 	for x in xrange(ims.shape[0]):
 		transposed = np.transpose(ims[0], [0,3,1,2])
 		model.blobs["data"].data[x,:,:,:] = transposed
@@ -104,52 +104,64 @@ def safe_mkdir(_dir):
 			raise
 
 
-
-def init_fds(args):
+def init_fds(args, blobs):
 	fds = dict()
-	layers = args.layers.split(',')
 	safe_mkdir(args.out_dir)
 
-	for layer in layers:
-		fds[layer] = open(os.path.join(args.out_dir, layer + ".txt"), 'w')
+	for blob in blobs:
+		fds[blob] = open(os.path.join(args.out_dir, blob + ".txt"), 'w')
 	return fds
 
 
-
-def record_activation(model, layer, fd, args):
-	activations = model.blobs[layer].data
+def record_activation(model, blob, fd, args):
+	activations = model.blobs[blob].data
 	if activations.ndim > 2:
 		# pool over spatial regions
-		activations = np.max(activations, axis=(2,3))
-	#print layer, activations.shape
+		#activations = np.max(activations, axis=(2,3))
+		activations = activations.reshape((activations.shape[0], -1))
+	#print blob, activations.shape
 	np.savetxt(fd, activations, "%7.4f")
 
 
 def main(args):
-	model = init_model(args.network_file, args.weight_file, gpu=args.gpu)
 	print args
+	print "Initiaializing Model..."
+	model = init_model(args.network_file, args.weight_file, gpu=args.gpu)
+	print "Opening LMDB..."
 	env, txn, cursor = open_lmdb(args.test_lmdb)
 	max_images = min(args.max_images, env.stat()['entries'])
 	max_iters = (max_images + args.batch_size - 1) / args.batch_size
 
-	layers = args.layers.split(',')
-	fds = init_fds(args)
+	if args.blobs == "_all":
+		blobs = model.blobs.keys()
+	else:
+		blobs = args.blobs.split(',')
+	print "Recording blobs:", blobs
+	print "Opening Output Files..."
+	fds = init_fds(args, blobs)
 	label_fd = open(os.path.join(args.out_dir, "labels.txt"), 'w')
 
+	print "Starting Activation Extraction..."
 	for iter_num in xrange(max_iters):
 		ims, labels = get_batch(cursor, batch_size=args.batch_size, means=args.means, scale=args.scale)
 		fprop(model, ims, args)
-		for layer in layers:
-			record_activation(model, layer, fds[layer], args)
+		for blob in blobs:
+			record_activation(model, blob, fds[blob], args)
 		for label in labels:
 			label_fd.write("%d\n" % label)
 
 		if iter_num > 0 and iter_num % 10 == 0:
 			print "%.2f%% (%d/%d) Batches" % (100. * iter_num / max_iters, iter_num, max_iters)
+	print "Done"
 
+	print "Closing Files..."
 	label_fd.close()
 	for fd in fds.values():
 		fd.close()
+
+	print "Closing LMDB..."
+	env.close()
+	print "Exiting"
 
 
 def get_args():
@@ -159,14 +171,12 @@ def get_args():
 				help="Caffe network file")
 	parser.add_argument("weight_file", 
 				help="Caffe weights file")
-	parser.add_argument("layers", 
-				help="Comma separated list of layers to include")
 	parser.add_argument("test_lmdb", 
 				help="LMDB of images (encoded DocDatums), used to gather activation values")
 	parser.add_argument("out_dir",
 				help="Output directory of where to store the activations")
 
-	parser.add_argument("-m", "--means", type=str, default="",
+	parser.add_argument("-m", "--means", type=str, default="0",
 				help="Optional mean values per channel " 
 				"(e.g. 127 for grayscale or 182,192,112 for BGR)")
 	parser.add_argument("-a", "--scale", type=str, default=str(1.0 / 255),
@@ -177,8 +187,10 @@ def get_args():
 				help="Max number of image processed at once")
 	parser.add_argument("--gpu", type=int, default=0,
 				help="GPU to use for running the models")
-	parser.add_argument("--input-layer", type=str, default="data",
+	parser.add_argument("--input-blob", type=str, default="data",
 				help="Name of input blob")
+	parser.add_argument("--blobs", type=str, default="_all",
+				help="Comma separated list of blobs to include")
 
 	args = parser.parse_args()
 
