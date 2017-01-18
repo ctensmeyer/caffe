@@ -194,7 +194,7 @@ message NetParameter {
 // NOTE
 // Update the next available ID when you add a new SolverParameter field.
 //
-// SolverParameter next available ID: 111 (last added: min_iters_per_period)
+// SolverParameter next available ID: 112 (last added: max_nonfinite_test_loss)
 // SolverParameter next available ID: 38 (last added: clip_gradients)
 message SolverParameter {
   //////////////////////////////////////////////////////////////////////////////
@@ -322,6 +322,10 @@ message SolverParameter {
   optional int32 max_periods_without_improvement = 108 [default = 5]; 
   optional float min_lr = 109 [default = 0];
   repeated int32 min_iters_per_period = 110;
+
+  // if non-zero, will halt training early if this many consecutive train
+  // losses have non-finite values (i.e. inf or nan)
+  optional int32 max_nonfinite_test_loss = 111 [default = 0];
 }
 
 // A message that stores the solver snapshots

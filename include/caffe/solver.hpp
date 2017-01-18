@@ -63,7 +63,7 @@ class Solver {
   int train_iters_since_lr_adjust_;
   int periods_no_improvement_;
   bool stop_early_;
-
+  int nonfinite_test_loss_counter_;
   DISABLE_COPY_AND_ASSIGN(Solver);
 };
 
