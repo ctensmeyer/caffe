@@ -152,13 +152,14 @@ def extract_surf(im, args):
 	kps, descriptors = surf.compute(im, kps)
 
 	dense = descriptors.reshape( (args.surf_grid_size, args.surf_grid_size, 64) )
+	dense = 128 * (dense + 1) 
+	dense = dense.astype(np.uint8)
 	channel_start = 0
 	ims = list()
 	while channel_start < 64:
 		im_slice = np.squeeze(dense[:,:,channel_start:channel_start+3])
 		ims.append(im_slice)
 		channel_start += 3
-
 	return ims
 	
 

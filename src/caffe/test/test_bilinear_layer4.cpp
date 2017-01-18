@@ -99,6 +99,7 @@ class BilinearInterpolationLayerTest4 : public MultiDeviceTest<TypeParam> {
   vector<Blob<Dtype>*> blob_top_vec_;
 };
 
+/*
 TYPED_TEST_CASE(BilinearInterpolationLayerTest4, TestDtypesAndDevices);
 
 TYPED_TEST(BilinearInterpolationLayerTest4, TestForward) {
@@ -118,5 +119,6 @@ TYPED_TEST(BilinearInterpolationLayerTest4, TestGradient) {
   checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
       this->blob_top_vec_, 0);
 }
+*/
 
 }  // namespace caffe

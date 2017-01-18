@@ -475,6 +475,7 @@ class ReLULayer : public NeuronLayer<Dtype> {
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 };
 
+
 #ifdef USE_CUDNN
 /**
  * @brief CuDNN acceleration of ReLULayer.
@@ -500,6 +501,7 @@ class CuDNNReLULayer : public ReLULayer<Dtype> {
   cudnnHandle_t             handle_;
   cudnnTensorDescriptor_t bottom_desc_;
   cudnnTensorDescriptor_t top_desc_;
+  cudnnActivationDescriptor_t activ_desc_;
 };
 #endif
 
@@ -558,6 +560,7 @@ class SigmoidLayer : public NeuronLayer<Dtype> {
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 };
 
+
 #ifdef USE_CUDNN
 /**
  * @brief CuDNN acceleration of SigmoidLayer.
@@ -583,8 +586,10 @@ class CuDNNSigmoidLayer : public SigmoidLayer<Dtype> {
   cudnnHandle_t             handle_;
   cudnnTensorDescriptor_t bottom_desc_;
   cudnnTensorDescriptor_t top_desc_;
+  cudnnActivationDescriptor_t activ_desc_;
 };
 #endif
+
 
 /**
  * @brief TanH hyperbolic tangent non-linearity @f$
@@ -643,6 +648,7 @@ class TanHLayer : public NeuronLayer<Dtype> {
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 };
 
+
 #ifdef USE_CUDNN
 /**
  * @brief CuDNN acceleration of TanHLayer.
@@ -668,8 +674,10 @@ class CuDNNTanHLayer : public TanHLayer<Dtype> {
   cudnnHandle_t             handle_;
   cudnnTensorDescriptor_t bottom_desc_;
   cudnnTensorDescriptor_t top_desc_;
+  cudnnActivationDescriptor_t activ_desc_;
 };
 #endif
+
 
 /**
  * @brief Tests whether the input exceeds a threshold: outputs 1 for inputs

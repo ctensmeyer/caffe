@@ -9,7 +9,7 @@
 namespace caffe {
 
 template <typename Dtype>
-void BilinearInterpolationLayer<Dtype>::SetUp(const vector<Blob<Dtype>*>& bottom,
+void BilinearInterpolationLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   //this->Reshape(bottom, top);
   //CHECK_EQ(bottom[1]->count(), 2) << "BilinearInterpolationLayer requires the output height/width";
