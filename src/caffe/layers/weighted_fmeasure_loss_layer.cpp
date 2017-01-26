@@ -48,11 +48,11 @@ void WeightedFmeasureLossLayer<Dtype>::Forward_cpu(
   if (margin_ > 0 && margin_ < 0.5) {
     for (int i = 0; i < count; i++) {
 	  if (target[i] > 0.5) {
-		if (input[i] >= (1. - margin_)) {
+		if (input[i] >= (0.5 + margin_)) {
 		  input[i] = target[i];
 		}
 	  } else {
-		if (input[i] <= margin_) {
+		if (input[i] <= (0.5 - margin_)) {
 		  input[i] = target[i];
 		}
 	  }

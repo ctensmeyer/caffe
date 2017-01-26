@@ -13,11 +13,11 @@ __global__ void MarginThreshold(const int n, const Dtype margin,
     Dtype* input, const Dtype* target) {
   CUDA_KERNEL_LOOP(index, n) {
     if (target[index] > 0.5) {
-      if (input[index] >= (1. - margin)) {
+      if (input[index] >= (0.5 + margin)) {
         input[index] = target[index];
       }
     } else {
-      if (input[index] <= margin) {
+      if (input[index] <= (0.5 - margin)) {
         input[index] = target[index];
       }
     }
