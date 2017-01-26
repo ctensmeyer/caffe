@@ -7,17 +7,42 @@
 
 namespace caffe {
 
+
+template <typename Dtype>
+__global__ void MarginThreshold(const int n, const Dtype margin,
+    Dtype* input, const Dtype* target) {
+  CUDA_KERNEL_LOOP(index, n) {
+    if (target[index] > 0.5) {
+      if (input[index] >= (1. - margin)) {
+        input[index] = target[index];
+      }
+    } else {
+      if (input[index] <= margin) {
+        input[index] = target[index];
+      }
+    }
+  }
+}
+
 template <typename Dtype>
 void WeightedFmeasureLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
   const int count = bottom[0]->count();
   // Stable version of loss computation from input data
-  const Dtype* input = bottom[0]->gpu_data();
+  Dtype* input = bottom[0]->mutable_gpu_data();
   const Dtype* target = bottom[1]->gpu_data();
   const Dtype* recall_weight = bottom[2]->gpu_data();
   const Dtype* precision_weight = bottom[3]->gpu_data();
 
   recall_num_ = recall_denum_ = precision_num_ = precision_denum_ = 0;
+
+  // threshold inputs according to margin
+  if (margin_ > 0 && margin_ < 0.5) {
+    // NOLINT_NEXT_LINE(whitespace/operators)
+    MarginThreshold<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
+        count, margin_, input, target);
+    CUDA_POST_KERNEL_CHECK;
+  }
 
   // Blas version
   Dtype* target_mult_input = work_buffer_->mutable_gpu_data();

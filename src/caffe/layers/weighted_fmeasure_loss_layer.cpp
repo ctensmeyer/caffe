@@ -12,6 +12,7 @@ template <typename Dtype>
 void WeightedFmeasureLossLayer<Dtype>::LayerSetUp(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
   LossLayer<Dtype>::LayerSetUp(bottom, top);
+  margin_ = this->layer_param().weighted_fmeasure_loss_param().margin();
 }
 
 template <typename Dtype>
@@ -36,12 +37,27 @@ void WeightedFmeasureLossLayer<Dtype>::Forward_cpu(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
   const int count = bottom[0]->count();
   // Stable version of loss computation from input data
-  const Dtype* input = bottom[0]->cpu_data();
+  Dtype* input = bottom[0]->mutable_cpu_data();
   const Dtype* target = bottom[1]->cpu_data();
   const Dtype* recall_weight = bottom[2]->cpu_data();
   const Dtype* precision_weight = bottom[3]->cpu_data();
 
   recall_num_ = recall_denum_ = precision_num_ = precision_denum_ = 0;
+
+  // threshold inputs according to margin
+  if (margin_ > 0 && margin_ < 0.5) {
+    for (int i = 0; i < count; i++) {
+	  if (target[i] > 0.5) {
+		if (input[i] >= (1. - margin_)) {
+		  input[i] = target[i];
+		}
+	  } else {
+		if (input[i] <= margin_) {
+		  input[i] = target[i];
+		}
+	  }
+	}
+  }
 
   // Blas version
   Dtype* target_mult_input = work_buffer_->mutable_cpu_data();
