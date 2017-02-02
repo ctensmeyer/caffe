@@ -101,4 +101,15 @@ TYPED_TEST(WeightedFMeasureLossLayerTest, TestGradient) {
       this->blob_top_vec_, 0);
 }
 
+
+TYPED_TEST(WeightedFMeasureLossLayerTest, TestMarginGradient) {
+  typedef typename TypeParam::Dtype Dtype;
+  LayerParameter layer_param;
+  layer_param.mutable_weighted_fmeasure_loss_param()->set_margin(0.25);
+  WeightedFmeasureLossLayer<Dtype> layer(layer_param);
+  GradientChecker<Dtype> checker(1e-4, 2e-2, 1701, 1, 0.01);
+  checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
+      this->blob_top_vec_, 0);
+}
+
 }  // namespace caffe

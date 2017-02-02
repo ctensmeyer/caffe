@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <string>
 #include <vector>
+#include <math.h>
 
 #include "caffe/net.hpp"
 #include "caffe/proto/caffe.pb.h"
@@ -43,6 +44,7 @@ void Solver<Dtype>::Init(const SolverParameter& param) {
   iter_ = 0;
   current_step_ = 0;
   stop_early_ = false;
+  nonfinite_test_loss_counter_ = 0;
   if (param_.monitor_test()) {
     best_loss_so_far_ = 100000;  // init to very large value
 	steps_no_improvement_ = 0;
@@ -209,6 +211,13 @@ void Solver<Dtype>::Step(int iters) {
         && (iter_ > 0 || param_.test_initialization())) {
       TestAll();
     }
+	if (param_.max_nonfinite_test_loss() && nonfinite_test_loss_counter_ >
+		param_.max_nonfinite_test_loss()) {
+	    LOG(INFO) << "Detected " << nonfinite_test_loss_counter_ 
+			<< " consecutive non-finite test losses";
+	    LOG(INFO) << "Stopping Training Early";
+        break;
+	}
 
     const bool display = param_.display() && 
 		(iter_ % param_.display() == 0 || iter_ <= param_.do_everything());
@@ -350,6 +359,11 @@ void Solver<Dtype>::Test(const int test_net_id) {
   if (param_.test_compute_loss()) {
     loss /= param_.test_iter(test_net_id);
     LOG(INFO) << "Test loss: " << loss;
+	if (!std::isfinite(loss)) {
+	  nonfinite_test_loss_counter_++;
+	}  else {
+	  nonfinite_test_loss_counter_ = 0;
+	}
   }
   if (param_.monitor_test() && param_.monitor_test_id() == test_net_id) {
     if (loss < best_loss_so_far_) {

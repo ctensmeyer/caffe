@@ -393,6 +393,13 @@ def prepare_images(test_dbs, transforms, args):
 
 	return ims, original_slice_transforms, label, full_ims
 
+def load_class_ids(f):
+	d = dict()
+	for line in open(f, 'r').readlines():
+		tokens = line.split()
+		d[int(tokens[1])] = tokens[0]
+	d[12] = "None"
+	return d
 
 def main(args):
 	log(args, str(sys.argv))
@@ -404,7 +411,15 @@ def main(args):
 	log(args, "Initializing network for prediction")
 	predict_net = init_caffe(args.predict_model, args.predict_weights, args.gpu)
 	log(args, "Initializing network for votes")
-	vote_net = init_caffe(args.vote_model, args.vote_weights, args.gpu)
+	if args.vote_model and args.vote_weights:
+		vote_net = init_caffe(args.vote_model, args.vote_weights, args.gpu)
+	else:
+		vote_net = None
+
+	if args.class_ids:
+		class_ids = load_class_ids(args.class_ids)
+	else:
+		class_ids = [str(x) for x in xrange(13)]
 
 	log(args, "Opening test lmdbs")
 	test_dbs = open_dbs(args.test_lmdbs.split(args.delimiter))
@@ -423,22 +438,25 @@ def main(args):
 		num_total += 1
 
 		ims, originals, label, full_ims = prepare_images(test_dbs, transforms, args)
-		#weights = get_weights(ims, vote_net, args)
-		weights = np.asarray([1] * len(ims))
+		if vote_net is not None:
+			weights = get_weights(ims, vote_net, args)
+		else:
+			weights = np.asarray([1] * len(ims))
 		
 		predicted_label, all_predictions, mean_outputs, all_outputs = predict(ims, predict_net, args, weights)
 
 		# keep track of correct predictions
-		print test_dbs[0][2].key()
+		print test_dbs[0][2].key()  # cursor.key()
 		verdict = "Correct" if label == predicted_label else "Wrong"
-		print "%s: Actual: %d\tPrediction: %d" % (verdict, label, predicted_label)
+		print "%s: Actual: %s (%d)\tPrediction: %s (%d)" % (verdict, class_ids[label], label, 
+			class_ids[predicted_label], predicted_label)
 		_sorted = np.sort(mean_outputs)[::-1]
 		if predicted_label == label:
 			num_correct += 1
 			margin = _sorted[0] - _sorted[1]
 		else:
 			margin = mean_outputs[label] - _sorted[0]
-		print mean_outputs
+		print mean_outputs.squeeze()
 		print "margin: %.3f\n" % margin
 
 		conf_mat[label,predicted_label] += 1
@@ -448,7 +466,7 @@ def main(args):
 			all_num_correct[all_predictions == label] += 1
 
 		if args.out_dir:
-			sub_dir = os.path.join(args.out_dir, "%d_%d_%d_%s_%.3f" % (num_total, label, predicted_label, verdict, margin))
+			sub_dir = os.path.join(args.out_dir, "%d_%s_%s_%s_%.3f" % (num_total, class_ids[label], class_ids[predicted_label], verdict, margin))
 			wrong_dir = os.path.join(args.out_dir, "wrong") 
 			try:
 				os.makedirs(sub_dir)
@@ -457,7 +475,7 @@ def main(args):
 				pass
 
 			if label != predicted_label:
-				im_fname = os.path.join(wrong_dir, "wrong_%d_%d_%d_%.3f.png" % (num_total, label, predicted_label, margin))
+				im_fname = os.path.join(wrong_dir, "wrong_%d_%s_%s_%.3f.png" % (num_total, class_ids[label], class_ids[predicted_label], margin))
 				cv2.imwrite(im_fname, np.squeeze(full_ims[0]))
 			im_fname = os.path.join(sub_dir, "original_%d.png" % num_total)
 			cv2.imwrite(im_fname, np.squeeze(full_ims[0]))
@@ -477,7 +495,9 @@ def main(args):
 
 				txt_fname = os.path.join(sub_dir, "%d_%s_%.3f_%.3f.txt" % (idx, crop_verdict, crop_margin, weight))
 				fd = open(txt_fname, 'w')
-				fd.write("%s: Actual: %d\tPrediction: %d\n" % (crop_verdict, label, crop_prediction))
+				#fd.write("%s: Actual: %s\tPrediction: %s\n" % (crop_verdict, class_ids[label], class_ids[crop_prediction]))
+				fd.write("%s: Actual: %s (%d)\tPrediction: %s (%d)\n" % (crop_verdict, class_ids[label], label, 
+					class_ids[crop_prediction], crop_prediction))
 				fd.write("%s\n" % np.array_str(class_scores))
 				fd.write("margin: %.3f\n" % crop_margin)
 				fd.write("weight: %.3f\n" % weight)
@@ -501,9 +521,12 @@ def main(args):
 	log(args, "\nOverall Accuracy: %f" % overall_acc)
 
 	if args.out_dir:
-		target_names = [ 'Caroline', 'Cursiva', 'Humanistic', 'Humanistic_Cursive', 'Hybrida', 'Uncial', 
-						'Praegothica', 'Southern_Textualis', 'Half_uncial', 'Semihybrida', 'Semitextualis', 
-						'Textualis']
+		if isinstance(class_ids[0], str):
+			target_names = [ 'Caroline', 'Cursiva', 'Humanistic', 'Humanistic_Cursive', 'Hybrida', 'Uncial', 
+							'Praegothica', 'Southern_Textualis', 'Half_uncial', 'Semihybrida', 'Semitextualis', 
+							'Textualis']
+		else:
+			target_names = [class_idx[x] for x in xrange(len(class_idx))]
 		outfile = os.path.join(args.out_dir, "conf_mat.png")
 		conf_mat = np.delete(np.delete(conf_mat, 0, axis=0), 0, axis=1)
 		cm_normalized = conf_mat.astype('float') / conf_mat.sum(axis=1)[:, np.newaxis]
@@ -547,10 +570,6 @@ def get_args():
 				help="The model definition file for the predicting network(e.g. deploy.prototxt)")
 	parser.add_argument("predict_weights", 
 				help="The model weight file for the predicting network (e.g. net.caffemodel)")
-	parser.add_argument("vote_model", 
-				help="The model definition file for the vote network(e.g. deploy.prototxt)")
-	parser.add_argument("vote_weights", 
-				help="The model weight file for the vote network (e.g. net.caffemodel)")
 	parser.add_argument("test_lmdbs", 
 				help="LMDBs of test images (encoded DocDatums), files separated with ;")
 
@@ -574,6 +593,13 @@ def get_args():
 				help="Max number of transforms in single batch per original image")
 	parser.add_argument("-o", "--out-dir", default='', type=str, 
 				help="Out dir where to store analysis")
+
+	parser.add_argument("--vote-model", default='',
+				help="The model definition file for the vote network (e.g. deploy.prototxt)")
+	parser.add_argument("--vote-weights",  default='',
+				help="The model weight file for the vote network (e.g. net.caffemodel)")
+	parser.add_argument("--class-ids",  default='',
+				help="File indicating mapping from class names to integer labels")
 
 	args = parser.parse_args()
 
