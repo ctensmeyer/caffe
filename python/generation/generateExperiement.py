@@ -4,8 +4,8 @@ import createNetwork
 DS = ["rvl_cdip", "andoc_1m", "rvl_cdip_10", "rvl_cdip_100", "andoc_1m_10", "andoc_1m_50", "imagenet"]
 
 ########################
-#ds = 'rvl_cdip_half'
-ds = 'andoc_1m_half'
+#ds = 'rvl_cdip'
+ds = 'andoc_1m'
 #ds = 'combined'
 #ds = 'imagenet'
 #######################
@@ -119,13 +119,20 @@ EXPERIMENTS = {"baseline": {"baseline" : (COMBO(ds), dict(num_experiments=3, **d
 							 "elastic_3_5": (COMBO(ds), dict(elastic_sigma=3, elastic_max_alpha=5, **default)),
 							 "elastic_3_10": (COMBO(ds), dict(elastic_sigma=3, elastic_max_alpha=10, **default)),
 						   },
-				"combined": { "crop_mirror_shear": (COMBO(ds, 256), dict(crop=227, hmirror=0.0, vmirror=0.5, shear=10, **default)),
-							  "crop_mirror": (COMBO(ds, 256), dict(crop=227, hmirror=0.0, vmirror=0.5, **default)),
-							  "mirror_shear": (COMBO(ds), dict(hmirror=0.0, vmirror=0.5, shear=10, **default)),
-							  "crop_shear": (COMBO(ds, 256), dict(crop=227, shear=10, **default)),
+				"salt": {    "salt_025": (COMBO(ds), dict(salt_max_flip=0.025, **default)),
+							 "salt_05": (COMBO(ds), dict(salt_max_flip=0.05, **default)),
+							 "salt_1": (COMBO(ds), dict(salt_max_flip=0.1, **default)),
+							 "salt_2": (COMBO(ds), dict(salt_max_flip=0.2, **default)),
+						   },
+				"combined": { "crop_mirror_shear": (COMBO(ds, 256), dict(crop=227, hmirror=0.0, vmirror=0.5, shear=10, num_experiments=2, shift="mean", scale=(1.0/255))),
+							  "crop_mirror": (COMBO(ds, 256), dict(crop=227, hmirror=0.0, vmirror=0.5, num_experiments=2, shift="mean", scale=(1.0/255))),
+							  "mirror_shear": (COMBO(ds), dict(hmirror=0.0, vmirror=0.5, shear=10, num_experiments=2, shift="mean", scale=(1.0/255))),
+							  "crop_shear": (COMBO(ds, 256), dict(crop=227, shear=10, num_experiments=2, shift="mean", scale=(1.0/255))),
 						   },
 
 				"size": { "size_%d" % size: (COMBO(ds, size), dict(**size_default)) for size in SIZES },
+				"size2": { "size_512_75": (COMBO(ds, 512), dict(width=0.75, **size_default)),
+							 "size_512_50": (COMBO(ds, 512), dict(width=0.5, **size_default)) },
 				"multiscale": { "multiscale_%d_%d" % (sizes[0], sizes[-1]): (COMBO(ds, sizes[-1]), 
 					dict(pool='spp', sizes=sizes,**size_default)) for sizes in MULTISCALE_SIZES },
 
@@ -135,6 +142,22 @@ EXPERIMENTS = {"baseline": {"baseline" : (COMBO(ds), dict(num_experiments=3, **d
 							 "width_fc_50" : (COMBO(ds), dict(fc_width_mult=0.50, **width_default)),
 							 "width_fc_75" : (COMBO(ds), dict(fc_width_mult=0.75, **width_default)),
 						   },
+				"width3": { "width_conv_150" : (COMBO(ds), dict(conv_width_mult=1.50, **width_default)),
+							 "width_conv_200" : (COMBO(ds), dict(conv_width_mult=2.00, **width_default)),
+							 "width_conv_150_fc_50" : (COMBO(ds), dict(conv_width_mult=1.50, fc_width_mult=0.5, **width_default)),
+						   },
+				"padding2": {
+							 "crop_227": (['color_227_short'], dict(num_experiments=2, crop=227, shear=10, **default)),
+							 "crop_384": (['color_384_short'], dict(num_experiments=2, crop=384, shear=10, **default))
+							},
+				"padding4": {
+							 "warped_227": (COMBO(ds, 227), dict(**pad_default)),
+							 "warped_384": (COMBO(ds, 384), dict(**pad_default)),
+							 "spp_warped_227": (COMBO(ds, 227), dict(pool='spp', **pad_default)),
+							 "spp_warped_384": (COMBO(ds, 384), dict(pool='spp', **pad_default)),
+							 "crop_227": (['color_227_short'], dict(num_experiments=2, crop=227, shear=10, **default)),
+							 "crop_384": (['color_384_short'], dict(num_experiments=2, crop=384, shear=10, **default))
+							},
 				"padding": { 
 							 "warped_227": (COMBO(ds, 227), dict(**pad_default)),
 							 "pad_227":	(COMBO(ds, 227, pad=True), dict(**pad_default)),
@@ -182,6 +205,7 @@ EXPERIMENTS = {"baseline": {"baseline" : (COMBO(ds), dict(num_experiments=3, **d
 
 				"dsurf2": { "dsurf_227": (['dsurf_227'], dict(dsurf=True, num_experiments=10, **default))},
 				"dsurf_gray2": { "dsurf_gray_227": (['dsurf_227', 'gray_227'], dict(dsurf=True, num_experiments=10, **default)) },
+				"dsurf_color2": { "dsurf_color_227": (['dsurf_227', 'color_227'], dict(dsurf=True, num_experiments=10, **default)) },
 
 
 				"finetune": { 
@@ -232,7 +256,29 @@ EXPERIMENTS = {"baseline": {"baseline" : (COMBO(ds), dict(num_experiments=3, **d
 							  "combined_color": (['color_227'], dict(shear=10, num_experiments=2, **default)),
 							  "combined_gray": (['gray_227'], dict(shear=10, num_experiments=2, **default)),
 							 },
+				"equi_arch": {
+							  "conv_4": (COMBO(ds, 227), dict(depth=2, rotation=20, **default)),
+							  "conv_5": (COMBO(ds, 227), dict(depth=3, rotation=20, **default)),
+							  "conv_6": (COMBO(ds, 227), dict(depth=4, rotation=20, **default)),
+							  "conv_7": (COMBO(ds, 227), dict(depth=5, rotation=20, **default)),
+							  "fc_1": (COMBO(ds, 227), dict(fc_depth=1, rotation=20, **default)),
+							  "fc_2": (COMBO(ds, 227), dict(fc_depth=2, rotation=20, **default)),
+							  "fc_3": (COMBO(ds, 227), dict(fc_depth=3, rotation=20, **default)),
+							  "fc_4": (COMBO(ds, 227), dict(fc_depth=4, rotation=20, **default)),
+							  "width_50": (COMBO(ds, 227), dict(width_mult=0.5, rotation=20, **default)),
+							  "width_150": (COMBO(ds, 227), dict(width_mult=1.5, rotation=20, **default)),
+							 }
 				}
+
+
+def equiArchExperiments():
+	group = "equi_arch"
+
+	experiments = EXPERIMENTS["equi_arch"]
+
+	for name, (tags, tr) in experiments.items():
+		print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
+		createNetwork.createExperiment(ds, tags, group, name, **tr)
 
 
 def sizeExperiments():
@@ -240,6 +286,15 @@ def sizeExperiments():
 
 	experiments = EXPERIMENTS["size"]
 	experiments.update(EXPERIMENTS["multiscale"])
+
+	for name, (tags, tr) in experiments.items():
+		print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
+		createNetwork.createExperiment(ds, tags, group, name, **tr)
+
+def size2Experiments():
+	group = "size2"
+
+	experiments = EXPERIMENTS["size2"]
 
 	for name, (tags, tr) in experiments.items():
 		print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
@@ -267,11 +322,40 @@ def paddingExperiments():
 		print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
 		createNetwork.createExperiment(ds, tags, group, name, **tr)
 
+
+def padding2Experiments():
+	group = "padding3"
+
+	experiments = EXPERIMENTS["padding2"]
+
+	for name, (tags, tr) in experiments.items():
+		print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
+		createNetwork.createExperiment(ds, tags, group, name, **tr)
+
+
+def padding4Experiments():
+	group = "padding4"
+
+	experiments = EXPERIMENTS["padding4"]
+
+	for name, (tags, tr) in experiments.items():
+		print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
+		createNetwork.createExperiment(ds, tags, group, name, **tr)
+
 def widthExperiments():
 	group = "width"
 
 	experiments = EXPERIMENTS["width"]
 	experiments.update(EXPERIMENTS["width_2"])
+
+	for name, (tags, tr) in experiments.items():
+		print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
+		createNetwork.createExperiment(ds, tags, group, name, **tr)
+
+def width3Experiments():
+	group = "width3"
+
+	experiments = EXPERIMENTS["width3"]
 
 	for name, (tags, tr) in experiments.items():
 		print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
@@ -351,12 +435,30 @@ def dsurf2Experiments():
 	group = "dsurf2"
 
 	experiments = EXPERIMENTS["dsurf2"]
-	experiments.update(EXPERIMENTS["dsurf_gray2"])
+	#experiments.update(EXPERIMENTS["dsurf_gray2"])
+	experiments.update(EXPERIMENTS["dsurf_color2"])
 
 	for name, (tags, tr) in experiments.items():
 		print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
 		createNetwork.createExperiment(ds, tags, group, name, **tr)
 
+
+def augmentation2Experiments():
+	group = "augmentation"
+	
+	experiments = EXPERIMENTS['salt']
+	for name, (tags, tr) in experiments.items():
+		print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
+		createNetwork.createExperiment(ds, tags, group, name, **tr)
+
+
+def augmentation3Experiments():
+	group = "aug_combined"
+	
+	experiments = EXPERIMENTS['combined']
+	for name, (tags, tr) in experiments.items():
+		print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
+		createNetwork.createExperiment(ds, tags, group, name, **tr)
 
 def augmentationExperiments():
 	group = "augmentation"
@@ -377,7 +479,18 @@ def augmentationExperiments():
 		print "createNetwork.createExperiment(%r, %r, %r, %r, %r)" % (ds, tags, group, name, tr)
 		createNetwork.createExperiment(ds, tags, group, name, **tr)
 
+def hsvExperiments():
+	tr = {'num_experiments': 10, 'hsv': True, 'scale': (1./255), 'shift': 'mean'} 
+	createNetwork.createExperiment(ds, ['color_227'], 'channel2', 'hsv', **tr)
+	createNetwork.createExperiment(ds, ['color_227', 'color_227'], 'channel2', 'hsv_rgb', **tr)
+	
 
+def channel2Experiments():
+	tr = {'num_experiments': 10, 'scale': (1./255), 'shift': 'mean'} 
+	createNetwork.createExperiment(ds, ['binary_227'], 'channel2', 'binary', **tr)
+	createNetwork.createExperiment(ds, ['gray_227_invert'], 'channel2', 'gray_invert', **tr)
+	createNetwork.createExperiment(ds, ['color_227_invert'], 'channel2', 'color_invert', **tr)
+	createNetwork.createExperiment(ds, ['gray_227'], 'channel2', 'gray', **tr)
 
 
 def variantExperiments():
@@ -413,17 +526,27 @@ def channelExperiments():
 
 if __name__ == "__main__":
 	#print COMBO(ds, 227, multiple=True)
-	sizeExperiments()
+	#sizeExperiments()
+	#size2Experiments()
 	#paddingExperiments()
+	#padding2Experiments()
+	padding4Experiments()
 	#finetuneExperiments()
 	#finetune2Experiments()
 	#finetune3Experiments()
+	#finetune4Experiments()
 	#dsurfExperiments()
 	#dsurf2Experiments()
 	#bnExperiments()
 	#bn2Experiments()
 	#depthExperiments()
 	#widthExperiments()
+	#width3Experiments()
 	#augmentationExperiments()
+	#augmentation2Experiments()
+	#augmentation3Experiments()
 	#channelExperiments()
+	#channel2Experiments()
 	#variantExperiments()
+	#hsvExperiments()
+	#equiArchExperiments()

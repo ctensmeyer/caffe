@@ -28,9 +28,7 @@ def safe_mkdir(_dir):
 
 
 def setup_network(args):
-	net_file = os.path.join(args.net_dir, 'deploy.prototxt')
-	weights_file = os.path.join(args.net_dir, 'weights.caffemodel')
-	network = caffe.Net(net_file, weights_file, caffe.TEST)
+	network = caffe.Net(args.net_file, args.weights_file, caffe.TEST)
 	if args.gpu >= 0:
 		caffe.set_mode_gpu()
 		caffe.set_device(args.gpu)
@@ -54,7 +52,7 @@ def fprop(network, ims, args):
 
 		# propagate on batch
 		network.forward()
-		output = np.copy(network.blobs["prob"].data)
+		output = np.copy(network.blobs[args.out_blob].data)
 		responses.append(output)
 		print "Progress %d%%" % int(100 * min(idx, len(ims)) / float(len(ims)))
 	return np.concatenate(responses, axis=0)
@@ -176,12 +174,8 @@ def xor_image(im1, im2):
 
 def get_ims_files(args):
 	im_files = map(lambda s: s.strip(), open(args.image_manifest, 'r').readlines())
-	im_dirs = map(lambda s: s.strip(), open(os.path.join(args.net_dir, 'inputs.txt'), 'r').readlines())
+	im_dirs = args.im_dirs.split(',')
 	return im_files, im_dirs
-
-
-def get_pad_size(args):
-	return int(open(os.path.join(args.net_dir, 'pad.txt'), 'r').read())
 
 
 def load_im(im_file, im_dirs, args):
@@ -248,25 +242,27 @@ def write_output(locations, raw_subwindows, binarized_subwindows, im_file, image
 def main(args):
 	network = setup_network(args)
 	im_files, im_dirs = get_ims_files(args)
-	pad_size = get_pad_size(args)
-	print "Pad Size:", pad_size
+	pad_size = args.pad
 	safe_mkdir(os.path.join(args.out_dir, 'basic'))
 	for idx, im_file in enumerate(im_files):
 		image = load_im(im_file, im_dirs, args)
-		cv2.imwrite('tmp.png', (1./ args.scale) * image + args.mean)
+		if idx == 0:
+			print image.shape
+		if idx and idx % args.print_count == 0:
+			print "Processed %d/%d Images" % (idx, len(im_files))
 		locations, subwindows = get_subwindows(image, pad_size, args.tile_size)
 		raw_subwindows, binarized_subwindows = predict(network, subwindows, args)
 		write_output(locations, raw_subwindows, binarized_subwindows, im_file, image, pad_size, image, args)
 
-		if idx and idx % args.print_count == 0:
-			print "Processed %d/%d Images" % (idx, len(im_files))
 	
 
 def get_args():
 	parser = argparse.ArgumentParser(description="Outputs binary predictions")
 
-	parser.add_argument("net_dir", 
-				help="The dir containing the model")
+	parser.add_argument("net_file", 
+				help="The deploy.prototxt")
+	parser.add_argument("weights_file", 
+				help="The weights.caffemodel")
 	parser.add_argument("dataset_dir",
 				help="The dataset to be evaluated")
 	parser.add_argument("image_manifest",
@@ -283,16 +279,23 @@ def get_args():
 				help="Optional scale factor")
 	parser.add_argument("--print-count", default=1, type=int, 
 				help="Print every print-count images processed")
-	parser.add_argument("-b", "--batch-size", default=1, type=int, 
+	parser.add_argument("-b", "--batch-size", default=8, type=int, 
 				help="Max number of transforms in single batch per original image")
-	parser.add_argument("-t", "--tile-size", default=128, type=int, 
+	parser.add_argument("-p", "--pad", default=64, type=int, 
+				help="Padding size")
+	parser.add_argument("-t", "--tile-size", default=256, type=int, 
 				help="Size of tiles to extract")
+	parser.add_argument("--im-dirs", default='original_images', type=str, 
+				help="comma separated list of input images to the network")
 	parser.add_argument("--threshold", default=0.5, type=float, 
 				help="Probability threshold for foreground/background")
 	parser.add_argument("-v", "--verbose", default=False, action='store_true',
 				help="Write auxiliary images for analysis")
+	parser.add_argument("--out-blob", default='prob', type=str,
+				help="Output blob of net")
 
 	args = parser.parse_args()
+	print args
 
 	return args
 			
