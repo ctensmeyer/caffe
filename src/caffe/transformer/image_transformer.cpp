@@ -168,6 +168,19 @@ ImageTransformer<Dtype>* CreateImageTransformer(ImageTransformationParameter par
 	  prob_transformers->push_back(transformer);
 	  weights.push_back(weight);
 	}
+	// OtsuColorJitter
+	for (int j = 0; j < prob_param.otsu_color_jitter_params_size(); j++) {
+	  OtsuColorJitterTransformParameter otsu_color_jitter_param = prob_param.otsu_color_jitter_params(j); 
+	  if (j < prob_param.otsu_color_jitter_prob_weights_size()) {
+	    weight = prob_param.otsu_color_jitter_prob_weights(j);
+	  } else {
+	    weight = 1;
+	  }
+	  ImageTransformer<Dtype>* transformer = new OtsuColorJitterImageTransformer<Dtype>(otsu_color_jitter_param);
+	  transformer->InitRand(rng_seed);
+	  prob_transformers->push_back(transformer);
+	  weights.push_back(weight);
+	}
 	// ElasticDeformation
 	for (int j = 0; j < prob_param.elastic_deformation_params_size(); j++) {
 	  ElasticDeformationTransformParameter elastic_deformation_param = prob_param.elastic_deformation_params(j); 

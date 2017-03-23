@@ -565,6 +565,7 @@ message ProbImageTransformParameter {
   repeated ZeroBorderTransformParameter zero_border_params = 23;
   repeated HSVTransformParameter hsv_params = 24;
   repeated SaltPepperTransformParameter salt_pepper_params = 25;
+  repeated OtsuColorJitterTransformParameter otsu_color_jitter_params = 26;
 
   // the number of values for each of these fields should match the number
   // of values for the corresponding fields 1-5.  If left unspecificed,
@@ -584,6 +585,7 @@ message ProbImageTransformParameter {
   repeated float zero_border_prob_weights = 33;
   repeated float hsv_prob_weights = 34;
   repeated float salt_pepper_prob_weights = 35;
+  repeated float otsu_color_jitter_prob_weights = 36;
 }
 
 message ResizeTransformParameter {
@@ -712,6 +714,12 @@ message PerspectiveTransformParameter {
 message ColorJitterTransformParameter {
   optional float mean = 2 [default = 0];
   optional float sigma = 1 [default = 5];
+}
+
+message OtsuColorJitterTransformParameter {
+  optional float mean = 2 [default = 0];
+  optional float sigma = 1 [default = 5];
+  optional bool foreground = 3 [default = true];
 }
 
 message ElasticDeformationTransformParameter {
