@@ -2,6 +2,7 @@
 import os
 import sys
 import numpy as np
+import scipy.ndimage
 import cv2
 
 
@@ -26,7 +27,30 @@ def measure_psnr(im, gt):
 
 
 def measure_drd(im, gt):
-	return 0.
+	diff = np.absolute( (im - gt) / 255).astype(np.float32)
+	W = np.asarray([[0.0256, 0.0324, 0.0362, 0.0324, 0.0256],
+					[0.0324, 0.0512, 0.0724, 0.0512, 0.0324],
+					[0.0362, 0.0724, 2.0000, 0.0724, 0.0362],
+					[0.0324, 0.0512, 0.0724, 0.0512, 0.0324],
+					[0.0256, 0.0324, 0.0362, 0.0324, 0.0256]])
+	out = scipy.ndimage.convolve(diff, W, mode='constant', cval=0.)
+	out = out - 2
+	neg_indices = out < 0
+	out[neg_indices] = 0
+
+	numer = out.sum()
+	num_non_uniform = 0
+	h = 0
+	while h + 8 <= gt.shape[0]:
+		w = 0
+		while w + 8 <= gt.shape[1]:
+			sub_im = gt[h:h+8,w:w+8]
+			a = sub_im.mean()
+			if a != 0 and a != 255:
+				num_non_uniform += 1
+			w += 8
+		h += 8
+	return numer / float(num_non_uniform)
 
 
 # convention that 0 is foreground and != 0 is background
@@ -73,7 +97,7 @@ def get_metrics(predict_fn, gt_fn, recall_fn, precision_fn):
 	f, p, r = measure_fmeasure(predict_im, gt_im)
 	pf, pp, pr = measure_psuedo_fmeasure(predict_im, gt_im, recall_weights, precision_weights)
 
-	return pf, pp, pr, f, p, r, psnr, accuracy
+	return pf, pp, pr, f, p, r, psnr, accuracy, drd
 
 def main(predict_dir, pr_dat_dir, out_file, summary_file):
 	fd = open(out_file, 'w')
@@ -88,6 +112,7 @@ def main(predict_dir, pr_dat_dir, out_file, summary_file):
 		metrics = get_metrics(predict_fn, gt_fn, recall_fn, precision_fn)
 		all_metrics.append(metrics)
 		fd.write("%s  %s\n" % (fn, "  ".join(map(lambda f: "%.4f" % f, metrics))))
+		exit()
 
 	fd.close()
 
