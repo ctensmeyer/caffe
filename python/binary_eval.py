@@ -27,19 +27,35 @@ def measure_psnr(im, gt):
 
 
 def measure_drd(im, gt):
-	diff = np.absolute( (im - gt) / 255).astype(np.float32)
-	W = np.asarray([[0.0256, 0.0324, 0.0362, 0.0324, 0.0256],
-					[0.0324, 0.0512, 0.0724, 0.0512, 0.0324],
-					[0.0362, 0.0724, 2.0000, 0.0724, 0.0362],
-					[0.0324, 0.0512, 0.0724, 0.0512, 0.0324],
-					[0.0256, 0.0324, 0.0362, 0.0324, 0.0256]])
-	out = scipy.ndimage.convolve(diff, W, mode='constant', cval=0.)
-	out = out - 2
-	neg_indices = out < 0
-	out[neg_indices] = 0
+	diff = (im - gt)
+	gt = gt 
+	im = im 
 
-	numer = out.sum()
+	# compute weight matrix
+	W = np.zeros((5,5))
+	for i in [-2, -1, 0, 1, 2]:
+		for j in [-2, -1, 0, 1, 2]:
+			if i or j:
+				W[i+2,j+2] = 1 / np.sqrt(i*i + j*j)
+	s = W.sum()
+	W = W / s
+
+	total = 0
+	locs = np.where(diff != 0)
+	S = locs[0].shape[0]
+	for k in xrange(S):
+		h,w = locs[0][k], locs[1][k]
+		dist = 0
+		for i in [-2, -1, 0, 1, 2]:
+			for j in [-2, -1, 0, 1, 2]:
+				if h + i >= 0 and h + i < gt.shape[0] and w + j >= 0 and w + j < gt.shape[1]:
+					dist += W[i+2,j+2] * (1 if (im[h,w] - gt[h+i,w+j]) else 0)
+		total += dist
+			
+	numer = total
+
 	num_non_uniform = 0
+	blocks = 0
 	h = 0
 	while h + 8 <= gt.shape[0]:
 		w = 0
@@ -48,6 +64,7 @@ def measure_drd(im, gt):
 			a = sub_im.mean()
 			if a != 0 and a != 255:
 				num_non_uniform += 1
+			blocks += 1
 			w += 8
 		h += 8
 	return numer / float(num_non_uniform)
@@ -97,7 +114,11 @@ def get_metrics(predict_fn, gt_fn, recall_fn, precision_fn):
 	f, p, r = measure_fmeasure(predict_im, gt_im)
 	pf, pp, pr = measure_psuedo_fmeasure(predict_im, gt_im, recall_weights, precision_weights)
 
+<<<<<<< HEAD
 	return pf, pp, pr, f, p, r, psnr, accuracy, drd
+=======
+	return pf, pp, pr, f, p, r, drd, psnr, accuracy
+>>>>>>> 9a38896bb4b7fad239edd7a38330a9e35f7d8f1b
 
 def main(predict_dir, pr_dat_dir, out_file, summary_file):
 	fd = open(out_file, 'w')
