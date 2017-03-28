@@ -1449,6 +1449,7 @@ message WeightedFmeasureLossParameter {
   // counts background pixels as correct if their prob is <= 0.5 - margin
   // margin of 0.5 has no affect
   optional float margin = 1 [default = 0.5];
+  optional bool per_instance = 2 [default = false];
 }
 
 message SPPParameter {

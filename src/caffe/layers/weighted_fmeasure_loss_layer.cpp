@@ -13,6 +13,7 @@ void WeightedFmeasureLossLayer<Dtype>::LayerSetUp(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
   LossLayer<Dtype>::LayerSetUp(bottom, top);
   margin_ = this->layer_param().weighted_fmeasure_loss_param().margin();
+  per_instance_ = this->layer_param().weighted_fmeasure_loss_param().per_instance();
 }
 
 template <typename Dtype>
@@ -30,6 +31,14 @@ void WeightedFmeasureLossLayer<Dtype>::Reshape(
   CHECK_EQ(bottom[0]->num(), bottom[3]->num()) <<
       "WeightedFmeasure layer inputs must have the same number of instances.";
   work_buffer_->Reshape(bottom[0]->shape());
+  if (per_instance_) {
+    vector<int> shape;
+	shape.push_back(bottom[0]->num());
+	shape.push_back(1);
+	top[0]->Reshape(shape);
+  } else {
+    LossLayer<Dtype>::Reshape(bottom, top);
+  }
 }
 
 template <typename Dtype>
@@ -59,15 +68,52 @@ void WeightedFmeasureLossLayer<Dtype>::Forward_cpu(
 	}
   }
 
-  // Blas version
-  Dtype* target_mult_input = work_buffer_->mutable_cpu_data();
-  caffe_mul(count, input, target, target_mult_input);
+  if (per_instance_) {
+    const int num = bottom[0]->num();
+    const int height = bottom[0]->num();
+    const int width = bottom[0]->num();
+    const int spatial_size = height * width;
+    Dtype* target_mult_input = work_buffer_->mutable_cpu_data();
+	for (int n = 0; n < num; n++) {
+	  const int spatial_offset = n * spatial_size;
 
-  recall_num_ = caffe_cpu_dot(count, target_mult_input, recall_weight);
-  recall_denum_ = caffe_cpu_dot(count, target, recall_weight);
+      caffe_mul(spatial_size, input + spatial_offset, target + spatial_offset, target_mult_input + spatial_offset);
 
-  precision_num_ = caffe_cpu_dot(count, target_mult_input, precision_weight);
-  precision_denum_ = caffe_cpu_dot(count, input, precision_weight);
+      recall_num_ = caffe_cpu_dot(spatial_size, target_mult_input + spatial_offset, recall_weight + spatial_offset);
+      recall_denum_ = caffe_cpu_dot(spatial_size, target + spatial_offset, recall_weight + spatial_offset);
+
+      precision_num_ = caffe_cpu_dot(spatial_size, target_mult_input + spatial_offset, precision_weight + spatial_offset);
+      precision_denum_ = caffe_cpu_dot(spatial_size, input + spatial_offset, precision_weight + spatial_offset);
+
+
+      // check for 0 denominators to avoid nans
+      recall_ = (recall_denum_ != 0) ? recall_num_ / recall_denum_ : 0;
+      precision_ = (precision_denum_ != 0) ? precision_num_ / precision_denum_ : 0;
+      Dtype f_measure = ((recall_ + precision_) != 0) ? 2 * recall_ * precision_ / (recall_ + precision_) : 0;
+      top[0]->mutable_cpu_data()[n] = 1 - f_measure;  // loss should be lower is better
+	}
+  } else {
+    // Blas version
+    Dtype* target_mult_input = work_buffer_->mutable_cpu_data();
+    caffe_mul(count, input, target, target_mult_input);
+
+    recall_num_ = caffe_cpu_dot(count, target_mult_input, recall_weight);
+    recall_denum_ = caffe_cpu_dot(count, target, recall_weight);
+
+    precision_num_ = caffe_cpu_dot(count, target_mult_input, precision_weight);
+    precision_denum_ = caffe_cpu_dot(count, input, precision_weight);
+
+
+    // check for 0 denominators to avoid nans
+    recall_ = (recall_denum_ != 0) ? recall_num_ / recall_denum_ : 0;
+    precision_ = (precision_denum_ != 0) ? precision_num_ / precision_denum_ : 0;
+    Dtype f_measure = ((recall_ + precision_) != 0) ? 2 * recall_ * precision_ / (recall_ + precision_) : 0;
+    //LOG(INFO) << "F/P/R:" << f_measure << " " << precision_ << " " <<  recall_;
+    //LOG(INFO) << "P_num/P_denum:" << precision_num_ << " " << precision_denum_;
+    //LOG(INFO) << "R_num/R_denum:" << recall_num_ << " " << recall_denum_;
+    top[0]->mutable_cpu_data()[0] = 1 - f_measure;  // loss should be lower is better
+  }
+
 
 /*
   // Loop version
@@ -88,15 +134,6 @@ void WeightedFmeasureLossLayer<Dtype>::Forward_cpu(
 	precision_denum_ += (input[i] * precision_weight[i]);  // B_W(x,y)
   }
 */
-
-  // check for 0 denominators to avoid nans
-  recall_ = (recall_denum_ != 0) ? recall_num_ / recall_denum_ : 0;
-  precision_ = (precision_denum_ != 0) ? precision_num_ / precision_denum_ : 0;
-  Dtype f_measure = ((recall_ + precision_) != 0) ? 2 * recall_ * precision_ / (recall_ + precision_) : 0;
-  //LOG(INFO) << "F/P/R:" << f_measure << " " << precision_ << " " <<  recall_;
-  //LOG(INFO) << "P_num/P_denum:" << precision_num_ << " " << precision_denum_;
-  //LOG(INFO) << "R_num/R_denum:" << recall_num_ << " " << recall_denum_;
-  top[0]->mutable_cpu_data()[0] = 1 - f_measure;  // loss should be lower is better
 }
 
 template <typename Dtype>
@@ -107,7 +144,7 @@ void WeightedFmeasureLossLayer<Dtype>::Backward_cpu(
     LOG(FATAL) << this->type()
                << " WeightedFmeasureLossLayer cannot backpropagate to label inputs, or weight maps.";
   }
-  if (propagate_down[0]) {
+  if (propagate_down[0] and !per_instance_) {
     //const Dtype* input = bottom[0]->cpu_data();
     Dtype* target = bottom[1]->mutable_cpu_data();  // reuse memory for intermediate computations
     const Dtype* recall_weight = bottom[2]->cpu_data();

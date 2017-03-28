@@ -44,21 +44,46 @@ void WeightedFmeasureLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& b
     CUDA_POST_KERNEL_CHECK;
   }
 
-  // Blas version
-  Dtype* target_mult_input = work_buffer_->mutable_gpu_data();
-  caffe_gpu_mul(count, input, target, target_mult_input);
+  if (per_instance_) {
+    const int num = bottom[0]->num();
+    const int height = bottom[0]->num();
+    const int width = bottom[0]->num();
+    const int spatial_size = height * width;
+    Dtype* target_mult_input = work_buffer_->mutable_gpu_data();
+	for (int n = 0; n < num; n++) {
+	  const int spatial_offset = n * spatial_size;
 
-  caffe_gpu_dot(count, target_mult_input, recall_weight, &recall_num_);
-  caffe_gpu_dot(count, target, recall_weight, &recall_denum_);
+      caffe_gpu_mul(spatial_size, input + spatial_offset, target + spatial_offset, target_mult_input + spatial_offset);
 
-  caffe_gpu_dot(count, target_mult_input, precision_weight, &precision_num_);
-  caffe_gpu_dot(count, input, precision_weight, &precision_denum_);
+      caffe_gpu_dot(spatial_size, target_mult_input + spatial_offset, recall_weight + spatial_offset, &recall_num_);
+      caffe_gpu_dot(spatial_size, target + spatial_offset, recall_weight + spatial_offset, &recall_denum_);
 
-  // check for 0 denominators to avoid nans
-  recall_ = (recall_denum_ != 0) ? recall_num_ / recall_denum_ : 0;
-  precision_ = (precision_denum_ != 0) ? precision_num_ / precision_denum_ : 0;
-  Dtype f_measure = ((recall_ + precision_) != 0) ? 2 * recall_ * precision_ / (recall_ + precision_) : 0;
-  top[0]->mutable_cpu_data()[0] = 1 - f_measure;  // loss should be lower is better
+      caffe_gpu_dot(spatial_size, target_mult_input + spatial_offset, precision_weight + spatial_offset, &precision_num_);
+      caffe_gpu_dot(spatial_size, input + spatial_offset, precision_weight + spatial_offset, &precision_denum_);
+
+      // check for 0 denominators to avoid nans
+      recall_ = (recall_denum_ != 0) ? recall_num_ / recall_denum_ : 0;
+      precision_ = (precision_denum_ != 0) ? precision_num_ / precision_denum_ : 0;
+      Dtype f_measure = ((recall_ + precision_) != 0) ? 2 * recall_ * precision_ / (recall_ + precision_) : 0;
+      top[0]->mutable_cpu_data()[n] = 1 - f_measure;  // loss should be lower is better
+	}
+  } else {
+    // Blas version
+    Dtype* target_mult_input = work_buffer_->mutable_gpu_data();
+    caffe_gpu_mul(count, input, target, target_mult_input);
+
+    caffe_gpu_dot(count, target_mult_input, recall_weight, &recall_num_);
+    caffe_gpu_dot(count, target, recall_weight, &recall_denum_);
+
+    caffe_gpu_dot(count, target_mult_input, precision_weight, &precision_num_);
+    caffe_gpu_dot(count, input, precision_weight, &precision_denum_);
+
+    // check for 0 denominators to avoid nans
+    recall_ = (recall_denum_ != 0) ? recall_num_ / recall_denum_ : 0;
+    precision_ = (precision_denum_ != 0) ? precision_num_ / precision_denum_ : 0;
+    Dtype f_measure = ((recall_ + precision_) != 0) ? 2 * recall_ * precision_ / (recall_ + precision_) : 0;
+    top[0]->mutable_cpu_data()[0] = 1 - f_measure;  // loss should be lower is better
+  }
 }
 
 template <typename Dtype>
@@ -68,7 +93,7 @@ void WeightedFmeasureLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& 
     LOG(FATAL) << this->type()
                << " WeightedFmeasureLossLayer cannot backpropagate to label inputs, or weight maps.";
   }
-  if (propagate_down[0]) {
+  if (propagate_down[0] && !per_instance_) {
     Dtype* target = bottom[1]->mutable_gpu_data();  // reuse memory for intermediate computations
     const Dtype* recall_weight = bottom[2]->gpu_data();
     const Dtype* precision_weight = bottom[3]->gpu_data();
