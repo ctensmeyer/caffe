@@ -113,15 +113,15 @@ void Graph4CEnergyLayer<Dtype>::Forward_cpu(
 		  int channel = UD_CHANNEL;
 		  if (cur_label) {
 		    if (neb_label) {
-			  channel = E11_OFFSET;
+			  channel += E11_OFFSET;
 			} else {
-			  channel = E10_OFFSET;
+			  channel += E10_OFFSET;
 			}
 		  } else {
 		    if (neb_label) {
-			  channel = E01_OFFSET;
+			  channel += E01_OFFSET;
 			} else {
-			  channel = E00_OFFSET;
+			  channel += E00_OFFSET;
 			}
 		  }
 		  spatial_offset = h * height + w;
@@ -135,15 +135,15 @@ void Graph4CEnergyLayer<Dtype>::Forward_cpu(
 		  int channel = LR_CHANNEL;
 		  if (cur_label) {
 		    if (neb_label) {
-			  channel = E11_OFFSET;
+			  channel += E11_OFFSET;
 			} else {
-			  channel = E10_OFFSET;
+			  channel += E10_OFFSET;
 			}
 		  } else {
 		    if (neb_label) {
-			  channel = E01_OFFSET;
+			  channel += E01_OFFSET;
 			} else {
-			  channel = E00_OFFSET;
+			  channel += E00_OFFSET;
 			}
 		  }
 		  spatial_offset = h * height + w;
@@ -151,7 +151,7 @@ void Graph4CEnergyLayer<Dtype>::Forward_cpu(
 		}
 	  }
 	} // end height
-	top_data[n] = energy;
+	top_data[n] = energy / spatial_size;
   } // end num
 }
 
@@ -177,7 +177,7 @@ void Graph4CEnergyLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
     for (int n = 0; n < num; n++) {
 	  // dE/de = 1, where e is any individual energy param
 	  // thus dLoss/de = 1 * dLoss/dE = top_diff[n]
-	  Dtype diff = top_diff[n]; 
+	  Dtype diff = top_diff[n] / spatial_size; 
       for (int h = 0; h < height; h++) {
         for (int w = 0; w < width; w++) {
           int unary_num_offset = 2 * n * spatial_size;
@@ -202,15 +202,15 @@ void Graph4CEnergyLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
       	    int channel = UD_CHANNEL;
       	    if (cur_label) {
       	      if (neb_label) {
-      	  	    channel = E11_OFFSET;
+      	  	    channel += E11_OFFSET;
       	  	  } else {
-      	  	    channel = E10_OFFSET;
+      	  	    channel += E10_OFFSET;
       	  	  }
       	    } else {
       	      if (neb_label) {
-      	  	    channel = E01_OFFSET;
+      	  	    channel += E01_OFFSET;
       	  	  } else {
-      	  	    channel = E00_OFFSET;
+      	  	    channel += E00_OFFSET;
       	  	  }
       	    }
       	    spatial_offset = h * height + w;
@@ -224,15 +224,15 @@ void Graph4CEnergyLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
       	    int channel = LR_CHANNEL;
       	    if (cur_label) {
       	      if (neb_label) {
-      	  	    channel = E11_OFFSET;
+      	  	    channel += E11_OFFSET;
       	  	  } else {
-      	  	    channel = E10_OFFSET;
+      	  	    channel += E10_OFFSET;
       	  	  }
       	    } else {
       	      if (neb_label) {
-      	  	    channel = E01_OFFSET;
+      	  	    channel += E01_OFFSET;
       	  	  } else {
-      	  	    channel = E00_OFFSET;
+      	  	    channel += E00_OFFSET;
       	  	  }
       	    }
       	    spatial_offset = h * height + w;

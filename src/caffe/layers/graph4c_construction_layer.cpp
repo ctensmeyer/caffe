@@ -72,6 +72,8 @@ void Graph4CConstructorLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
    Channels 2-3 are edge weights between up-down and left-right nodes
       Note that these cases are not distringuished here, so it is up
 	  to the energy computing layer to decide which is which.
+	  Precisely, Channel 2 corresponds to the input channels 0-3
+	             Channel 3 corresponds to the input channels 4-7
 */
 template <typename Dtype>
 void Graph4CConstructorLayer<Dtype>::Forward_cpu(
@@ -157,11 +159,11 @@ void Graph4CConstructorLayer<Dtype>::Forward_cpu(
 
 	    // these are preset to 0
 	    if (c_i >= 0) {
-	      // connect to terminal
-	      top_data[top_num_offset +   (TERM_OFFSET * spatial_size) + spatial_offset] = c_i;
+	      // connect to source (background class)
+	      top_data[top_num_offset + (SOURCE_OFFSET * spatial_size) + spatial_offset] = c_i;
 	    } else {
-	      // connect to source
-	      top_data[top_num_offset + (SOURCE_OFFSET * spatial_size) + spatial_offset] = -1 * c_i;
+	      // connect to terminal (foreground class)
+	      top_data[top_num_offset +   (TERM_OFFSET * spatial_size) + spatial_offset] = -1 * c_i;
 	    }
 	  }
 	}
