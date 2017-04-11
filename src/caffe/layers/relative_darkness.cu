@@ -33,6 +33,8 @@ inline Dtype sigmoid_d_offset(Dtype x, Dtype slope, Dtype center, Dtype offset, 
 template <typename Dtype>
 void RelativeDarknessLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
+  Forward_cpu(bottom, top);
+  /*
   const Dtype* bottom_data = bottom[0]->cpu_data();
   Dtype* top_data = top[0]->mutable_cpu_data();
   const int num = bottom[0]->num();
@@ -88,6 +90,7 @@ void RelativeDarknessLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& botto
 	  }
 	}
   }
+  */
 }
 
 /*
@@ -97,6 +100,8 @@ template <typename Dtype>
 void RelativeDarknessLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     const vector<bool>& propagate_down,
     const vector<Blob<Dtype>*>& bottom) {
+  Backward_cpu(bottom, propagate_down, top);
+  /*
   const Dtype* bottom_data = bottom[0]->cpu_data();
   const Dtype* top_diff = top[0]->cpu_data();
   const int num = bottom[0]->num();
@@ -106,6 +111,7 @@ void RelativeDarknessLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
 
   // assumes kernel_size_ is odd
   const int size = (kernel_size_ - 1) / 2;
+  const Dtype norm = 1. / kernel_size_ / kernel_size_;
 
   const Dtype* params = this->blobs_[0]->cpu_data();
   const Dtype a_l = params[AL_IDX_];
@@ -162,6 +168,7 @@ void RelativeDarknessLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
       }
     }
   }
+  */
 }
 
 INSTANTIATE_LAYER_GPU_FUNCS(RelativeDarknessLayer);

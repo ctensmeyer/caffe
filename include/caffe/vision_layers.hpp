@@ -706,6 +706,7 @@ class RelativeDarknessLayer : public Layer<Dtype> {
 
   int kernel_size_;
   Dtype min_param_value_;
+  Dtype bias_;
   static const int LOWER_OFFSET_ = 0;
   static const int MIDDLE_OFFSET_ = 1;
   static const int UPPER_OFFSET_ = 2;

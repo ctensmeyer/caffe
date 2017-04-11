@@ -16,6 +16,7 @@ void RelativeDarknessLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom
       << "Bottom blob must have only a single channel";
   RelativeDarknessParameter rd_param = this->layer_param().relative_darkness_param();
   kernel_size_ = rd_param.kernel_size();
+  bias_ = rd_param.bias();
   CHECK_GT(kernel_size_, 0)
       << "Kernel Size must be greater than 0";
   CHECK_EQ(kernel_size_ % 2, 1)
@@ -125,7 +126,7 @@ void RelativeDarknessLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& botto
   //LOG(INFO) << "Params: " << a_l << " " << a_m1 << " " << a_m2 << " " << a_u << " " << w_l << " " << w_r;
   
 
-  caffe_set(top[0]->count(), (Dtype) 0, top_data);
+  caffe_set(top[0]->count(), (Dtype) bias_, top_data);
   for (int n = 0; n < num; n++) {
     int bottom_num_offset = n * 1 * spatial_size;
 	int top_num_offset = n * 3 * spatial_size;

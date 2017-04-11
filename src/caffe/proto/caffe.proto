@@ -1227,6 +1227,7 @@ message RelativeDarknessParameter {
   optional int32 kernel_size = 1 [default = 3];
   optional float min_param_value = 2 [default = 0.1];
   optional FillerParameter filler = 3;
+  optional float bias = 4 [default = -0.3];
 }
 
 // Message that stores parameters used by ReLULayer
