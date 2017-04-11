@@ -398,7 +398,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 211 (last added: weighted_fmeasure_loss_param)
+// LayerParameter next available layer-specific ID: 212 (last added: relative_darkness)
 // LayerParameter next available layer-specific ID: 137 (last added: reduction_param)
 // The 2xx numbers are reservered for additional layers added by Chris, while 1xx are
 //   used by the official caffe release.
@@ -486,6 +486,7 @@ message LayerParameter {
   optional PythonParameter python_param = 130;
   optional ReductionParameter reduction_param = 136;
   optional ReLUParameter relu_param = 123;
+  optional RelativeDarknessParameter relative_darkness_param = 211;
   optional ReshapeParameter reshape_param = 133;
   optional ScaleParameter scale_param = 142;
   optional SigmoidParameter sigmoid_param = 124;
@@ -1220,6 +1221,12 @@ message ReductionParameter {
   optional int32 axis = 2 [default = 0];
 
   optional float coeff = 3 [default = 1.0]; // coefficient for output
+}
+
+message RelativeDarknessParameter {
+  optional int32 kernel_size = 1 [default = 3];
+  optional float min_param_value = 2 [default = 0.1];
+  optional FillerParameter filler = 3;
 }
 
 // Message that stores parameters used by ReLULayer
