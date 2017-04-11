@@ -740,6 +740,47 @@ class SimpleCropLayer : public Layer<Dtype> {
   shared_ptr<Blob<Dtype> > crop_like_blob_;
 };
 
+template<typename Dtype>
+class RelativeDarknessLayer : public Layer<Dtype> {
+ public:
+  explicit RelativeDarknessLayer(const LayerParameter& param) 
+  	: Layer<Dtype>(param) {}
+  virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
+  	const vector<Blob<Dtype>*>& top);
+  virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
+  	const vector<Blob<Dtype>*>& top);
+
+  virtual inline const char* type() const { return "RelativeDarkness"; }
+  virtual inline int ExactNumBottomBlobs() const { return 1; }
+  virtual inline int ExactNumTopBlobs() const { return 1; }
+
+ protected:
+  virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
+    const vector<Blob<Dtype>*>& top);
+  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
+    const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
+    const vector<Blob<Dtype>*>& top);
+  virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
+    const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+
+  virtual void FixParams();
+
+  int kernel_size_;
+  Dtype min_param_value_;
+  Dtype bias_;
+  static const int LOWER_OFFSET_ = 0;
+  static const int MIDDLE_OFFSET_ = 1;
+  static const int UPPER_OFFSET_ = 2;
+
+  static const int AL_IDX_ = 0;
+  static const int AM1_IDX_ = 1;
+  static const int AM2_IDX_ = 2;
+  static const int AU_IDX_ = 3;
+  static const int WL_IDX_ = 4;
+  static const int WR_IDX_ = 5;
+};
+
 
 template<typename Dtype>
 class BilinearInterpolationLayer : public Layer<Dtype> {
