@@ -42,6 +42,7 @@ void RelativeDarknessLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& botto
 
   // assumes kernel_size_ is odd
   const int size = (kernel_size_ - 1) / 2;
+  const Dtype norm = 1. / kernel_size_ / kernel_size_;
 
   this->FixParams();
   const Dtype* params = this->blobs_[0]->cpu_data();
@@ -74,13 +75,13 @@ void RelativeDarknessLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& botto
 		    Dtype middle_val_right = sigmoid(cur_val, a_m2, center_val, w_r, (Dtype) +1.0);
 		    Dtype upper_val = sigmoid(cur_val, a_u, center_val, w_r, (Dtype) -1.0);
 
-			top_data[top_num_offset + LOWER_OFFSET_ * spatial_size + h * height + w] = lower_val;
-			top_data[top_num_offset + UPPER_OFFSET_ * spatial_size + h * height + w] = upper_val;
+			top_data[top_num_offset + LOWER_OFFSET_ * spatial_size + h * height + w] = norm * lower_val;
+			top_data[top_num_offset + UPPER_OFFSET_ * spatial_size + h * height + w] = norm * upper_val;
 
 			if (middle_val_left < middle_val_right) {
-			  top_data[top_num_offset + MIDDLE_OFFSET_ * spatial_size + h * height + w] = middle_val_left;
+			  top_data[top_num_offset + MIDDLE_OFFSET_ * spatial_size + h * height + w] = norm * middle_val_left;
 			} else {
-			  top_data[top_num_offset + MIDDLE_OFFSET_ * spatial_size + h * height + w] = middle_val_right;
+			  top_data[top_num_offset + MIDDLE_OFFSET_ * spatial_size + h * height + w] = norm * middle_val_right;
 			}
 		  }
 		}
@@ -138,22 +139,22 @@ void RelativeDarknessLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
 	          Dtype cur_val = bottom_data[bottom_num_offset + (h + i) * height + (w + j)];
 
 		      // lower 
-		      params_diff[AL_IDX_] += lower_diff * sigmoid_d_slope(cur_val, a_l, center_val, -1 * w_l, (Dtype) +1.0);
-		      params_diff[WL_IDX_] += lower_diff * sigmoid_d_offset(cur_val, a_l, center_val, -1 * w_l, (Dtype) +1.0);
+		      params_diff[AL_IDX_] += norm * lower_diff * sigmoid_d_slope(cur_val, a_l, center_val, -1 * w_l, (Dtype) +1.0);
+		      params_diff[WL_IDX_] -= norm * lower_diff * sigmoid_d_offset(cur_val, a_l, center_val, -1 * w_l, (Dtype) +1.0);
 
 		      // upper
-		      params_diff[AU_IDX_] += upper_diff * sigmoid_d_slope(cur_val, a_u, center_val, w_r, (Dtype) -1.0);
-		      params_diff[WL_IDX_] += upper_diff * sigmoid_d_offset(cur_val, a_u, center_val, w_r, (Dtype) -1.0);
+		      params_diff[AU_IDX_] += norm * upper_diff * sigmoid_d_slope(cur_val, a_u, center_val, w_r, (Dtype) -1.0);
+		      params_diff[WL_IDX_] += norm * upper_diff * sigmoid_d_offset(cur_val, a_u, center_val, w_r, (Dtype) -1.0);
 
 		      // middle
 		      Dtype middle_val_left = sigmoid(cur_val, a_m1, center_val, -1 * w_l, (Dtype) -1.0);
 		      Dtype middle_val_right = sigmoid(cur_val, a_m2, center_val, w_r, (Dtype) +1.0);
 		      if (middle_val_left < middle_val_right) {
-		        params_diff[AM1_IDX_] += middle_diff * sigmoid_d_slope(cur_val, a_m1, center_val, -1 * w_l, (Dtype) -1.0);
-		        params_diff[WL_IDX_] += middle_diff * sigmoid_d_offset(cur_val, a_m1, center_val, -1 * w_l, (Dtype) -1.0);
+		        params_diff[AM1_IDX_] += norm * middle_diff * sigmoid_d_slope(cur_val, a_m1, center_val, -1 * w_l, (Dtype) -1.0);
+		        params_diff[WL_IDX_] -= norm * middle_diff * sigmoid_d_offset(cur_val, a_m1, center_val, -1 * w_l, (Dtype) -1.0);
 		      } else {
-		        params_diff[AM2_IDX_] += middle_diff * sigmoid_d_slope(cur_val, a_m2, center_val, w_r, (Dtype) +1.0);
-		        params_diff[WR_IDX_] += middle_diff * sigmoid_d_offset(cur_val, a_m2, center_val, w_r, (Dtype) +1.0);
+		        params_diff[AM2_IDX_] += norm * middle_diff * sigmoid_d_slope(cur_val, a_m2, center_val, w_r, (Dtype) +1.0);
+		        params_diff[WR_IDX_] += norm * middle_diff * sigmoid_d_offset(cur_val, a_m2, center_val, w_r, (Dtype) +1.0);
 		      }
       	    }
       	  }
