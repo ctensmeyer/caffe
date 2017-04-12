@@ -1,0 +1,202 @@
+#include <vector>
+
+#include "caffe/layer.hpp"
+#include "caffe/util/io.hpp"
+#include "caffe/util/math_functions.hpp"
+#include "caffe/vision_layers.hpp"
+
+namespace caffe {
+
+
+template <typename Dtype>
+__global__ void MarginThreshold(const int n, const Dtype margin,
+    Dtype* input, const Dtype* target) {
+  CUDA_KERNEL_LOOP(index, n) {
+    if (target[index] > 0.5) {
+      if (input[index] >= (0.5 + margin)) {
+        input[index] = target[index];
+      }
+    } else {
+      if (input[index] <= (0.5 - margin)) {
+        input[index] = target[index];
+      }
+    }
+  }
+}
+
+/*
+template <typename Dtype>
+void WeightedFmeasureLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
+    const vector<Blob<Dtype>*>& top) {
+
+  // constants
+  const int count = bottom[0]->count();
+  const int num = bottom[0]->num();
+  const int height = bottom[0]->height();
+  const int width = bottom[0]->width();
+  const int spatial_size = height * width;
+
+  // inputs
+  Dtype* input = bottom[0]->mutable_gpu_data();
+  const Dtype* target = bottom[1]->gpu_data();
+  const Dtype* recall_weight = bottom[2]->gpu_data();
+  const Dtype* precision_weight = bottom[3]->gpu_data();
+
+  // cache values for backward step
+  Dtype* recall = recall_->mutable_cpu_data();
+  Dtype* recall_num = recall_num_->mutable_cpu_data();
+  Dtype* recall_denum = recall_denum_->mutable_cpu_data();
+  Dtype* precision = precision_->mutable_cpu_data();
+  Dtype* precision_num = precision_num_->mutable_cpu_data();
+  Dtype* precision_denum = precision_denum_->mutable_cpu_data();
+
+  Dtype* pfm = pfm_->mutable_cpu_data();
+  Dtype loss = 0;
+
+  // threshold inputs according to margin
+  if (margin_ > 0 && margin_ < 0.5) {
+    // NOLINT_NEXT_LINE(whitespace/operators)
+    MarginThreshold<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS>>>(
+        count, margin_, input, target);
+    CUDA_POST_KERNEL_CHECK;
+  }
+
+  for (int n = 0; n < num; n++) {
+    const int spatial_offset = n * spatial_size;
+
+    Dtype* target_mult_input = work_buffer_->mutable_gpu_data();
+    caffe_gpu_mul(spatial_size, input + spatial_offset, target + spatial_offset, target_mult_input);
+
+    caffe_gpu_dot(spatial_size, target_mult_input, recall_weight + spatial_offset, recall_num + n);
+    caffe_gpu_dot(spatial_size, target + spatial_offset, recall_weight + spatial_offset, recall_denum + n);
+
+    caffe_gpu_dot(spatial_size, target_mult_input, precision_weight + spatial_offset, precision_num + n);
+    caffe_gpu_dot(spatial_size, input + spatial_offset, precision_weight + spatial_offset, precision_denum + n);
+
+    // check for divide by zero errors
+    if (recall_denum[n] != 0) {
+	  recall[n] = recall_num[n] / recall_denum[n];
+	} else {
+	  recall[n] = 0;
+	}
+    if (precision_denum[n] != 0) {
+	  precision[n] = precision_num[n] / precision_denum[n];
+	} else {
+	  precision[n] = 0;
+	}
+	if (precision[n] + recall[n] != 0) {
+      pfm[n] = 2 * recall[n] * precision[n] / (recall[n] + precision[n]);
+      if (top.size() > 1) {
+        top[1]->mutable_cpu_data()[n] = pfm[n];
+      }
+	  loss += 1 - pfm[n];
+	} else {
+	  // GT is all background, so Recall is undefined and Precision is 0
+	  // Recall Weights don't apply, so do \sum W_p (B - G)^2 / \sum W_p
+	  // and G == 0
+	  Dtype numer, denum;
+      Dtype* work = work_buffer_->mutable_gpu_data();
+	  caffe_gpu_scale(spatial_size, (Dtype) 1., input + spatial_offset, work);
+
+	  caffe_gpu_mul(spatial_size, input + spatial_offset, work, work + spatial_size);
+	  caffe_gpu_mul(spatial_size, work + spatial_size, precision_weight + spatial_offset, work);
+
+	  caffe_gpu_asum(spatial_size, work, &numer);
+	  caffe_gpu_asum(spatial_size, precision_weight + spatial_offset, &denum);
+	  //LOG(INFO) << "HERE: " << numer << " " << denum << " " << (numer / denum) << " " << loss;
+	  loss += 0.5 * numer / denum;
+	  //LOG(INFO) << loss;
+	}
+    // check for 0 denominators to avoid nans
+    //LOG(INFO) << "F/P/R:" << f_measure << " " << precision_ << " " <<  recall_;
+    //LOG(INFO) << "P_num/P_denum:" << precision_num_ << " " << precision_denum_;
+    //LOG(INFO) << "R_num/R_denum:" << recall_num_ << " " << recall_denum_;
+  }
+  top[0]->mutable_cpu_data()[0] = loss / num;
+
+}
+
+template <typename Dtype>
+void WeightedFmeasureLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
+    const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
+  if (propagate_down[1] || propagate_down[2] || propagate_down[3]) {
+    LOG(FATAL) << this->type()
+               << " WeightedFmeasureLossLayer cannot backpropagate to label inputs, or weight maps.";
+  }
+  
+  const Dtype* input = bottom[0]->gpu_data();  
+  const Dtype* target = bottom[1]->gpu_data();
+  const Dtype* recall_weight = bottom[2]->gpu_data();
+  const Dtype* precision_weight = bottom[3]->gpu_data();
+
+  // constants
+  const int count = bottom[0]->count();
+  const int num = bottom[0]->num();
+  const int height = bottom[0]->height();
+  const int width = bottom[0]->width();
+  const int spatial_size = height * width;
+
+  // cached values from the forward step
+  const Dtype* recall = recall_->cpu_data();
+  //const Dtype* recall_num = recall_num_->cpu_data();
+  const Dtype* recall_denum = recall_denum_->cpu_data();
+  const Dtype* precision = precision_->cpu_data();
+  const Dtype* precision_num = precision_num_->cpu_data();
+  const Dtype* precision_denum = precision_denum_->cpu_data();
+
+  Dtype* diff = bottom[0]->mutable_cpu_diff();
+
+  if (!propagate_down[0]) {
+    return;
+  }
+
+  // need to compute dF/dB = dF/dR * dR/dB + dF/dP * dP/dB for each pixel
+  // dF/dR and dF/dP are fixed for all pixels
+  // dF/dR = 2 * p^2 / (p + r)^2
+  // dF/dP = 2 * r^2 / (p + r)^2
+  for(int n = 0; n < num; n++) {
+    const int spatial_offset = n * spatial_size;
+  
+    //DLOG(ERROR) << "-F/P/R:" << top[0]->cpu_data()[0] << " " << precision_ << " " <<  recall_;
+    if (precision[n] != 0 && recall[n] != 0) {
+      Dtype sum_squared = recall[n] + precision[n];
+      sum_squared = sum_squared * sum_squared;
+      Dtype dF_dR = 2 * precision[n] * precision[n] / sum_squared; 
+      Dtype dF_dP = 2 * recall[n] * recall[n] / sum_squared;
+      //DLOG(ERROR) << "dF_dR/dF_dP:" << dF_dR << " " << dF_dP;
+  
+      // BLAS Version, overwritting input buffers for space saving
+      // dF_dR * dR_dB  
+      Dtype* dR_dB = work_buffer_->mutable_gpu_data();
+      caffe_gpu_mul(spatial_size, target + spatial_offset, recall_weight + spatial_offset, dR_dB);
+      caffe_gpu_scal(spatial_size, (Dtype)(-2. * dF_dR / recall_denum[n]), dR_dB); 
+  
+      // dF_dP * dP_dB 
+      Dtype* dP_dB = work_buffer_->mutable_gpu_diff();
+      caffe_gpu_scale(spatial_size, (Dtype) 1., target + spatial_offset, dP_dB);
+      caffe_gpu_scal(spatial_size, precision_denum[n], dP_dB); // scale target by precision_denum_
+
+      caffe_gpu_add_scalar(spatial_size, -1 * precision_num[n], dP_dB); // subtract precision_num_
+      caffe_gpu_mul(spatial_size, dP_dB, precision_weight + spatial_offset, dP_dB + spatial_size);
+	  Dtype val = -2. * dF_dP / (precision_denum[n] * precision_denum[n]);
+      caffe_gpu_scale(spatial_size, val, dP_dB + spatial_size, dP_dB);
+
+      caffe_gpu_add(spatial_size, dR_dB, dP_dB, diff + spatial_offset);
+    } else {
+	  Dtype denum;
+      Dtype* work = work_buffer_->mutable_gpu_data();
+
+	  caffe_gpu_mul(spatial_size, input + spatial_offset, precision_weight + spatial_offset, work);
+	  caffe_gpu_asum(spatial_size, precision_weight + spatial_offset, &denum);
+	  caffe_gpu_scal(spatial_size, (Dtype) (2. / denum), work);
+
+      caffe_gpu_add(spatial_size, diff + spatial_offset, work, diff + spatial_offset);
+    }
+  }
+  caffe_gpu_scal(count, (Dtype) (1. / num), diff);
+}
+*/
+
+//INSTANTIATE_LAYER_GPU_FUNCS(WeightedFmeasureLossLayer);
+
+}  // namespace caffe

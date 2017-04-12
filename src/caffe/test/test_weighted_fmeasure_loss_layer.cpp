@@ -27,10 +27,10 @@ class WeightedFMeasureLossLayerTest : public MultiDeviceTest<TypeParam> {
         blob_bottom_recall_weight_(new Blob<Dtype>(1, 1, 1, 2)),
         blob_bottom_precision_weight_(new Blob<Dtype>(1, 1, 1, 2)),
   */
-  	    blob_bottom_data_(new Blob<Dtype>(10, 1, 10, 10)),
-        blob_bottom_label_(new Blob<Dtype>(10, 1, 10, 10)),
-        blob_bottom_recall_weight_(new Blob<Dtype>(10, 1, 10, 10)),
-        blob_bottom_precision_weight_(new Blob<Dtype>(10, 1, 10, 10)),
+  	    blob_bottom_data_(new Blob<Dtype>(10, 1, 5, 5)),
+        blob_bottom_label_(new Blob<Dtype>(10, 1, 5, 5)),
+        blob_bottom_recall_weight_(new Blob<Dtype>(10, 1, 5, 5)),
+        blob_bottom_precision_weight_(new Blob<Dtype>(10, 1, 5, 5)),
         blob_top_loss_(new Blob<Dtype>()) {
     // fill the values
     FillerParameter filler_param;
@@ -50,8 +50,14 @@ class WeightedFMeasureLossLayerTest : public MultiDeviceTest<TypeParam> {
     int count = blob_bottom_label_->count();
 	Dtype* target = blob_bottom_label_->mutable_cpu_data();
     for (int i = 0; i < count; i++) {
-	  target[i] = i % 2;
+	  if (i < 100) {
+	    target[i] = i % 2;
+	  } else {
+	    target[i] = i % 2;
+	    //target[i] = 0;
+	  }
 	}
+
     blob_bottom_vec_.push_back(blob_bottom_label_);
 
     filler.Fill(this->blob_bottom_recall_weight_);
@@ -90,6 +96,7 @@ class WeightedFMeasureLossLayerTest : public MultiDeviceTest<TypeParam> {
 };
 
 TYPED_TEST_CASE(WeightedFMeasureLossLayerTest, TestDtypesAndDevices);
+//TYPED_TEST_CASE(WeightedFMeasureLossLayerTest, ::testing::Types<CPUDevice<float> >);
 
 
 TYPED_TEST(WeightedFMeasureLossLayerTest, TestGradient) {
@@ -102,6 +109,7 @@ TYPED_TEST(WeightedFMeasureLossLayerTest, TestGradient) {
 }
 
 
+/*
 TYPED_TEST(WeightedFMeasureLossLayerTest, TestMarginGradient) {
   typedef typename TypeParam::Dtype Dtype;
   LayerParameter layer_param;
@@ -111,5 +119,6 @@ TYPED_TEST(WeightedFMeasureLossLayerTest, TestMarginGradient) {
   checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
       this->blob_top_vec_, 0);
 }
+*/
 
 }  // namespace caffe
