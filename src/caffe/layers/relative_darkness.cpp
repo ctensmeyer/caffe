@@ -123,7 +123,7 @@ void RelativeDarknessLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& botto
   const Dtype a_u = params[AU_IDX_];
   const Dtype w_l = params[WL_IDX_];
   const Dtype w_r = params[WR_IDX_];
-  //LOG(INFO) << "Params: " << a_l << " " << a_m1 << " " << a_m2 << " " << a_u << " " << w_l << " " << w_r;
+  LOG(INFO) << "Params: " << a_l << " " << a_m1 << " " << a_m2 << " " << a_u << " " << w_l << " " << w_r;
   
 
   caffe_set(top[0]->count(), (Dtype) bias_, top_data);
