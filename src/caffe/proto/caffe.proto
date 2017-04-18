@@ -1437,6 +1437,10 @@ message WeightedFmeasureLossParameter {
   // when GT consists of only 0s, F-measure (recall) is undefined
   // so default to using MSE for that instance
   optional float mse_lambda = 2 [default = 0.1];
+
+  // whether to use average of the instance f-measures as the loss (true)
+  // or to use the total f-measure of the combined instances (false)
+  optional bool avg_fm = 3 [default = true];
 }
 
 message SPPParameter {

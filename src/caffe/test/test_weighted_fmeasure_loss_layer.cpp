@@ -53,8 +53,8 @@ class WeightedFMeasureLossLayerTest : public MultiDeviceTest<TypeParam> {
 	  if (i < 100) {
 	    target[i] = i % 2;
 	  } else {
-	    target[i] = i % 2;
-	    //target[i] = 0;
+	    //target[i] = i % 2;
+	    target[i] = 0;
 	  }
 	}
 
@@ -99,26 +99,103 @@ TYPED_TEST_CASE(WeightedFMeasureLossLayerTest, TestDtypesAndDevices);
 //TYPED_TEST_CASE(WeightedFMeasureLossLayerTest, ::testing::Types<CPUDevice<float> >);
 
 
-TYPED_TEST(WeightedFMeasureLossLayerTest, TestGradient) {
+TYPED_TEST(WeightedFMeasureLossLayerTest, TestGradientAvgFm) {
   typedef typename TypeParam::Dtype Dtype;
   LayerParameter layer_param;
+  layer_param.mutable_weighted_fmeasure_loss_param()->set_avg_fm(true);
   WeightedFmeasureLossLayer<Dtype> layer(layer_param);
-  GradientChecker<Dtype> checker(1e-4, 2e-2, 1701, 1, 0.01);
+  GradientChecker<Dtype> checker(1e-2, 1e-3, 1701);
+  checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
+      this->blob_top_vec_, 0);
+}
+
+TYPED_TEST(WeightedFMeasureLossLayerTest, TestGradientTotalFm) {
+  typedef typename TypeParam::Dtype Dtype;
+  LayerParameter layer_param;
+  layer_param.mutable_weighted_fmeasure_loss_param()->set_avg_fm(false);
+  WeightedFmeasureLossLayer<Dtype> layer(layer_param);
+  GradientChecker<Dtype> checker(1e-2, 1e-3, 1701);
   checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
       this->blob_top_vec_, 0);
 }
 
 
 /*
-TYPED_TEST(WeightedFMeasureLossLayerTest, TestMarginGradient) {
+// With a margin != 0.5, the Loss is no longer differentiable, so
+// these tests should fail.
+TYPED_TEST(WeightedFMeasureLossLayerTest, TestMarginGradientAvgFm) {
   typedef typename TypeParam::Dtype Dtype;
   LayerParameter layer_param;
   layer_param.mutable_weighted_fmeasure_loss_param()->set_margin(0.25);
+  layer_param.mutable_weighted_fmeasure_loss_param()->set_avg_fm(true);
   WeightedFmeasureLossLayer<Dtype> layer(layer_param);
-  GradientChecker<Dtype> checker(1e-4, 2e-2, 1701, 1, 0.01);
+  GradientChecker<Dtype> checker(1e-2, 1e-3, 1701);
+  checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
+      this->blob_top_vec_, 0);
+}
+
+TYPED_TEST(WeightedFMeasureLossLayerTest, TestMarginGradientTotalFm) {
+  typedef typename TypeParam::Dtype Dtype;
+  LayerParameter layer_param;
+  layer_param.mutable_weighted_fmeasure_loss_param()->set_margin(0.25);
+  layer_param.mutable_weighted_fmeasure_loss_param()->set_avg_fm(false);
+  WeightedFmeasureLossLayer<Dtype> layer(layer_param);
+  GradientChecker<Dtype> checker(1e-2, 1e-3, 1701);
   checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
       this->blob_top_vec_, 0);
 }
 */
+
+TYPED_TEST(WeightedFMeasureLossLayerTest, TestGradientMSETotalFm) {
+  typedef typename TypeParam::Dtype Dtype;
+  Blob<Dtype>* gt = new Blob<Dtype>(10, 1, 5, 5);
+  gt->Reshape(this->blob_bottom_data_->shape());
+  int count = gt->count();
+  Dtype* gtp = gt->mutable_cpu_data();
+  for (int i = 0; i < count; i++) {
+    gtp[i] = 0;
+  }
+
+  vector<Blob<Dtype>*> bottoms;
+  bottoms.push_back(this->blob_bottom_data_);
+  bottoms.push_back(gt);
+  bottoms.push_back(this->blob_bottom_precision_weight_);
+  bottoms.push_back(this->blob_bottom_recall_weight_);
+
+  LayerParameter layer_param;
+  layer_param.mutable_weighted_fmeasure_loss_param()->set_avg_fm(false);
+  WeightedFmeasureLossLayer<Dtype> layer(layer_param);
+  GradientChecker<Dtype> checker(1e-2, 1e-3, 1701);
+  checker.CheckGradientExhaustive(&layer, bottoms,
+      this->blob_top_vec_, 0);
+
+  delete gt;
+}
+
+TYPED_TEST(WeightedFMeasureLossLayerTest, TestGradientMSEAvgFm) {
+  typedef typename TypeParam::Dtype Dtype;
+  Blob<Dtype>* gt = new Blob<Dtype>(10, 1, 5, 5);
+  gt->Reshape(this->blob_bottom_data_->shape());
+  int count = gt->count();
+  Dtype* gtp = gt->mutable_cpu_data();
+  for (int i = 0; i < count; i++) {
+    gtp[i] = 0;
+  }
+
+  vector<Blob<Dtype>*> bottoms;
+  bottoms.push_back(this->blob_bottom_data_);
+  bottoms.push_back(gt);
+  bottoms.push_back(this->blob_bottom_precision_weight_);
+  bottoms.push_back(this->blob_bottom_recall_weight_);
+
+  LayerParameter layer_param;
+  layer_param.mutable_weighted_fmeasure_loss_param()->set_avg_fm(true);
+  WeightedFmeasureLossLayer<Dtype> layer(layer_param);
+  GradientChecker<Dtype> checker(1e-2, 1e-3, 1701);
+  checker.CheckGradientExhaustive(&layer, bottoms,
+      this->blob_top_vec_, 0);
+
+  delete gt;
+}
 
 }  // namespace caffe

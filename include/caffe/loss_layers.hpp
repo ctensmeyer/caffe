@@ -4,6 +4,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <math.h>
 
 #include "caffe/blob.hpp"
 #include "caffe/common.hpp"
@@ -887,7 +888,15 @@ class WeightedFmeasureLossLayer : public LossLayer<Dtype> {
 
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
+  virtual void Forward_cpu_avg_fm(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+  virtual void Forward_cpu_total_fm(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
   virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  virtual void Backward_cpu_avg_fm(const vector<Blob<Dtype>*>& top,
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  virtual void Backward_cpu_total_fm(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
   /*
   virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
