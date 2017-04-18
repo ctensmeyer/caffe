@@ -1225,9 +1225,10 @@ message ReductionParameter {
 
 message RelativeDarknessParameter {
   optional int32 kernel_size = 1 [default = 3];
-  optional float min_param_value = 2 [default = 0.1];
-  optional FillerParameter filler = 3;
-  optional float bias = 4 [default = -0.3];
+  optional float min_param_value = 2 [default = 0.001];
+  optional float bias = 4 [default = 0];
+  optional float initial_a = 5 [default = 1];
+  optional float initial_w = 6 [default = 0.05];
 }
 
 // Message that stores parameters used by ReLULayer
@@ -1433,6 +1434,9 @@ message WeightedFmeasureLossParameter {
   // counts background pixels as correct if their prob is <= 0.5 - margin
   // margin of 0.5 has no affect
   optional float margin = 1 [default = 0.5];
+  // when GT consists of only 0s, F-measure (recall) is undefined
+  // so default to using MSE for that instance
+  optional float mse_lambda = 2 [default = 0.1];
 }
 
 message SPPParameter {

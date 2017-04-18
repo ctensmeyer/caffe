@@ -13,6 +13,7 @@ void WeightedFmeasureLossLayer<Dtype>::LayerSetUp(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
   LossLayer<Dtype>::LayerSetUp(bottom, top);
   margin_ = this->layer_param().weighted_fmeasure_loss_param().margin();
+  mse_lambda_ = this->layer_param().weighted_fmeasure_loss_param().mse_lambda();
 }
 
 template <typename Dtype>
@@ -124,6 +125,32 @@ void WeightedFmeasureLossLayer<Dtype>::Forward_cpu(
       if (top.size() > 1) {
         top[1]->mutable_cpu_data()[n] = pfm[n];
       }
+	  if (!isfinite(pfm[n])) {
+	    LOG(INFO) << "Found " << pfm[n] << " which is non-finite on instance " << n;
+	    LOG(INFO) << "\tLayer name: " << this->layer_param().name();
+	    LOG(INFO) << "\tprecision: " << precision[n] << " precision_num: " 
+			<< precision_num[n] << " precision_denum: " << precision_denum[n];
+	    LOG(INFO) << "\trecall: " << recall[n] << " recall_num: " 
+			<< recall_num[n] << " recall_denum: " << recall_denum[n];
+		for (int i = 0; i < spatial_size; i++) {
+		  if (!isfinite(input[i])) {
+		    LOG(INFO) << "\tinput at (" << (i / width) << "," << (i % width) 
+				<< ") is " << input[i] << " which is non-finite";
+		  }
+		  if (!isfinite(target[i])) {
+		    LOG(INFO) << "\ttarget at (" << (i / width) << "," << (i % width) 
+				<< ") is " << target[i] << " which is non-finite";
+		  }
+		  if (!isfinite(precision_weight[i])) {
+		    LOG(INFO) << "\tprecision_weight at (" << (i / width) << "," << (i % width) 
+				<< ") is " << precision_weight[i] << " which is non-finite";
+		  }
+		  if (!isfinite(recall_weight[i])) {
+		    LOG(INFO) << "\trecall_weight at (" << (i / width) << "," << (i % width) 
+				<< ") is " << recall_weight[i] << " which is non-finite";
+		  }
+		}
+	  }
 	  loss += 1 - pfm[n];
 	} else {
 	  // GT is all background, so Recall is undefined and Precision is 0
@@ -138,13 +165,15 @@ void WeightedFmeasureLossLayer<Dtype>::Forward_cpu(
 	  Dtype numer = caffe_cpu_asum(spatial_size, work);
 	  Dtype denum = caffe_cpu_asum(spatial_size, precision_weight + spatial_offset);
 	  //LOG(INFO) << "HERE: " << numer << " " << denum << " " << (numer / denum) << " " << loss;
-	  loss += 0.5 * numer / denum;
+	  Dtype individual_loss = mse_lambda_ * 0.5 * numer / denum;
+	  if (!isfinite(individual_loss)) {
+	    LOG(INFO) << "Found non-finite MSE: " << individual_loss << " on instance " << n;
+	    LOG(INFO) << "\tLayer name: " << this->layer_param().name();
+	    LOG(INFO) << "\tnumer: " << numer << " denum: " << denum;
+	  }
+	  loss += individual_loss;
 	  //LOG(INFO) << loss;
 	}
-    // check for 0 denominators to avoid nans
-    //LOG(INFO) << "F/P/R:" << f_measure << " " << precision_ << " " <<  recall_;
-    //LOG(INFO) << "P_num/P_denum:" << precision_num_ << " " << precision_denum_;
-    //LOG(INFO) << "R_num/R_denum:" << recall_num_ << " " << recall_denum_;
   }
   top[0]->mutable_cpu_data()[0] = loss / num;
 
@@ -241,7 +270,7 @@ void WeightedFmeasureLossLayer<Dtype>::Backward_cpu(
 
 	  caffe_mul(spatial_size, input + spatial_offset, precision_weight + spatial_offset, work);
 	  Dtype denum = caffe_cpu_asum(spatial_size, precision_weight + spatial_offset);
-	  caffe_scal(spatial_size, (Dtype) (2. / denum), work);
+	  caffe_scal(spatial_size, (Dtype) (mse_lambda_ * 2. / denum), work);
 
       caffe_add(spatial_size, diff + spatial_offset, work, diff + spatial_offset);
     }

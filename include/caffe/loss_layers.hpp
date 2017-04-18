@@ -898,7 +898,7 @@ class WeightedFmeasureLossLayer : public LossLayer<Dtype> {
 
   shared_ptr<Blob<Dtype> > work_buffer_, pfm_, recall_, precision_, 
   	recall_num_, recall_denum_, precision_num_, precision_denum_;
-  Dtype margin_;
+  Dtype margin_, mse_lambda_;
 };
 
 }  // namespace caffe
