@@ -34,16 +34,10 @@ void RelativeDarknessLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom
 	shape.push_back(6);
 	shape.push_back(1);
     this->blobs_[0].reset(new Blob<Dtype>(shape));
-    shared_ptr<Filler<Dtype> > filler;
-    if (rd_param.has_filler()) {
-      filler.reset(GetFiller<Dtype>(rd_param.filler()));
-    } else {
-      FillerParameter filler_param;
-      filler_param.set_type("constant");
-      filler_param.set_value(0.25);
-      filler.reset(GetFiller<Dtype>(filler_param));
-    }
-    filler->Fill(this->blobs_[0].get());
+
+    Dtype* params = this->blobs_[0]->mutable_cpu_data();
+    params[AL_IDX_] = params[AM1_IDX_] = params[AM2_IDX_] = params[AU_IDX_] = rd_param.initial_a();
+    params[WL_IDX_] = params[WR_IDX_] = rd_param.initial_w();
   }
   //FixParams();
   LOG(INFO) << this->blobs_[0]->count();
@@ -199,6 +193,7 @@ void RelativeDarknessLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
   const Dtype w_l = params[WL_IDX_];
   const Dtype w_r = params[WR_IDX_];
   Dtype* params_diff = this->blobs_[0]->mutable_cpu_diff();
+  LOG(INFO) << "Params: " << a_l << " " << a_m1 << " " << a_m2 << " " << a_u << " " << w_l << " " << w_r;
   //LOG(INFO) << "Starting Backwards";
 
   // Propagte to param

@@ -862,18 +862,26 @@ template <typename Dtype>
 class WeightedFmeasureLossLayer : public LossLayer<Dtype> {
  public:
   explicit WeightedFmeasureLossLayer(const LayerParameter& param)
-      : LossLayer<Dtype>(param), work_buffer_(new Blob<Dtype>()) {}
+      : LossLayer<Dtype>(param), work_buffer_(new Blob<Dtype>()),
+	  pfm_(new Blob<Dtype>()), recall_(new Blob<Dtype>()),
+	  precision_(new Blob<Dtype>()), recall_num_(new Blob<Dtype>()),
+	  recall_denum_(new Blob<Dtype>()), precision_num_(new Blob<Dtype>()),
+	  precision_denum_(new Blob<Dtype>()) {}
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
   virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
 
   virtual inline const char* type() const { return "WeightedFmeasureLoss"; }
-  virtual inline int ExactNumBottomBlobs() const { return 4; }
   // predictions
   // binary gt image
   // recall weights
   // precision weights
+  virtual inline int ExactNumBottomBlobs() const { return 4; }
+  // loss
+  // individual instance losses (optional)
+  virtual inline int MaxTopBlobs() const { return 2; }
+  virtual inline int ExactNumTopBlobs() const { return -1; }
 
  protected:
 
@@ -881,14 +889,16 @@ class WeightedFmeasureLossLayer : public LossLayer<Dtype> {
       const vector<Blob<Dtype>*>& top);
   virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  /*
   virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top);
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  */
 
-  shared_ptr<Blob<Dtype> > work_buffer_;
-  Dtype recall_, precision_, precision_num_, precision_denum_, recall_num_, recall_denum_, margin_;
-  bool per_instance_;
+  shared_ptr<Blob<Dtype> > work_buffer_, pfm_, recall_, precision_, 
+  	recall_num_, recall_denum_, precision_num_, precision_denum_;
+  Dtype margin_, mse_lambda_;
 };
 
 }  // namespace caffe
