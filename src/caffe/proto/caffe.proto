@@ -808,6 +808,14 @@ message BatchNormParameter {
   // Small value to add to the variance estimate so that we don't divide by
   // zero.
   optional float eps = 3 [default = 1e-5];
+  optional FillerParameter scale_filler = 5;
+  optional FillerParameter bias_filler = 6;
+  enum Engine {
+    DEFAULT = 0;
+	CAFFE = 1;
+	CUDNN = 2;
+  }
+  optional Engine engine = 15 [default = DEFAULT];
 }
 
 message BiasParameter {
@@ -1469,6 +1477,10 @@ message WeightedFmeasureLossParameter {
   // when GT consists of only 0s, F-measure (recall) is undefined
   // so default to using MSE for that instance
   optional float mse_lambda = 2 [default = 0.1];
+
+  // whether to use average of the instance f-measures as the loss (true)
+  // or to use the total f-measure of the combined instances (false)
+  optional bool avg_fm = 3 [default = true];
 }
 
 message SPPParameter {

@@ -58,15 +58,34 @@ TYPED_TEST(RelativeDarknessLayerTest, TestGradient) {
   LayerParameter layer_param;
   layer_param.mutable_relative_darkness_param()->set_kernel_size(5);
   layer_param.mutable_relative_darkness_param()->set_min_param_value(0.01);
-  layer_param.mutable_relative_darkness_param()->mutable_filler()->set_type("uniform");
-  layer_param.mutable_relative_darkness_param()->mutable_filler()->set_min(0.01);
+  layer_param.mutable_relative_darkness_param()->set_initial_a(2.5);
+  layer_param.mutable_relative_darkness_param()->set_initial_w(0.03);
   RelativeDarknessLayer<Dtype> layer(layer_param);
   layer.LayerSetUp(this->blob_bottom_vec_, this->blob_top_vec_);
   layer.Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   vector<bool> prop_down;
   prop_down.push_back(false);
   layer.Backward(this->blob_bottom_vec_, prop_down, this->blob_top_vec_);
-  GradientChecker<Dtype> checker(1e-5, 1e-1, 1701, 1, 0.01);
+  GradientChecker<Dtype> checker(1e-4, 1e-1, 1701);
+  // only check parameter blob
+  checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
+      this->blob_top_vec_, 100); 
+  //checker.CheckGradientSingle(&layer, this->blob_bottom_vec_,
+  //    this->blob_top_vec_, 100, 0, 1); 
+}
+
+TYPED_TEST(RelativeDarknessLayerTest, TestGradientDefaultParams) {
+  typedef typename TypeParam::Dtype Dtype;
+  LayerParameter layer_param;
+  layer_param.mutable_relative_darkness_param()->set_kernel_size(5);
+  layer_param.mutable_relative_darkness_param()->set_min_param_value(0.01);
+  RelativeDarknessLayer<Dtype> layer(layer_param);
+  layer.LayerSetUp(this->blob_bottom_vec_, this->blob_top_vec_);
+  layer.Forward(this->blob_bottom_vec_, this->blob_top_vec_);
+  vector<bool> prop_down;
+  prop_down.push_back(false);
+  layer.Backward(this->blob_bottom_vec_, prop_down, this->blob_top_vec_);
+  GradientChecker<Dtype> checker(1e-4, 1e-1, 1701);
   // only check parameter blob
   checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
       this->blob_top_vec_, 100); 
