@@ -125,7 +125,8 @@ void Graph4CEnergyLayer<Dtype>::Forward_cpu(
 			}
 		  }
 		  spatial_offset = h * height + w;
-		  energy += pair_energy[pair_num_offset + (channel * spatial_size) + spatial_offset];
+	      // 2 * because we have a -> b and b -> a
+		  energy += 2 * pair_energy[pair_num_offset + (channel * spatial_size) + spatial_offset];
 		}
 
 		if (w + 1 < width) {
@@ -147,7 +148,8 @@ void Graph4CEnergyLayer<Dtype>::Forward_cpu(
 			}
 		  }
 		  spatial_offset = h * height + w;
-		  energy += pair_energy[pair_num_offset + (channel * spatial_size) + spatial_offset];
+	      // 2 * because we have a -> b and b -> a
+		  energy += 2 * pair_energy[pair_num_offset + (channel * spatial_size) + spatial_offset];
 		}
 	  }
 	} // end height
@@ -214,7 +216,8 @@ void Graph4CEnergyLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
       	  	  }
       	    }
       	    spatial_offset = h * height + w;
-      	    pair_diff[pair_num_offset + (channel * spatial_size) + spatial_offset] = diff;
+			// 2 * because we have a -> b and b -> a
+      	    pair_diff[pair_num_offset + (channel * spatial_size) + spatial_offset] = 2 * diff;
       	  }
 
       	  if (w + 1 < width) {
@@ -236,7 +239,8 @@ void Graph4CEnergyLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
       	  	  }
       	    }
       	    spatial_offset = h * height + w;
-      	    pair_diff[pair_num_offset + (channel * spatial_size) + spatial_offset] = diff;
+			// 2 * because we have a -> b and b -> a
+      	    pair_diff[pair_num_offset + (channel * spatial_size) + spatial_offset] = 2 * diff;
       	  }
         }
       } // end height

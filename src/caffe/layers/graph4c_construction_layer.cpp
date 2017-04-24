@@ -62,9 +62,14 @@ void Graph4CConstructorLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
 		channels 0-3 are for up/down energies
 			value at [h,w] is the energy between pixels [h,w] and [h+1,w]
 			Thus the last row is not used
+			In the labels for the channels, i.e. EXY, X refers the the top
+				neighbor and Y refers to the bottom neighbor.  That is,
+				E10 means the energy for the configuration that the top
+				neb is 1 and the bottom neb is 0
 		channels 4-7 are for left/right energies
 			value at [h,w] is the energy between pixels [h,w] and [h,w+1]
 			Thus the last col is not used
+			See note above.  EXY means left neb is X, right neb is Y
 		see #defines
  1 top blob of size num x 4 x height x width.
    Channel 0 is the edge weights from the source node (background)
@@ -101,27 +106,56 @@ void Graph4CConstructorLayer<Dtype>::Forward_cpu(
 	  	int top_num_offset = 4 * n * spatial_size;
 		int spatial_offset = h * height + w;
 
+		//LOG(INFO) << "\n";
+		//LOG(INFO) << "h,w = " << h << "," << w;
+
 	    // c_i = unary_energy_i[1] - unary_energy_i[0];
-	    Dtype c_i = (unary_energy[unary_num_offset + spatial_size + spatial_offset] - 
-		             unary_energy[unary_num_offset + spatial_offset]);
+		Dtype unary_energy1 = unary_energy[unary_num_offset + spatial_size + spatial_offset];
+		Dtype unary_energy0 = unary_energy[unary_num_offset + spatial_offset];
+
+		//LOG(INFO) << "c_i = " << unary_energy1 << " - " << unary_energy0;
+	    Dtype c_i = unary_energy1 - unary_energy0;
+		//LOG(INFO) << "c_i = " << c_i;
 
 		// c_i += \sum_j pair_energy_ij[1,0] + [1,1] - [0,1] - [0,0]
 		// also computes the edge weights
 		if (h - 1 >= 0) {
 		  // up neighbor
 		  spatial_offset = (h-1) * height + w;
-		  c_i += (pair_energy[pair_num_offset + ((UD_CHANNEL + E10_OFFSET) * spatial_size) + spatial_offset] +
+		  // I'm the bottom neb, so E01 means I'm 1, and the top neb is 0
+		  c_i += (pair_energy[pair_num_offset + ((UD_CHANNEL + E01_OFFSET) * spatial_size) + spatial_offset] +
 		          pair_energy[pair_num_offset + ((UD_CHANNEL + E11_OFFSET) * spatial_size) + spatial_offset] -
-		          pair_energy[pair_num_offset + ((UD_CHANNEL + E01_OFFSET) * spatial_size) + spatial_offset] -
+		          pair_energy[pair_num_offset + ((UD_CHANNEL + E10_OFFSET) * spatial_size) + spatial_offset] -
 		          pair_energy[pair_num_offset + ((UD_CHANNEL + E00_OFFSET) * spatial_size) + spatial_offset]);
+/*
+		  LOG(INFO) << "up neb";
+		  Dtype e10 = pair_energy[pair_num_offset + ((UD_CHANNEL + E01_OFFSET) * spatial_size) + spatial_offset]; 
+		  Dtype e11 = pair_energy[pair_num_offset + ((UD_CHANNEL + E11_OFFSET) * spatial_size) + spatial_offset]; 
+		  Dtype e01 = pair_energy[pair_num_offset + ((UD_CHANNEL + E10_OFFSET) * spatial_size) + spatial_offset]; 
+		  Dtype e00 = pair_energy[pair_num_offset + ((UD_CHANNEL + E00_OFFSET) * spatial_size) + spatial_offset]; 
+		  LOG(INFO) << "c_i += " << e10 << " + " << e11 << " - " << e01 << " - " << e00;
+		  c_i += (e10 + e11 - e01 - e00);
+		  LOG(INFO) << "c_i = " << c_i;
+*/
 	    }
 		if (h + 1 < height) {
 		  // down neighbor
 		  spatial_offset = h * height + w;
+		  // I'm the top neb
 		  c_i += (pair_energy[pair_num_offset + ((UD_CHANNEL + E10_OFFSET) * spatial_size) + spatial_offset] +
 		          pair_energy[pair_num_offset + ((UD_CHANNEL + E11_OFFSET) * spatial_size) + spatial_offset] -
 		          pair_energy[pair_num_offset + ((UD_CHANNEL + E01_OFFSET) * spatial_size) + spatial_offset] -
 		          pair_energy[pair_num_offset + ((UD_CHANNEL + E00_OFFSET) * spatial_size) + spatial_offset]);
+/*
+		  LOG(INFO) << "down neb";
+		  Dtype e10 = pair_energy[pair_num_offset + ((UD_CHANNEL + E10_OFFSET) * spatial_size) + spatial_offset]; 
+		  Dtype e11 = pair_energy[pair_num_offset + ((UD_CHANNEL + E11_OFFSET) * spatial_size) + spatial_offset]; 
+		  Dtype e01 = pair_energy[pair_num_offset + ((UD_CHANNEL + E01_OFFSET) * spatial_size) + spatial_offset]; 
+		  Dtype e00 = pair_energy[pair_num_offset + ((UD_CHANNEL + E00_OFFSET) * spatial_size) + spatial_offset]; 
+		  LOG(INFO) << "c_i += " << e10 << " + " << e11 << " - " << e01 << " - " << e00;
+		  c_i += (e10 + e11 - e01 - e00);
+		  LOG(INFO) << "c_i = " << c_i;
+*/
 
 	      // UD edge weight
 		  Dtype ud_edge_weight = 
@@ -134,25 +168,49 @@ void Graph4CConstructorLayer<Dtype>::Forward_cpu(
 		if (w - 1 >= 0) {
 		  // left neighbor
 		  spatial_offset = h * height + w - 1;
-		  c_i += (pair_energy[pair_num_offset + ((LR_CHANNEL + E10_OFFSET) * spatial_size) + spatial_offset] +
+		  // I'm the right neb, so E01 means I'm 1, and the left neb is 0
+		  c_i += (pair_energy[pair_num_offset + ((LR_CHANNEL + E01_OFFSET) * spatial_size) + spatial_offset] +
 		          pair_energy[pair_num_offset + ((LR_CHANNEL + E11_OFFSET) * spatial_size) + spatial_offset] -
-		          pair_energy[pair_num_offset + ((LR_CHANNEL + E01_OFFSET) * spatial_size) + spatial_offset] -
+		          pair_energy[pair_num_offset + ((LR_CHANNEL + E10_OFFSET) * spatial_size) + spatial_offset] -
 		          pair_energy[pair_num_offset + ((LR_CHANNEL + E00_OFFSET) * spatial_size) + spatial_offset]);
+
+/*
+		  LOG(INFO) << "left neb";
+		  Dtype e10 = pair_energy[pair_num_offset + ((LR_CHANNEL + E01_OFFSET) * spatial_size) + spatial_offset]; 
+		  Dtype e11 = pair_energy[pair_num_offset + ((LR_CHANNEL + E11_OFFSET) * spatial_size) + spatial_offset]; 
+		  Dtype e01 = pair_energy[pair_num_offset + ((LR_CHANNEL + E10_OFFSET) * spatial_size) + spatial_offset]; 
+		  Dtype e00 = pair_energy[pair_num_offset + ((LR_CHANNEL + E00_OFFSET) * spatial_size) + spatial_offset]; 
+		  LOG(INFO) << "c_i += " << e10 << " + " << e11 << " - " << e01 << " - " << e00;
+		  c_i += (e10 + e11 - e01 - e00);
+		  LOG(INFO) << "c_i = " << c_i;
+*/
 		}
 		if (w + 1 < width) {
 		  // right neighbor
 		  spatial_offset = h * height + w;
+		  // I'm the left neb
 		  c_i += (pair_energy[pair_num_offset + ((LR_CHANNEL + E10_OFFSET) * spatial_size) + spatial_offset] +
 		          pair_energy[pair_num_offset + ((LR_CHANNEL + E11_OFFSET) * spatial_size) + spatial_offset] -
 		          pair_energy[pair_num_offset + ((LR_CHANNEL + E01_OFFSET) * spatial_size) + spatial_offset] -
 		          pair_energy[pair_num_offset + ((LR_CHANNEL + E00_OFFSET) * spatial_size) + spatial_offset]);
 
+/*
+		  LOG(INFO) << "right neb";
+		  Dtype e10 = pair_energy[pair_num_offset + ((LR_CHANNEL + E10_OFFSET) * spatial_size) + spatial_offset]; 
+		  Dtype e11 = pair_energy[pair_num_offset + ((LR_CHANNEL + E11_OFFSET) * spatial_size) + spatial_offset]; 
+		  Dtype e01 = pair_energy[pair_num_offset + ((LR_CHANNEL + E01_OFFSET) * spatial_size) + spatial_offset]; 
+		  Dtype e00 = pair_energy[pair_num_offset + ((LR_CHANNEL + E00_OFFSET) * spatial_size) + spatial_offset]; 
+		  LOG(INFO) << "c_i += " << e10 << " + " << e11 << " - " << e01 << " - " << e00;
+		  c_i += (e10 + e11 - e01 - e00);
+		  LOG(INFO) << "c_i = " << c_i;
+*/
+
 	      // LR edge weight
 		  Dtype lr_edge_weight = 
-	             (pair_energy[pair_num_offset + ((UD_CHANNEL + E10_OFFSET) * spatial_size) + spatial_offset] +
-			      pair_energy[pair_num_offset + ((UD_CHANNEL + E01_OFFSET) * spatial_size) + spatial_offset] -
-			      pair_energy[pair_num_offset + ((UD_CHANNEL + E11_OFFSET) * spatial_size) + spatial_offset] -
-			      pair_energy[pair_num_offset + ((UD_CHANNEL + E00_OFFSET) * spatial_size) + spatial_offset]);
+	             (pair_energy[pair_num_offset + ((LR_CHANNEL + E10_OFFSET) * spatial_size) + spatial_offset] +
+			      pair_energy[pair_num_offset + ((LR_CHANNEL + E01_OFFSET) * spatial_size) + spatial_offset] -
+			      pair_energy[pair_num_offset + ((LR_CHANNEL + E11_OFFSET) * spatial_size) + spatial_offset] -
+			      pair_energy[pair_num_offset + ((LR_CHANNEL + E00_OFFSET) * spatial_size) + spatial_offset]);
 		  top_data[top_num_offset + (LR_EDGE_OFFSET * spatial_size) + spatial_offset] = lr_edge_weight;
 		}
 	    spatial_offset = h * height + w;

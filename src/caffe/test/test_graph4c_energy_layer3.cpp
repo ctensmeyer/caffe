@@ -122,19 +122,21 @@ a total cut cost of 27
 */
 
 template <typename TypeParam>
-class Graph4CConstructLayerTest : public MultiDeviceTest<TypeParam> {
+class Graph4CEnergyLayerTest3 : public MultiDeviceTest<TypeParam> {
   typedef typename TypeParam::Dtype Dtype;
 
  protected:
-  Graph4CConstructLayerTest() : 
+  Graph4CEnergyLayerTest3() : 
     bottom1_(new Blob<Dtype>(1, 2, 2, 2)),
     bottom2_(new Blob<Dtype>(1, 8, 2, 2)),
-    top1_(new Blob<Dtype>(1, 4, 2, 2)) {
+    bottom3_(new Blob<Dtype>(1, 1, 2, 2)),
+    top1_(new Blob<Dtype>(1, 1, 1, 1)),
+    expected_energy_(new Blob<Dtype>(16, 1, 1, 1)) {
 
 	// order wrt graphcut.py is x1, x2, x4, x3
 	Dtype* bottom1 = bottom1_->mutable_cpu_data();
 
-	Dtype not_used = 5;  // can be any arbitrary value
+	Dtype not_used = 0;  // can be any arbitrary value
 
 	// energy 0 unary terms
 	bottom1[0] = 10; bottom1[1] = 3;  // x1 and x2
@@ -181,57 +183,80 @@ class Graph4CConstructLayerTest : public MultiDeviceTest<TypeParam> {
 	bottom2[30] = 4; bottom2[31] = not_used; // x4-x3, not used
 
     blob_bottom_vec_.push_back(bottom2_);
-
+    blob_bottom_vec_.push_back(bottom3_);
 
     blob_top_vec_.push_back(top1_);
+
+	Dtype* expected_energy = expected_energy_->mutable_cpu_data();
+	Dtype norm = 4.;  // energy is normalized by the spatial size
+	expected_energy[0] = 94 / norm; // 0000
+	expected_energy[1] = 84 / norm; // 0001
+	expected_energy[2] = 129 / norm; // 0010
+	expected_energy[3] = 103 / norm; // 0011
+	expected_energy[4] = 67 / norm; // 0100
+	expected_energy[5] = 57 / norm; // 0101
+	expected_energy[6] = 82 / norm; // 0110
+	expected_energy[7] = 56 / norm; // 0111
+	expected_energy[8] = 117 / norm;  // 1000
+	expected_energy[9] = 103 / norm;  // 1001
+	expected_energy[10] = 152 / norm; // 1010 
+	expected_energy[11] = 122 / norm; // 1011 
+	expected_energy[12] = 68 / norm; // 1100 
+	expected_energy[13] = 54 / norm; // 1101 
+	expected_energy[14] = 83 / norm; // 1110 
+	expected_energy[15] = 53 / norm; // 1111 
   }
-  virtual ~Graph4CConstructLayerTest() {
+  virtual ~Graph4CEnergyLayerTest3() {
     delete bottom1_;
     delete bottom2_;
+    delete bottom3_;
+    delete expected_energy_;
     delete top1_;
   }
 
   Blob<Dtype>* const bottom1_;
   Blob<Dtype>* const bottom2_;
+  Blob<Dtype>* const bottom3_;
   Blob<Dtype>* const top1_;
+  Blob<Dtype>* const expected_energy_;
   vector<Blob<Dtype>*> blob_bottom_vec_;
   vector<Blob<Dtype>*> blob_top_vec_;
 
-  void TestConstruct() {
+  void TestEnergy() {
     const Dtype kErrorMargin = 1e-5;
     LayerParameter layer_param;
-    Graph4CConstructorLayer<Dtype> layer(layer_param);
+    Graph4CEnergyLayer<Dtype> layer(layer_param);
     layer.SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
     layer.Reshape(this->blob_bottom_vec_, this->blob_top_vec_);
-    layer.Forward(this->blob_bottom_vec_, this->blob_top_vec_);
 
+	const Dtype* expected_energy = expected_energy_->cpu_data();
+	Dtype* bottom3 = bottom3_->mutable_cpu_data();
 
-	const Dtype* graph_weights = top1_->cpu_data();
-    EXPECT_NEAR(graph_weights[0], (Dtype)10, kErrorMargin); // x1-s
-    EXPECT_NEAR(graph_weights[1], (Dtype)0, kErrorMargin); // x2-s
-    EXPECT_NEAR(graph_weights[2], (Dtype)0, kErrorMargin); // x4-s
-    EXPECT_NEAR(graph_weights[3], (Dtype)17, kErrorMargin); // x3-s
-    EXPECT_NEAR(graph_weights[4], (Dtype)0, kErrorMargin); // x1-t
-    EXPECT_NEAR(graph_weights[5], (Dtype)48, kErrorMargin); // x2-t
-    EXPECT_NEAR(graph_weights[6], (Dtype)20, kErrorMargin); // x4-t
-    EXPECT_NEAR(graph_weights[7], (Dtype)0, kErrorMargin); // x3-t
-    EXPECT_NEAR(graph_weights[8], (Dtype)2, kErrorMargin); // x1-x4
-    EXPECT_NEAR(graph_weights[9], (Dtype)10, kErrorMargin); // x2-x3
-    //EXPECT_NEAR(graph_weights[10], (Dtype)8, kErrorMargin); // not used
-    //EXPECT_NEAR(graph_weights[11], (Dtype)8, kErrorMargin); // not used
-    EXPECT_NEAR(graph_weights[12], (Dtype)11, kErrorMargin); // x1-x2
-    //EXPECT_NEAR(graph_weights[13], (Dtype)8, kErrorMargin); // not used
-    EXPECT_NEAR(graph_weights[14], (Dtype)8, kErrorMargin); // x4-x3
-    //EXPECT_NEAR(graph_weights[15], (Dtype)8, kErrorMargin); // not used
-
+    int idx = 0;
+	for (int x1 = 0; x1 <= 1; x1++) {
+	  bottom3[0] = x1;
+	  for (int x2 = 0; x2 <= 1; x2++) {
+	    bottom3[1] = x2;
+	    for (int x3 = 0; x3 <= 1; x3++) {
+	      bottom3[3] = x3;
+	      for (int x4 = 0; x4 <= 1; x4++) {
+	        bottom3[2] = x4;
+            layer.Forward(this->blob_bottom_vec_, this->blob_top_vec_);
+			Dtype energy = top1_->cpu_data()[0];
+            EXPECT_NEAR(energy, expected_energy[idx], kErrorMargin);
+			idx += 1;
+		  }
+		}
+	  }
+	}
   }
 };
 
-TYPED_TEST_CASE(Graph4CConstructLayerTest, TestDtypesAndDevices);
+TYPED_TEST_CASE(Graph4CEnergyLayerTest3, TestDtypesAndDevices);
 
 
-TYPED_TEST(Graph4CConstructLayerTest, TestConstruct) {
-  this->TestConstruct();
+TYPED_TEST(Graph4CEnergyLayerTest3, TestConstruct) {
+  this->TestEnergy();
 }
 
 

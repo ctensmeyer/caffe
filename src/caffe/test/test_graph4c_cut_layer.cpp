@@ -21,9 +21,9 @@ class Graph4CCutLayerTest : public MultiDeviceTest<TypeParam> {
 
  protected:
   Graph4CCutLayerTest() : 
-    bottom_(new Blob<Dtype>(2, 4, 2, 2)),
-    top1_(new Blob<Dtype>(2, 1, 2, 2)),
-    top2_(new Blob<Dtype>(2, 1, 1, 1)) {
+    bottom_(new Blob<Dtype>(3, 4, 2, 2)),
+    top1_(new Blob<Dtype>(3, 1, 2, 2)),
+    top2_(new Blob<Dtype>(3, 1, 1, 1)) {
 
 	Dtype* bottom = bottom_->mutable_cpu_data();
 
@@ -61,6 +61,23 @@ class Graph4CCutLayerTest : public MultiDeviceTest<TypeParam> {
 	bottom[28] = 3; bottom[29] = 0;
 	bottom[30] = 4; bottom[31] = 0;
 
+	// instance 2
+	// source edges
+	bottom[32] = 10; bottom[33] = 0;
+	bottom[34] = 0; bottom[35] = 17;
+
+	// term edges
+	bottom[36] = 0; bottom[37] = 48;
+	bottom[38] = 20; bottom[39] = 0;
+
+	// ud edges
+	bottom[40] = 2; bottom[41] = 10;
+	bottom[42] = 0; bottom[43] = 0;
+
+	// lr edges
+	bottom[44] = 11; bottom[45] = 0;
+	bottom[46] = 8; bottom[47] = 0;
+
 
     blob_bottom_vec_.push_back(bottom_);
 
@@ -90,6 +107,7 @@ class Graph4CCutLayerTest : public MultiDeviceTest<TypeParam> {
 	const Dtype* cut_cost = top2_->cpu_data();
     EXPECT_NEAR(cut_cost[0], (Dtype)8, kErrorMargin);
     EXPECT_NEAR(cut_cost[1], (Dtype)10, kErrorMargin);
+    EXPECT_NEAR(cut_cost[2], (Dtype)27, kErrorMargin);
 
 	const Dtype* cut = top1_->cpu_data();
 
@@ -104,6 +122,12 @@ class Graph4CCutLayerTest : public MultiDeviceTest<TypeParam> {
     EXPECT_NEAR(cut[5], (Dtype)0, kErrorMargin);
     EXPECT_NEAR(cut[6], (Dtype)0, kErrorMargin);
     EXPECT_NEAR(cut[7], (Dtype)1, kErrorMargin);
+
+	// instance 2
+    EXPECT_NEAR(cut[8], (Dtype)1, kErrorMargin);
+    EXPECT_NEAR(cut[9], (Dtype)1, kErrorMargin);
+    EXPECT_NEAR(cut[10], (Dtype)1, kErrorMargin);
+    EXPECT_NEAR(cut[11], (Dtype)1, kErrorMargin);
   }
 };
 
