@@ -174,6 +174,8 @@ void Graph4CEnergyLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
 
     Dtype* unary_diff = bottom[UNARY_BLOB_IDX]->mutable_cpu_diff();
     Dtype* pair_diff = bottom[PAIR_BLOB_IDX]->mutable_cpu_diff();
+	caffe_set(2 * num * spatial_size, (Dtype) 0., unary_diff);
+	caffe_set(8 * num * spatial_size, (Dtype) 0., pair_diff);
     const Dtype* labels = bottom[LABEL_BLOB_IDX]->cpu_data();
 
     for (int n = 0; n < num; n++) {
