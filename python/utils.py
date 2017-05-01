@@ -82,6 +82,31 @@ def apply_crop(im, tokens):
 	return im[y:y+height,x:x+width]
 
 
+# "corner_crop height width loc"
+def apply_corner_crop(im, tokens):
+	height, width = int(tokens[1]), int(tokens[2])
+	loc = tokens[3]
+
+	if loc == 'center':
+		y = (im.shape[0] - height) / 2
+		x = (im.shape[1] - width) / 2
+	elif loc == 'ul':
+		y = 0
+		x = 0
+	elif loc == 'ur':
+		y = 0
+		x = im.shape[1] - width
+	elif loc == 'bl':
+		y = im.shape[0] - height
+		x = 0
+	elif loc == 'br':
+		y = im.shape[0] - height
+		x = im.shape[1] - width
+	else:
+		raise Exception("Invalid location: %r" % loc)
+	return apply_crop(im, ("crop %d %d %d %d" % (y, x, height, width)).split())
+
+
 def apply_dense_crop(im, tokens):
 	height, width, = int(tokens[1]), int(tokens[2])
 	y_stride, x_stride, = int(tokens[3]), int(tokens[4])
@@ -219,6 +244,8 @@ def apply_transform(im, transform_str):
 	tokens = transform_str.split()
 	if tokens[0] == 'crop':
 		return apply_crop(im, tokens)
+	if tokens[0] == 'corner_crop':
+		return apply_corner_crop(im, tokens)
 	if tokens[0] == 'densecrop':
 		return apply_dense_crop(im, tokens)
 	if tokens[0] == 'randcrop':

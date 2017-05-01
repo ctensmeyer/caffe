@@ -247,6 +247,19 @@ class ColorJitterImageTransformer : public ImageTransformer<Dtype> {
 };
 
 template <typename Dtype>
+class OtsuColorJitterImageTransformer : public ImageTransformer<Dtype> {
+ public:
+  explicit OtsuColorJitterImageTransformer(OtsuColorJitterTransformParameter param) :
+    param_(param) { };
+  virtual ~OtsuColorJitterImageTransformer() {};
+
+  virtual void Transform(const cv::Mat& in, cv::Mat& out);
+
+ protected:
+  OtsuColorJitterTransformParameter param_;
+};
+
+template <typename Dtype>
 class ElasticDeformationImageTransformer : public ImageTransformer<Dtype> {
  public:
   explicit ElasticDeformationImageTransformer(ElasticDeformationTransformParameter param) :

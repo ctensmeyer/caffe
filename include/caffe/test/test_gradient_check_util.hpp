@@ -94,9 +94,11 @@ void GradientChecker<Dtype>::CheckGradientSingle(Layer<Dtype>* layer,
       blobs_to_check.push_back(bottom[i]);
     }
   } else {
-    CHECK_LT(check_bottom, bottom.size());
-    blobs_to_check.push_back(bottom[check_bottom]);
-    propagate_down[check_bottom] = true;
+    //CHECK_LT(check_bottom, bottom.size());
+	if (check_bottom < bottom.size()) {
+      blobs_to_check.push_back(bottom[check_bottom]);
+      propagate_down[check_bottom] = true;
+	}
   }
   // Compute the gradient analytically using Backward
   Caffe::set_random_seed(seed_);
@@ -126,7 +128,7 @@ void GradientChecker<Dtype>::CheckGradientSingle(Layer<Dtype>* layer,
     Blob<Dtype>* current_blob = blobs_to_check[blob_id];
     const Dtype* computed_gradients =
         computed_gradient_blobs[blob_id]->cpu_data();
-    // LOG(ERROR) << "Blob " << blob_id << ": checking "
+    //LOG(ERROR) << "Blob " << blob_id << ": checking "
     //     << current_blob->count() << " parameters.";
     for (int feat_id = 0; feat_id < current_blob->count(); ++feat_id) {
       // For an element-wise layer, we only need to do finite differencing to
@@ -166,6 +168,7 @@ void GradientChecker<Dtype>::CheckGradientSingle(Layer<Dtype>* layer,
         // the scale factor by 1.
         Dtype scale = std::max(
             std::max(fabs(computed_gradient), fabs(estimated_gradient)), 1.);
+        //LOG(ERROR) << "Checking... " << threshold_ * scale;
         EXPECT_NEAR(computed_gradient, estimated_gradient, threshold_ * scale)
           << "debug: (top_id, top_data_id, blob_id, feat_id)="
           << top_id << "," << top_data_id << "," << blob_id << "," << feat_id
@@ -173,9 +176,9 @@ void GradientChecker<Dtype>::CheckGradientSingle(Layer<Dtype>* layer,
           << "; objective+ = " << positive_objective
           << "; objective- = " << negative_objective;
       }
-      // LOG(ERROR) << "Feature: " << current_blob->cpu_data()[feat_id];
-      // LOG(ERROR) << "computed gradient: " << computed_gradient
-      //    << " estimated_gradient: " << estimated_gradient;
+       //LOG(ERROR) << "Feature " << feat_id << ": " << current_blob->cpu_data()[feat_id];
+       //LOG(ERROR) << "computed gradient: " << computed_gradient
+       //   << " estimated_gradient: " << estimated_gradient;
     }
   }
 }
