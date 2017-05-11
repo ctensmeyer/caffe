@@ -135,11 +135,13 @@ void WeightedFmeasureLossLayer<Dtype>::Forward_cpu_total_fm(
     Dtype loss = mse_lambda_ * 0.5 * numer / denum;
     //LOG(INFO) << "HERE: " << numer << " " << denum << " " << (numer / denum) << " " << loss;
     top[0]->mutable_cpu_data()[0] = loss;
+	/*
     if (!std::isfinite(loss)) {
       LOG(INFO) << "Found non-finite MSE: " << loss;
       LOG(INFO) << "\tLayer name: " << this->layer_param().name();
       LOG(INFO) << "\tnumer: " << numer << " denum: " << denum;
     } 
+	*/
     
 /*
     numer = 0;
@@ -245,6 +247,7 @@ void WeightedFmeasureLossLayer<Dtype>::Forward_cpu_avg_fm(
       if (top.size() > 1) {
         top[1]->mutable_cpu_data()[n] = pfm[n];
       }
+	  /*
 	  if (!std::isfinite(pfm[n])) {
 	    LOG(INFO) << "Found " << pfm[n] << " which is non-finite on instance " << n;
 	    LOG(INFO) << "\tLayer name: " << this->layer_param().name();
@@ -271,6 +274,7 @@ void WeightedFmeasureLossLayer<Dtype>::Forward_cpu_avg_fm(
 		  }
 		}
 	  }
+	  */
 	  loss += 1 - pfm[n];
 	} else {
 	  // GT is likely all background, so Recall is undefined and Precision is 0
@@ -285,11 +289,13 @@ void WeightedFmeasureLossLayer<Dtype>::Forward_cpu_avg_fm(
 	  Dtype denum = caffe_cpu_asum(spatial_size, precision_weight + spatial_offset);
 	  //LOG(INFO) << "HERE: " << numer << " " << denum << " " << (numer / denum) << " " << loss;
 	  Dtype individual_loss = mse_lambda_ * 0.5 * numer / denum;
+	  /*
 	  if (!std::isfinite(individual_loss)) {
 	    LOG(INFO) << "Found non-finite MSE: " << individual_loss << " on instance " << n;
 	    LOG(INFO) << "\tLayer name: " << this->layer_param().name();
 	    LOG(INFO) << "\tnumer: " << numer << " denum: " << denum;
 	  }
+	  */
 	  loss += individual_loss;
 	  //LOG(INFO) << loss;
 	}
@@ -370,7 +376,7 @@ void WeightedFmeasureLossLayer<Dtype>::Backward_cpu_total_fm(
   
     caffe_add(count, dR_dB, dP_dB, diff);
   } else {
-	LOG(INFO) << "BACK";
+	//LOG(INFO) << "BACK";
     Dtype* work = work_buffer_->mutable_cpu_data();
     Dtype* work2 = work_buffer_->mutable_cpu_diff();
     caffe_set(count, (Dtype)0., work);

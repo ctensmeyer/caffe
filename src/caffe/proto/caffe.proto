@@ -403,7 +403,7 @@ message ParamSpec {
 // Update the next available ID when you add a new LayerParameter field.
 //
 // LayerParameter next available layer-specific ID: 212 (last added: relative_darkness)
-// LayerParameter next available layer-specific ID: 137 (last added: reduction_param)
+// LayerParameter next available layer-specific ID: 138 (last added: multi_stage_meanfield_param)
 // The 2xx numbers are reservered for additional layers added by Chris, while 1xx are
 //   used by the official caffe release.
 message LayerParameter {
@@ -481,6 +481,7 @@ message LayerParameter {
   optional LogParameter log_param = 134;
   optional LRNParameter lrn_param = 118;
   optional MemoryDataParameter memory_data_param = 119;
+  optional MultiStageMeanfieldParameter multi_stage_meanfield_param = 137;
   optional MVNParameter mvn_param = 120;
   optional PaddingParameter padding_param = 209;
   optional PoolingParameter pooling_param = 121;
@@ -1169,6 +1170,26 @@ message MemoryDataParameter {
   optional uint32 channels = 2;
   optional uint32 height = 3;
   optional uint32 width = 4;
+}
+
+// Message that stores parameters used by MultiStageMeanfieldLayer
+message MultiStageMeanfieldParameter {
+  enum Mode {
+    POTTS = 0;
+  }
+  optional Mode compatibility_mode = 1 [default = POTTS];
+  optional float threshold = 2;
+
+  required float theta_alpha = 3 [default = 10.];
+  required float theta_beta = 4 [default = 10.];
+  required float theta_gamma = 5 [default = 10.];
+
+  required uint32 num_iterations = 6 [default = 1];
+  optional float spatial_filter_weight = 7 [default = 1];
+  optional float bilateral_filter_weight = 8 [default = 1];
+
+  optional float forced_spatial_filter_weight = 9;
+  optional float forced_bilateral_filter_weight = 10;
 }
 
 message MVNParameter {
