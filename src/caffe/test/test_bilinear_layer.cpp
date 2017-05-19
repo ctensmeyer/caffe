@@ -111,7 +111,7 @@ class BilinearInterpolationLayerTest : public MultiDeviceTest<TypeParam> {
 
 TYPED_TEST_CASE(BilinearInterpolationLayerTest, TestDtypesAndDevices);
 
-///*
+/*
 TYPED_TEST(BilinearInterpolationLayerTest, TestForward) {
   this->TestForward();
 }
@@ -119,9 +119,9 @@ TYPED_TEST(BilinearInterpolationLayerTest, TestForward) {
 TYPED_TEST(BilinearInterpolationLayerTest, TestBackward) {
   this->TestBackward();
 }
-//*/
+*/
 
-///*
+/*
 TYPED_TEST(BilinearInterpolationLayerTest, TestGradient) {
   typedef typename TypeParam::Dtype Dtype;
   LayerParameter layer_param;
@@ -131,6 +131,6 @@ TYPED_TEST(BilinearInterpolationLayerTest, TestGradient) {
   checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
       this->blob_top_vec_, 0);
 }
-//*/
+*/
 
 }  // namespace caffe

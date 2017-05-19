@@ -117,6 +117,30 @@ class Graph4CMakeModularLayer : public Layer<Dtype> {
   //    const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 };
 
+template <typename Dtype>
+class Graph4CPairLayer : public Layer<Dtype> {
+ public:
+  explicit Graph4CPairLayer(const LayerParameter& param)
+      : Layer<Dtype>(param) {}
+  virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+
+  virtual inline const char* type() const { return "Graph4CPair"; }
+  virtual inline int ExactNumBottomBlobs() const { return 1; }
+  virtual inline int ExactNumTopBlobs() const { return 1; }
+
+ protected:
+  virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+
+  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
+    for (int i = 0; i < propagate_down.size(); ++i) {
+      if (propagate_down[i]) { NOT_IMPLEMENTED; }
+    }
+  }
+};
+
 }  // namespace caffe
 
 #endif  // CAFFE_GRAPH_LAYERS_HPP_

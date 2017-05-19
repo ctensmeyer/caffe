@@ -21,7 +21,7 @@ void Graph4CMakeModularLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
 
   CHECK_EQ(bottom[0]->channels(), 8) <<
-      "Graph4CEnergy layer unary input must have 8 channels";
+      "Graph4CMakeModular layer input must have 8 channels";
 
   vector<int> shape;
   shape.push_back(bottom[0]->num());

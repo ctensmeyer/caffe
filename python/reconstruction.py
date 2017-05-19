@@ -160,6 +160,8 @@ def save_image(im, num, args):
 	mean = int(args.means)
 	scale = float(args.scales)
 	im = im / scale + mean
+	im = np.transpose(im, (1, 2, 0))
+	print im.shape
 
 	out_file = os.path.join(args.out_dir, "%d.png" % num)
 	cv2.imwrite(out_file, im)

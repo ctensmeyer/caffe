@@ -113,19 +113,20 @@ void Graph4CEnergyLayer<Dtype>::Forward_cpu(
 		  int channel = UD_CHANNEL;
 		  if (cur_label) {
 		    if (neb_label) {
-			  channel = E11_OFFSET;
+			  channel += E11_OFFSET;
 			} else {
-			  channel = E10_OFFSET;
+			  channel += E10_OFFSET;
 			}
 		  } else {
 		    if (neb_label) {
-			  channel = E01_OFFSET;
+			  channel += E01_OFFSET;
 			} else {
-			  channel = E00_OFFSET;
+			  channel += E00_OFFSET;
 			}
 		  }
 		  spatial_offset = h * height + w;
-		  energy += pair_energy[pair_num_offset + (channel * spatial_size) + spatial_offset];
+	      // 2 * because we have a -> b and b -> a
+		  energy += 2 * pair_energy[pair_num_offset + (channel * spatial_size) + spatial_offset];
 		}
 
 		if (w + 1 < width) {
@@ -135,23 +136,24 @@ void Graph4CEnergyLayer<Dtype>::Forward_cpu(
 		  int channel = LR_CHANNEL;
 		  if (cur_label) {
 		    if (neb_label) {
-			  channel = E11_OFFSET;
+			  channel += E11_OFFSET;
 			} else {
-			  channel = E10_OFFSET;
+			  channel += E10_OFFSET;
 			}
 		  } else {
 		    if (neb_label) {
-			  channel = E01_OFFSET;
+			  channel += E01_OFFSET;
 			} else {
-			  channel = E00_OFFSET;
+			  channel += E00_OFFSET;
 			}
 		  }
 		  spatial_offset = h * height + w;
-		  energy += pair_energy[pair_num_offset + (channel * spatial_size) + spatial_offset];
+	      // 2 * because we have a -> b and b -> a
+		  energy += 2 * pair_energy[pair_num_offset + (channel * spatial_size) + spatial_offset];
 		}
 	  }
 	} // end height
-	top_data[n] = energy;
+	top_data[n] = energy / spatial_size;
   } // end num
 }
 
@@ -172,12 +174,14 @@ void Graph4CEnergyLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
 
     Dtype* unary_diff = bottom[UNARY_BLOB_IDX]->mutable_cpu_diff();
     Dtype* pair_diff = bottom[PAIR_BLOB_IDX]->mutable_cpu_diff();
+	caffe_set(2 * num * spatial_size, (Dtype) 0., unary_diff);
+	caffe_set(8 * num * spatial_size, (Dtype) 0., pair_diff);
     const Dtype* labels = bottom[LABEL_BLOB_IDX]->cpu_data();
 
     for (int n = 0; n < num; n++) {
 	  // dE/de = 1, where e is any individual energy param
 	  // thus dLoss/de = 1 * dLoss/dE = top_diff[n]
-	  Dtype diff = top_diff[n]; 
+	  Dtype diff = top_diff[n] / spatial_size; 
       for (int h = 0; h < height; h++) {
         for (int w = 0; w < width; w++) {
           int unary_num_offset = 2 * n * spatial_size;
@@ -202,19 +206,20 @@ void Graph4CEnergyLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
       	    int channel = UD_CHANNEL;
       	    if (cur_label) {
       	      if (neb_label) {
-      	  	    channel = E11_OFFSET;
+      	  	    channel += E11_OFFSET;
       	  	  } else {
-      	  	    channel = E10_OFFSET;
+      	  	    channel += E10_OFFSET;
       	  	  }
       	    } else {
       	      if (neb_label) {
-      	  	    channel = E01_OFFSET;
+      	  	    channel += E01_OFFSET;
       	  	  } else {
-      	  	    channel = E00_OFFSET;
+      	  	    channel += E00_OFFSET;
       	  	  }
       	    }
       	    spatial_offset = h * height + w;
-      	    pair_diff[pair_num_offset + (channel * spatial_size) + spatial_offset] = diff;
+			// 2 * because we have a -> b and b -> a
+      	    pair_diff[pair_num_offset + (channel * spatial_size) + spatial_offset] = 2 * diff;
       	  }
 
       	  if (w + 1 < width) {
@@ -224,19 +229,20 @@ void Graph4CEnergyLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
       	    int channel = LR_CHANNEL;
       	    if (cur_label) {
       	      if (neb_label) {
-      	  	    channel = E11_OFFSET;
+      	  	    channel += E11_OFFSET;
       	  	  } else {
-      	  	    channel = E10_OFFSET;
+      	  	    channel += E10_OFFSET;
       	  	  }
       	    } else {
       	      if (neb_label) {
-      	  	    channel = E01_OFFSET;
+      	  	    channel += E01_OFFSET;
       	  	  } else {
-      	  	    channel = E00_OFFSET;
+      	  	    channel += E00_OFFSET;
       	  	  }
       	    }
       	    spatial_offset = h * height + w;
-      	    pair_diff[pair_num_offset + (channel * spatial_size) + spatial_offset] = diff;
+			// 2 * because we have a -> b and b -> a
+      	    pair_diff[pair_num_offset + (channel * spatial_size) + spatial_offset] = 2 * diff;
       	  }
         }
       } // end height
