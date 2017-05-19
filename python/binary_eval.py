@@ -114,11 +114,7 @@ def get_metrics(predict_fn, gt_fn, recall_fn, precision_fn):
 	f, p, r = measure_fmeasure(predict_im, gt_im)
 	pf, pp, pr = measure_psuedo_fmeasure(predict_im, gt_im, recall_weights, precision_weights)
 
-<<<<<<< HEAD
-	return pf, pp, pr, f, p, r, psnr, accuracy, drd
-=======
 	return pf, pp, pr, f, p, r, drd, psnr, accuracy
->>>>>>> 9a38896bb4b7fad239edd7a38330a9e35f7d8f1b
 
 def main(predict_dir, pr_dat_dir, out_file, summary_file):
 	fd = open(out_file, 'w')
@@ -133,7 +129,6 @@ def main(predict_dir, pr_dat_dir, out_file, summary_file):
 		metrics = get_metrics(predict_fn, gt_fn, recall_fn, precision_fn)
 		all_metrics.append(metrics)
 		fd.write("%s  %s\n" % (fn, "  ".join(map(lambda f: "%.4f" % f, metrics))))
-		exit()
 
 	fd.close()
 
