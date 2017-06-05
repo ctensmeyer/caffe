@@ -910,6 +910,38 @@ class WeightedFmeasureLossLayer : public LossLayer<Dtype> {
   Dtype margin_, mse_lambda_;
 };
 
+template <typename Dtype>
+class WeightedFmeasureLoss2Layer : public LossLayer<Dtype> {
+ public:
+  explicit WeightedFmeasureLoss2Layer(const LayerParameter& param)
+      : LossLayer<Dtype>(param), work_buffer_(new Blob<Dtype>()) {}
+  virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+  virtual void Reshape(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+
+  virtual inline const char* type() const { return "WeightedFmeasureLoss2"; }
+  virtual inline int ExactNumBottomBlobs() const { return 4; }
+  // predictions
+  // binary gt image
+  // recall weights
+  // precision weights
+
+ protected:
+
+  virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+  virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+  virtual void Forward_gpu(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top);
+  virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
+      const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
+
+  shared_ptr<Blob<Dtype> > work_buffer_;
+  Dtype recall_, precision_, precision_num_, precision_denum_, recall_num_, recall_denum_, margin_;
+};
+
 }  // namespace caffe
 
 #endif  // CAFFE_LOSS_LAYERS_HPP_
