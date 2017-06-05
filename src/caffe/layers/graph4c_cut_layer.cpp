@@ -1,4 +1,6 @@
 
+#ifdef USE_GRAPHCUT
+
 #include <vector>
 
 #include "caffe/layer.hpp"
@@ -129,3 +131,4 @@ REGISTER_LAYER_CLASS(Graph4CCut);
 #undef UD_CHANNEL
 #undef LR_CHANNEL
 
+#endif //USE_GRAPHCUT

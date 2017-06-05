@@ -96,6 +96,7 @@ class Graph4CCutLayerTest : public MultiDeviceTest<TypeParam> {
   vector<Blob<Dtype>*> blob_bottom_vec_;
   vector<Blob<Dtype>*> blob_top_vec_;
 
+#ifdef USE_GRAPHCUT
   void TestCut() {
     const Dtype kErrorMargin = 1e-5;
     LayerParameter layer_param;
@@ -129,14 +130,17 @@ class Graph4CCutLayerTest : public MultiDeviceTest<TypeParam> {
     EXPECT_NEAR(cut[10], (Dtype)1, kErrorMargin);
     EXPECT_NEAR(cut[11], (Dtype)1, kErrorMargin);
   }
+#endif
 };
 
+#ifdef USE_GRAPHCUT
 TYPED_TEST_CASE(Graph4CCutLayerTest, TestDtypesAndDevices);
 
 
 TYPED_TEST(Graph4CCutLayerTest, TestCut) {
   this->TestCut();
 }
+#endif
 
 
 }  // namespace caffe

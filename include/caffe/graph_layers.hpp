@@ -63,6 +63,7 @@ class Graph4CEnergyLayer : public Layer<Dtype> {
   //    const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 };
 
+#ifdef USE_GRAPHCUT
 
 template <typename Dtype>
 class Graph4CCutLayer : public Layer<Dtype> {
@@ -89,6 +90,8 @@ class Graph4CCutLayer : public Layer<Dtype> {
     }
   }
 };
+
+#endif
 
 template <typename Dtype>
 class Graph4CMakeModularLayer : public Layer<Dtype> {
