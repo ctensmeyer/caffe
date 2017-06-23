@@ -251,10 +251,6 @@ void Graph4CEnergyLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
 }
 
 
-#ifdef CPU_ONLY
-STUB_GPU(Graph4CEnergyLayer);
-#endif
-
 INSTANTIATE_CLASS(Graph4CEnergyLayer);
 REGISTER_LAYER_CLASS(Graph4CEnergy);
 

@@ -99,10 +99,6 @@ void Graph4CPairLayer<Dtype>::Forward_cpu(
 }
 
 
-#ifdef CPU_ONLY
-STUB_GPU_FORWARD(Graph4CPairLayer);
-#endif
-
 INSTANTIATE_CLASS(Graph4CPairLayer);
 REGISTER_LAYER_CLASS(Graph4CPair);
 

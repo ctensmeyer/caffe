@@ -229,10 +229,6 @@ void Graph4CConstructorLayer<Dtype>::Forward_cpu(
 }
 
 
-#ifdef CPU_ONLY
-STUB_GPU_FORWARD(Graph4CConstructorLayer);
-#endif
-
 INSTANTIATE_CLASS(Graph4CConstructorLayer);
 REGISTER_LAYER_CLASS(Graph4CConstructor);
 

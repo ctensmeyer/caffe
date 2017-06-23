@@ -173,10 +173,6 @@ void Graph4CMakeModularLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& to
 }
 
 
-#ifdef CPU_ONLY
-STUB_GPU(Graph4CMakeModularLayer);
-#endif
-
 INSTANTIATE_CLASS(Graph4CMakeModularLayer);
 REGISTER_LAYER_CLASS(Graph4CMakeModular);
 
