@@ -1,6 +1,7 @@
 
 import random
 import numpy as np
+import scipy.spatial
 import matplotlib.pyplot as plt
 from math import pi
 
@@ -60,11 +61,13 @@ def line_intersect(m1, i1, m2, i2):
 	return (x_inter, y_inter)
 
 
-def between(c, a, b):
+def between(c, a, b, rtol=1e-07, atol=1e-10):
 	'''
 	return True is c is between a and b.  Accepts both a < b and b > a
 	'''
-	return (a <= c and c <= b) or (b <= c and c <= a)
+	eps = atol + rtol * abs(c)
+	return (((a - eps) <= c and c <= (b + eps)) or 
+	        ((b - eps) <= c and c <= (a + eps)))
 
 
 def d_slope_intercept(p1, p2):
@@ -322,8 +325,9 @@ def next_int(v, direction):
 			return int(np.floor(v))
 
 
-def pt_is_close(p1, p2):
-	return np.isclose(p1[0], p2[0]) and np.isclose(p1[1], p2[1])
+def pt_is_close(p1, p2, atol=1e-10, rtol=1e-8):
+	return (np.isclose(p1[0], p2[0], rtol=rtol, atol=atol) and 
+	   		np.isclose(p1[1], p2[1], rtol=rtol, atol=atol))
 
 
 def contains_poly(V1, V2):
@@ -351,6 +355,7 @@ def area_subtract_polygons(V1, V2):
 def d_area_subtract_polygons(V1, V2):
 	''' Gets (d_area of the residual of V1 - V2)/d_V1,d_V2 '''
 	if contains_poly(V1, V2):
+		#print "Contains"
 		d_V1 = d_area(V1)
 		d_V2 = d_area(V2, mult=-1.)
 		return d_V1, d_V2
@@ -442,19 +447,21 @@ def subtract_polygons(V1, V2):
 			# this vertex cannot be part of a residual polygon
 			visited[idx] = True
 
-	#print V1
-	#print V2
-	#print visited
+	if DEBUG:
+		print V1
+		print V2
+		print visited
 
 	i = 0
-	iters = 0
-	max_iters = 2 * (len(V1) + len(V2))
+	max_iters = 2 * (len(V1) + len(V2)) + 1
 	while not all(visited):
 		start_pt_idx = visited.index(False)
 		start_pt = V1[start_pt_idx]
 		cur_pt_idx = start_pt_idx
 		cur_pt = start_pt
-		#print "start_point: ", start_pt
+		cur_pt_is_intersection = False
+		if DEBUG:
+			print "start_point: ", start_pt
 
 		direction = 1
 		polygon = list()
@@ -463,34 +470,41 @@ def subtract_polygons(V1, V2):
 		cur_points = V1
 		other_points = V2
 		meta.append( (start_pt_idx, True) )
+		iters = 0
 		while first or cur_pt != start_pt:
 			# bookkeeping
 			first = False
 			polygon.append(cur_pt)
 			if isinstance(cur_pt_idx, int) and cur_pt == V1[cur_pt_idx]:
 				visited[cur_pt_idx] = True
-			#print "\ncur_point: ", cur_pt
+			if DEBUG:
+				print "\ncur_point: ", cur_pt
 
 			# attempt to move to the next vertex on the current quad
 			next_pt_idx = next_int(cur_pt_idx, direction) % len(cur_points) 
 			potential_next_pt = cur_points[next_pt_idx]
 			cur_m, cur_i = slope_intercept(cur_pt, potential_next_pt)
-			#print "potential_next_pt: ", potential_next_pt
+			if DEBUG: 
+				print "potential_next_pt: ", potential_next_pt
 
 			# find any intersections
 			intersections = map(lambda idx: line_seg_intersect(cur_pt, 
 								potential_next_pt, other_points[idx], 
 								other_points[(idx+1)%len(other_points)]), xrange(len(other_points)))
-			for idx in xrange(len(other_points)):
-				# If cur_pt is already an intersection point, remove it
-				if intersections[idx] and pt_is_close(intersections[idx], cur_pt):
-					intersections[idx] = None
-			#print "intersections: ", intersections
+			if cur_pt_is_intersection:
+				for idx in xrange(len(other_points)):
+					# If cur_pt is already an intersection point, remove it
+					if intersections[idx] and pt_is_close(intersections[idx], cur_pt):
+						intersections[idx] = None
+			if DEBUG:
+				print "intersections: ", intersections
 			if not any(intersections):
 				# no intersections, move to next vertex
-				#print "no intersections"
+				if DEBUG: 
+					print "no intersections"
 				cur_pt_idx = next_pt_idx
 				cur_pt = potential_next_pt
+				cur_pt_is_intersection = False
 				meta.append( (cur_pt_idx, V1 is cur_points) )
 			else:
 				# move to the closest intersection point
@@ -509,8 +523,10 @@ def subtract_polygons(V1, V2):
 				# other_points[(closest_intersection_idx+1)%4]
 				cur_pt_idx = closest_intersection_idx + 0.5
 				cur_pt = intersections[closest_intersection_idx]
-				#print "Intersect with:", cur_pt
-				#print "Between:", other_points[closest_intersection_idx], other_points[(closest_intersection_idx+1)%len(other_points)]
+				cur_pt_is_intersection = True
+				if DEBUG:
+					print "Intersect with:", cur_pt
+					print "Between:", other_points[closest_intersection_idx], other_points[(closest_intersection_idx+1)%len(other_points)]
 				if V1 is cur_points:
 					meta.append( (next_pt_idx, other_endpoint_idx, closest_intersection_idx, 
 								 (closest_intersection_idx+1)%len(other_points)) )
@@ -526,24 +542,29 @@ def subtract_polygons(V1, V2):
 				if same_side(cur_points[other_cur_quad_vertex_idx], 
 							 other_points[closest_intersection_idx],
 							 cur_m, cur_i):
-					#print "Same Side"
+					if DEBUG:
+						print "Same Side"
 					direction = -1
 				else:
 					direction = 1
 
 				if V2 is cur_points:
-					#print "Reversing direction"
+					if DEBUG:
+						print "Reversing direction"
 					direction *= -1
-				#print 'cur idx, direction:', cur_pt_idx, direction
+				if DEBUG:
+					print 'cur idx, direction:', cur_pt_idx, direction
 
 				# iterate on the other polygon
 				cur_points, other_points = other_points, cur_points
-			#if i >= 4:
+			#if i >= 1:
+			#	exit()
 			#	break
-			#i += 1
+			i += 1
 			iters += 1
 			if iters > max_iters:
-				raise Exception("Not Terminating with inputs %r,%r" % (V1, V2))
+				print polygons
+				raise Exception("Not Terminating (%d steps) with inputs %r,%r" % (iters, V1, V2))
 		polygons.append(polygon)
 		del meta[-1]
 		metas.append(meta)
@@ -583,6 +604,16 @@ def is_poly_convex(V):
 		v[idx % len(v)] = V[idx]
 
 	return True
+
+
+def is_poly_convex_unordered(V):
+	if len(V) == 3:
+		return True
+
+	V = np.asarray(V)
+	hull = scipy.spatial.ConvexHull(V)
+
+	return hull.vertices.shape[0] == V.shape[0]
 
 
 def angle_between(p1, p2):
@@ -744,11 +775,11 @@ def gradient_descent(q1, q2):
 		q1.step_towards(q2, lr=lr)
 
 
-if __name__ == "__main__":
+def one():
 	#points_1 = [(50., 50.), (400., 50.), (400., 400.), (50., 400.)]
 	#points_2 = [(200., 200.), (600., 200.), (600., 600.), (200., 600.)]
 	#points_2 = [(200., 0.), (300., 200.), (200., 500.), (0., 200.)]
-	points_1, points_2 = [(0.97776443, 0.86798877), (0.068810098, 0.875), (0.0703125, 0.091947116), (0.97325718, 0.093950324)],[(1.6127565, 0.38299164), (0.13434272, 0.80347627), (0.31475645, 0.12825154)]
+	points_1, points_2 = [(0.9432091116905212, 0.8659855723381042), (0.01772836595773697, 0.8639823794364929), (0.02373798005282879, 0.08994390815496445), (0.9402043223381042, 0.07892628014087677)],[(0.9299576282501221, 0.8622260093688965), (0.015937695279717445, 0.8531931638717651), (0.01449277251958847, 0.07618695497512817), (0.9402621388435364, 0.09529659152030945)]
 	
 	print is_poly_ordered(points_1)
 	print is_poly_ordered(points_2)
@@ -760,22 +791,13 @@ if __name__ == "__main__":
 	#gradient_descent(q1, q2)
 	plot(points_1)
 	plot(points_2, color='green')
+	#plt.show()
+	#exit()
 	q1_q2, q1_q2_metas = subtract_polygons(points_1, points_2)
-	q2_q1, q2_q1_metas = subtract_polygons(points_2, points_1)
-	#idx = 0
-	#colors = ['red', 'orange', 'cyan', 'black']
-	#for poly, meta in zip(q1_q2, q1_q2_metas):
-	#	if poly:
-	#		print poly
-	#		print meta
-	#		plot(poly, color=colors[idx])
-	#		idx += 1
-	#		print area(poly)
-	#		print
-	#
+	#q2_q1, q2_q1_metas = subtract_polygons(points_2, points_1)
 	idx = 0
-	colors = ['yellow', 'brown', 'purple', 'gray']
-	for poly, meta in zip(q2_q1, q2_q1_metas):
+	colors = ['red', 'orange', 'cyan', 'black']
+	for poly, meta in zip(q1_q2, q1_q2_metas):
 		if poly:
 			print poly
 			print meta
@@ -783,7 +805,61 @@ if __name__ == "__main__":
 			idx += 1
 			print area(poly)
 			print
+	
+	#idx = 0
+	#colors = ['yellow', 'brown', 'purple', 'gray']
+	#for poly, meta in zip(q2_q1, q2_q1_metas):
+	#	if poly:
+	#		print poly
+	#		print meta
+	#		plot(poly, color=colors[idx])
+	#		idx += 1
+	#		print area(poly)
+	#		print
 	plt.show()
+
+def two():
+	from polygon_area_layer import reorder
+	count = 0
+	while count < 100000:
+		V = list()
+		for idx in xrange(4):
+			V.append( (random.random(),random.random()) )
+		if is_poly_convex_unordered(V):
+			count += 1
+			V_ordered, _ = reorder(V)
+			if not is_poly_ordered(V_ordered):
+				print count, V, V_ordered
+				break
+			
+			
+			
+def three():
+	V1 = [(1.0, 1.0), (0.0, 1.0), (0.0, 0.0), (1.0, 0.0)]
+	V2 = [(0.80000001, 0.80000001), (0.2, 0.89999998), (0.1, 0.2), (0.69999999, 0.1)]
+	print d_area(V1)
+	print d_area(V2)
+	a, b = d_area_subtract_polygons(V1, V2)
+	print a
+	print b
+
+	a, b = d_area_subtract_polygons(V2, V1)
+	print a
+	print b
+
+def four():
+	p1 = (0.94321436, 0.86789978)
+	p2 = (0.040307812, 0.8990944)
+	q1 = (0.94320911, 0.86798877)
+	q2 = (0.9375, 0.082932696)
+	print line_seg_intersect(p1, p2, q1, q2)
+
+
+if __name__ == "__main__":
+	one()
+	#two()
+	#three()
+	#four()
 
 
 
