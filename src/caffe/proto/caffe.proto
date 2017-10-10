@@ -765,6 +765,9 @@ message LossParameter {
   optional bool log_output = 10 [default = false];
 
   optional float cross_entropy_positive_weight = 11 [default = 1];
+
+  optional bool weight_by_label_freqs = 3 [default = false];
+  repeated float class_weighting = 4;
 }
 
 // Messages that store parameters used by individual layer types follow, in
