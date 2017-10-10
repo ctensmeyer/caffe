@@ -611,7 +611,10 @@ def is_poly_convex_unordered(V):
 		return True
 
 	V = np.asarray(V)
-	hull = scipy.spatial.ConvexHull(V)
+	try:
+		hull = scipy.spatial.ConvexHull(V)
+	except:
+		return False
 
 	return hull.vertices.shape[0] == V.shape[0]
 

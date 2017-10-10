@@ -170,7 +170,7 @@ void GradientChecker<Dtype>::CheckGradientSingle(Layer<Dtype>* layer,
             std::max(fabs(computed_gradient), fabs(estimated_gradient)), 1.);
         //LOG(ERROR) << "Checking... " << threshold_ * scale;
         EXPECT_NEAR(computed_gradient, estimated_gradient, threshold_ * scale)
-          << "debug: (top_id, top_data_id, blob_id, feat_id)="
+          << "\ndebug: (top_id, top_data_id, blob_id, feat_id)="
           << top_id << "," << top_data_id << "," << blob_id << "," << feat_id
           << "; feat = " << feature
           << "; objective+ = " << positive_objective

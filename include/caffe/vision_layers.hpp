@@ -962,8 +962,9 @@ class CenterOfMassLayer : public Layer<Dtype> {
     const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 
   Blob<Dtype> aux_;
-  
+  int num_back_;
 };
+
 
 }  // namespace caffe
 
