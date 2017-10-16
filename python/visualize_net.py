@@ -179,7 +179,7 @@ def save_filters(net, args):
 	os.mkdir(out_dir)
 	for name, lblob in net.params.items():
 		if name in args.omit_layers:
-			print "Ommitting %s" % name
+			print "Omitting %s" % name
 			continue
 		print name
 		out_file = os.path.join(out_dir, name + ".png")

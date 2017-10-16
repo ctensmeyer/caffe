@@ -405,7 +405,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 212 (last added: relative_darkness)
+// LayerParameter next available layer-specific ID: 215 (last added: mcl_param)
 // LayerParameter next available layer-specific ID: 138 (last added: multi_stage_meanfield_param)
 // The 2xx numbers are reservered for additional layers added by Chris, while 1xx are
 //   used by the official caffe release.
@@ -463,6 +463,7 @@ message LayerParameter {
   optional BinaryEncodeParameter binary_param = 205;
   optional BatchNormParameter batch_norm_param = 139;
   optional BiasParameter bias_param = 141;
+  optional CenterOfMassParameter center_param = 212;
   optional ConcatParameter concat_param = 104;
   optional ContrastiveLossParameter contrastive_loss_param = 105;
   optional ConvolutionParameter convolution_param = 106;
@@ -481,8 +482,10 @@ message LayerParameter {
   optional ImageDataParameter image_data_param = 115;
   optional InfogainLossParameter infogain_loss_param = 116;
   optional InnerProductParameter inner_product_param = 117;
+  optional KernelDensityModeParameter kernel_param = 213;
   optional LogParameter log_param = 134;
   optional LRNParameter lrn_param = 118;
+  optional MCLParameter mcl_param = 214;
   optional MemoryDataParameter memory_data_param = 119;
   optional MultiStageMeanfieldParameter multi_stage_meanfield_param = 137;
   optional MVNParameter mvn_param = 120;
@@ -854,6 +857,15 @@ message BiasParameter {
   optional FillerParameter filler = 3;
 }
 
+message CenterOfMassParameter {
+
+  // set the gradient of inputs - that are outside the circle
+  // with a center computed by the center of mass and this
+  // given radius - to the grad value given.
+  optional int32 radius = 1 [default = 0];
+  optional float grad = 2 [default = 0];
+}
+
 message ConcatParameter {
   // The axis along which to concatenate -- may be negative to index from the
   // end (e.g., -1 for the last axis).  Other axes must have the
@@ -1145,6 +1157,17 @@ message InnerProductParameter {
   optional int32 axis = 5 [default = 1];
 }
 
+message KernelDensityModeParameter {
+  enum KernelType {
+    LINEAR = 0;
+    EPANECHNIKOV = 1;
+  }
+
+  optional float radius = 1 [default = 10];
+  optional KernelType kernel_type = 2 [default = LINEAR];
+  optional float grad_thresh = 3 [default = 0.0001];
+}
+
 // Message that stores parameters used by LogLayer
 message LogParameter {
   // LogLayer computes outputs y = log_base(shift + scale * x), for base > 0.
@@ -1166,6 +1189,10 @@ message LRNParameter {
   }
   optional NormRegion norm_region = 4 [default = ACROSS_CHANNELS];
   optional float k = 5 [default = 1.];
+}
+
+message MCLParameter {
+  optional uint32 hard_k = 1 [default = 1];
 }
 
 message MemoryDataParameter {
