@@ -17,7 +17,7 @@ namespace caffe {
 template <typename Dtype>
 void IntersectionOverUnionLossLayer<Dtype>::LayerSetUp(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
-  LossLayer<Dtype>::LayerSetUp(bottom, top);
+  //LossLayer<Dtype>::LayerSetUp(bottom, top);
 }
 
 template <typename Dtype>
@@ -38,6 +38,9 @@ void IntersectionOverUnionLossLayer<Dtype>::Reshape(
   shape.push_back(2);
 
   work_buffer_->Reshape(shape);
+
+  vector<int> loss_shape(0);  // Loss layers output a scalar; 0 axes.
+  top[0]->Reshape(loss_shape);
 }
 
 // assumes that pred and gt are simple polygons (no inner rings)

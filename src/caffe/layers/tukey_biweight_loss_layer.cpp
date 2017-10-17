@@ -14,6 +14,9 @@ void TukeyBiweightLossLayer<Dtype>::LayerSetUp(
   LossLayer<Dtype>::LayerSetUp(bottom, top);
   normalize_ = this->layer_param_.loss_param().normalize();
   c_ = this->layer_param_.tukey_biweight_param().c();
+  initial_period_ = this->layer_param_.tukey_biweight_param().initial_period();
+  initial_mult_ = this->layer_param_.tukey_biweight_param().initial_mult();
+  num_iters_ = 0;
 
   int size = this->layer_param_.tukey_biweight_param().scale_size();
   if (size == 0) {
@@ -47,6 +50,10 @@ void TukeyBiweightLossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bott
   for (int i = 0; i < count; i++) {
     Dtype r = std::abs(data[i] - gt[i]);
 	Dtype scale = scales_[i % scales_.size()];
+	if (num_iters_ < initial_period_) {
+	  scale *= initial_mult_;
+	}
+
 	if (r < thresh) {
 	  loss += thresh * (1 - std::pow(1 - std::pow(r / c_ / scale, 2),3));
 	} else {
@@ -74,6 +81,10 @@ void TukeyBiweightLossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top
     for (int i = 0; i < count; i++) {
       Dtype r = data[i] - gt[i];
 	  Dtype scale = scales_[i % scales_.size()];
+	  if (num_iters_ < initial_period_) {
+	    scale *= initial_mult_;
+	  }
+
 	  Dtype val = 0;
 	  if (std::abs(r) < thresh) {
 	    val = loss_diff * r / scale / scale * std::pow((1 - std::pow(r / c_ / scale, 2)), 2) / norm;
@@ -83,6 +94,7 @@ void TukeyBiweightLossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top
 	  diff[i] = val;
 	}
   }
+  num_iters_++;
 }
 
 

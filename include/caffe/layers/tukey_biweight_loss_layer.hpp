@@ -31,9 +31,10 @@ class TukeyBiweightLossLayer : public LossLayer<Dtype> {
   virtual void Backward_cpu(const vector<Blob<Dtype>*>& top,
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 
-  Dtype c_;
+  Dtype c_, initial_mult_;
   bool normalize_;
   std::vector<Dtype> scales_;
+  int initial_period_, num_iters_;
 };
 
 
