@@ -1524,6 +1524,7 @@ message WindowDataParameter {
 
 message TukeyBiweightParameter  {
   optional float c = 1 [default = 4.6851];
+  repeated float scale = 2;
 }
 
 message WeightedFmeasureLossParameter {

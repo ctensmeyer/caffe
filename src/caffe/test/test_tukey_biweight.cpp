@@ -61,4 +61,20 @@ TYPED_TEST(TukeyBiweightLossLayerTest, TestGradient) {
       this->blob_top_vec_, 0);
 }
 
+TYPED_TEST(TukeyBiweightLossLayerTest, TestGradientScale) {
+  typedef typename TypeParam::Dtype Dtype;
+  LayerParameter layer_param;
+  layer_param.mutable_tukey_biweight_param()->set_c(3);
+  layer_param.mutable_tukey_biweight_param()->add_scale(1);
+  layer_param.mutable_tukey_biweight_param()->add_scale(1.5);
+  layer_param.mutable_tukey_biweight_param()->add_scale(2);
+  layer_param.mutable_tukey_biweight_param()->add_scale(2.5);
+  layer_param.mutable_tukey_biweight_param()->add_scale(3);
+  TukeyBiweightLossLayer<Dtype> layer(layer_param);
+  layer.SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
+  GradientChecker<Dtype> checker(1e-2, 1e-2, 1701);
+  checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
+      this->blob_top_vec_, 0);
+}
+
 }  // namespace caffe

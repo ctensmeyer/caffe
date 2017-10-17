@@ -33,7 +33,7 @@ class TukeyBiweightLossLayer : public LossLayer<Dtype> {
 
   Dtype c_;
   bool normalize_;
-
+  std::vector<Dtype> scales_;
 };
 
 

@@ -14,6 +14,15 @@ void TukeyBiweightLossLayer<Dtype>::LayerSetUp(
   LossLayer<Dtype>::LayerSetUp(bottom, top);
   normalize_ = this->layer_param_.loss_param().normalize();
   c_ = this->layer_param_.tukey_biweight_param().c();
+
+  int size = this->layer_param_.tukey_biweight_param().scale_size();
+  if (size == 0) {
+    scales_.push_back(Dtype(1));
+  } else {
+    for (int i = 0; i < size; i++) {
+	  scales_.push_back(1.4836 * this->layer_param_.tukey_biweight_param().scale(i));
+	}
+  }
 }
 
 template <typename Dtype>
@@ -34,17 +43,14 @@ void TukeyBiweightLossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bott
   const Dtype* gt = bottom[1]->cpu_data();
 
   double thresh = c_ * c_ / 6;
-  //LOG(INFO) << thresh;
   double loss = 0;
   for (int i = 0; i < count; i++) {
     Dtype r = std::abs(data[i] - gt[i]);
-	//LOG(INFO) << "Forward: " << r;
+	Dtype scale = scales_[i % scales_.size()];
 	if (r < thresh) {
-	  loss += thresh * (1 - std::pow(1 - std::pow(r/c_, 2),3));
-	  //LOG(INFO) << "Forward reg: " << i;
+	  loss += thresh * (1 - std::pow(1 - std::pow(r / c_ / scale, 2),3));
 	} else {
 	  loss += thresh;
-	  //LOG(INFO) << "Forward: " << i;
 	}
   }
   loss /= norm;
@@ -67,16 +73,13 @@ void TukeyBiweightLossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top
   if (propagate_down[0]) {
     for (int i = 0; i < count; i++) {
       Dtype r = data[i] - gt[i];
-	  //Dtype sign = std::copysign(Dtype(1), r);
+	  Dtype scale = scales_[i % scales_.size()];
 	  Dtype val = 0;
 	  if (std::abs(r) < thresh) {
-	    val = loss_diff * r * std::pow((1 - std::pow(r / c_, 2)), 2) / norm;
-	    //LOG(INFO) << "Backward reg: " << i;
+	    val = loss_diff * r / scale / scale * std::pow((1 - std::pow(r / c_ / scale, 2)), 2) / norm;
 	  } else {
 	    val = 0;
-	    //LOG(INFO) << "Backward: " << i;
 	  }
-	  //LOG(INFO) << "Backward diff: " << val;
 	  diff[i] = val;
 	}
   }
