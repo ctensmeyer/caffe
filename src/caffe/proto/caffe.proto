@@ -405,7 +405,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 215 (last added: mcl_param)
+// LayerParameter next available layer-specific ID: 216 (last added: tukey_biweight_param)
 // LayerParameter next available layer-specific ID: 138 (last added: multi_stage_meanfield_param)
 // The 2xx numbers are reservered for additional layers added by Chris, while 1xx are
 //   used by the official caffe release.
@@ -507,6 +507,7 @@ message LayerParameter {
   optional TanHParameter tanh_param = 127;
   optional ThresholdParameter threshold_param = 128;
   optional TopKParameter topk_param = 204;
+  optional TukeyBiweightParameter tukey_biweight_param = 215;
   optional WindowDataParameter window_data_param = 129;
   optional WeightedFmeasureLossParameter weighted_fmeasure_loss_param = 210;
 }
@@ -1521,6 +1522,10 @@ message WindowDataParameter {
   optional string root_folder = 13 [default = ""];
 }
 
+message TukeyBiweightParameter  {
+  optional float c = 1 [default = 4.6851];
+}
+
 message WeightedFmeasureLossParameter {
   // counts foreground pixels as correct if their prob is >= 0.5 + margin
   // counts background pixels as correct if their prob is <= 0.5 - margin
@@ -1789,6 +1794,8 @@ message TopKParameter {
 
   optional Grouping grouping = 4 [default = LATERAL];
 }
+
+
 
 message BinaryEncodeParameter {
   optional uint32 num_bits = 1 [default = 32];
