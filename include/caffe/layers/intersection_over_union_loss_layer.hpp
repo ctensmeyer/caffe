@@ -54,7 +54,7 @@ class IntersectionOverUnionLossLayer : public LossLayer<Dtype> {
 		double& dm_dy, double& di_dx, double& di_dy);
   virtual void d_inter_d_p1(xy p1, xy p2, xy q1, xy q2, double& dx_dx,
         double& dx_dy, double& dy_dx, double& dy_dy);
-  virtual Dtype signed_area(std::vector<xy>& ring);
+  virtual double signed_area(std::vector<xy>& ring);
   virtual void d_area_d_pred(polygon& pred, polygon& gt, multi_polygon& polygons,
   							 double* diffs);
   virtual void find_intersection_points(polygon& pred, polygon& gt, 
@@ -64,7 +64,7 @@ class IntersectionOverUnionLossLayer : public LossLayer<Dtype> {
 							 point_meta& out);
   virtual void compute_diff(int idx, std::vector<xy>& ring,
       polygon& pred, polygon& gt, double* diffs, 
-	  std::vector<std::pair<xy,point_meta> >& intersections, Dtype sign);
+	  std::vector<std::pair<xy,point_meta> >& intersections, double sign);
 
   shared_ptr<Blob<double> > work_buffer_;
 };

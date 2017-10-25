@@ -139,8 +139,8 @@ void IntersectionOverUnionLossLayer<Dtype>::find_point_meta(xy pt, polygon& pred
 
 // computes the area before the absolute value (sign needed for derivative of abs)
 template <typename Dtype>
-Dtype IntersectionOverUnionLossLayer<Dtype>::signed_area(std::vector<xy>& ring) {
-  Dtype a = 0;
+double IntersectionOverUnionLossLayer<Dtype>::signed_area(std::vector<xy>& ring) {
+  double a = 0;
   for (int i = 0; i < ring.size(); i++) {
     xy pt1 = ring[i];
     xy pt2 = ring[(i+1) % ring.size()];
@@ -154,7 +154,7 @@ Dtype IntersectionOverUnionLossLayer<Dtype>::signed_area(std::vector<xy>& ring) 
 template <typename Dtype>
 void IntersectionOverUnionLossLayer<Dtype>::compute_diff(int idx, std::vector<xy>& ring,
       polygon& pred, polygon& gt, double* diffs, 
-	  std::vector<std::pair<xy,point_meta> >& intersections, Dtype sign) {
+	  std::vector<std::pair<xy,point_meta> >& intersections, double sign) {
 
   xy pt = ring[idx];
   point_meta meta;
@@ -165,8 +165,8 @@ void IntersectionOverUnionLossLayer<Dtype>::compute_diff(int idx, std::vector<xy
   int prev_idx = (idx - 1 + ring.size()) % ring.size();
   xy prev_pt = ring[prev_idx];
   xy next_pt = ring[next_idx];
-  Dtype da_dx = 0.5 * sign * (next_pt.y() - prev_pt.y());
-  Dtype da_dy = 0.5 * sign * (prev_pt.x() - next_pt.x());
+  double da_dx = 0.5 * sign * (next_pt.y() - prev_pt.y());
+  double da_dy = 0.5 * sign * (prev_pt.x() - next_pt.x());
 
   if (meta.is_original) {
     if (meta.is_pred) {
@@ -336,13 +336,13 @@ void IntersectionOverUnionLossLayer<Dtype>::d_area_d_pred(polygon& pred,
 	LOG(INFO) << p.x() << "," << p.y() << " " << m.i1 << " " << m.i2 << " " << m.i3 << " " << m.i4;
   }
 
-  Dtype _signed_area;
-  Dtype sign;
+  double _signed_area;
+  double sign;
 
   BOOST_FOREACH(polygon const& p, polygons) {
     std::vector<xy> outer_ring = p.outer();
 	_signed_area = signed_area(outer_ring);
-    sign = std::copysign(Dtype(1.), _signed_area); 
+    sign = std::copysign(1., _signed_area); 
 
 	for (int i = 0; i < outer_ring.size(); i++) {
 	  compute_diff(i, outer_ring, pred, gt, diffs, intersections, sign);
@@ -353,7 +353,7 @@ void IntersectionOverUnionLossLayer<Dtype>::d_area_d_pred(polygon& pred,
 	  std::vector<xy> inner_ring = inner_rings[j];
 	  _signed_area = signed_area(inner_ring);
 	  // inner rings contribute negative area
-      sign = -1 * std::copysign(Dtype(1.), _signed_area); 
+      sign = -1 * std::copysign(1., _signed_area); 
 
 	  if (boost::geometry::equals(inner_ring[0], inner_ring[inner_ring.size() - 1])) {
         // if ring is closed, make it open
@@ -381,14 +381,15 @@ void IntersectionOverUnionLossLayer<Dtype>::Forward_cpu(
 
   double total_iou = 0;
   for (int n = 0; n < num; n++) {
+    const int offset = 2 * n * n_points_pred;
     polygon pred;
 	for (int i = 0; i < n_points_pred; i++) {
-      boost::geometry::append(pred, xy(pred_data[2*i], pred_data[2*i+1]));
+      boost::geometry::append(pred, xy(pred_data[offset + 2*i], pred_data[offset + 2*i+1]));
 	}
 
     polygon gt;
 	for (int j = 0; j < n_points_gt; j++) {
-      boost::geometry::append(gt, xy(gt_data[2*j], gt_data[2*j+1]));
+      boost::geometry::append(gt, xy(gt_data[offset + 2*j], gt_data[offset + 2*j+1]));
 	}
 
 	multi_polygon output;
@@ -428,19 +429,19 @@ void IntersectionOverUnionLossLayer<Dtype>::Backward_cpu(
   double* intersection_diffs = work_buffer_->mutable_cpu_data();
   double* union_diffs = work_buffer_->mutable_cpu_diff();
 
-  const Dtype d_loss_d_top = top[0]->cpu_diff()[0];
+  const double d_loss_d_top = top[0]->cpu_diff()[0];
 
   for (int n = 0; n < num; n++) {
     const int offset = 2 * n * n_points_pred;
 
     polygon pred;
 	for (int i = 0; i < n_points_pred; i++) {
-      boost::geometry::append(pred, xy(pred_data[2*i], pred_data[2*i+1]));
+      boost::geometry::append(pred, xy(pred_data[offset+2*i], pred_data[offset+2*i+1]));
 	}
 
     polygon gt;
 	for (int j = 0; j < n_points_gt; j++) {
-      boost::geometry::append(gt, xy(gt_data[2*j], gt_data[2*j+1]));
+      boost::geometry::append(gt, xy(gt_data[offset+2*j], gt_data[offset+2*j+1]));
 	}
 
 	multi_polygon intersection, union_;
@@ -457,10 +458,10 @@ void IntersectionOverUnionLossLayer<Dtype>::Backward_cpu(
     d_area_d_pred(pred, gt, union_, union_diffs);
 
 	for (int i = 0; i < 2*n_points_pred; i++) {
-      const Dtype d_intersection = intersection_diffs[i];
-      const Dtype d_union = union_diffs[i];
+      const double d_intersection = intersection_diffs[i];
+      const double d_union = union_diffs[i];
 	  pred_diff[offset + i] = -1 * d_loss_d_top * (union_area * d_intersection - intersection_area * d_union) /
-	  							(union_area * union_area);
+	  							(union_area * union_area) / num;
 	  //pred_diff[offset + i] = -1 * d_loss_d_top * d_intersection;
 	}
   }
