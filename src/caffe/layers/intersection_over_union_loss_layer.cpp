@@ -381,28 +381,32 @@ void IntersectionOverUnionLossLayer<Dtype>::Forward_cpu(
 
   double total_iou = 0;
   for (int n = 0; n < num; n++) {
-    const int offset = 2 * n * n_points_pred;
-    polygon pred;
-	for (int i = 0; i < n_points_pred; i++) {
-      boost::geometry::append(pred, xy(pred_data[offset + 2*i], pred_data[offset + 2*i+1]));
+    try {
+      const int offset = 2 * n * n_points_pred;
+      polygon pred;
+	  for (int i = 0; i < n_points_pred; i++) {
+        boost::geometry::append(pred, xy(pred_data[offset + 2*i], pred_data[offset + 2*i+1]));
+	  }
+
+      polygon gt;
+	  for (int j = 0; j < n_points_gt; j++) {
+        boost::geometry::append(gt, xy(gt_data[offset + 2*j], gt_data[offset + 2*j+1]));
+	  }
+
+	  multi_polygon output;
+	  boost::geometry::intersection(pred, gt, output);
+	  double intersection_area = boost::geometry::area(output);
+
+	  output.clear();
+      boost::geometry::union_(pred, gt, output);
+	  double union_area = boost::geometry::area(output);
+
+	  double iou = intersection_area / union_area;
+	  //double iou = intersection_area;
+	  total_iou += iou;
+	} catch (const std::exception& e) {
+	  LOG(INFO) << "Exception thrown " << e.what();
 	}
-
-    polygon gt;
-	for (int j = 0; j < n_points_gt; j++) {
-      boost::geometry::append(gt, xy(gt_data[offset + 2*j], gt_data[offset + 2*j+1]));
-	}
-
-	multi_polygon output;
-	boost::geometry::intersection(pred, gt, output);
-	double intersection_area = boost::geometry::area(output);
-
-	output.clear();
-    boost::geometry::union_(pred, gt, output);
-	double union_area = boost::geometry::area(output);
-
-	double iou = intersection_area / union_area;
-	//double iou = intersection_area;
-	total_iou += iou;
   }
   double avg_iou = total_iou / num;
   top[0]->mutable_cpu_data()[0] = (1 - avg_iou);  // need lower to be better
@@ -434,35 +438,39 @@ void IntersectionOverUnionLossLayer<Dtype>::Backward_cpu(
   for (int n = 0; n < num; n++) {
     const int offset = 2 * n * n_points_pred;
 
-    polygon pred;
-	for (int i = 0; i < n_points_pred; i++) {
-      boost::geometry::append(pred, xy(pred_data[offset+2*i], pred_data[offset+2*i+1]));
-	}
+    try {
+      polygon pred;
+	  for (int i = 0; i < n_points_pred; i++) {
+        boost::geometry::append(pred, xy(pred_data[offset+2*i], pred_data[offset+2*i+1]));
+	  }
 
-    polygon gt;
-	for (int j = 0; j < n_points_gt; j++) {
-      boost::geometry::append(gt, xy(gt_data[offset+2*j], gt_data[offset+2*j+1]));
-	}
+      polygon gt;
+	  for (int j = 0; j < n_points_gt; j++) {
+        boost::geometry::append(gt, xy(gt_data[offset+2*j], gt_data[offset+2*j+1]));
+	  }
 
-	multi_polygon intersection, union_;
+	  multi_polygon intersection, union_;
 
-	boost::geometry::intersection(pred, gt, intersection);
-    boost::geometry::union_(pred, gt, union_);
+	  boost::geometry::intersection(pred, gt, intersection);
+      boost::geometry::union_(pred, gt, union_);
 
-	const double intersection_area = boost::geometry::area(intersection);
-	const double union_area = boost::geometry::area(union_);
+	  const double intersection_area = boost::geometry::area(intersection);
+	  const double union_area = boost::geometry::area(union_);
 
-    caffe_set(2*n_points_pred, 0., intersection_diffs);
-    caffe_set(2*n_points_pred, 0., union_diffs);
-    d_area_d_pred(pred, gt, intersection, intersection_diffs);
-    d_area_d_pred(pred, gt, union_, union_diffs);
+      caffe_set(2*n_points_pred, 0., intersection_diffs);
+      caffe_set(2*n_points_pred, 0., union_diffs);
+      d_area_d_pred(pred, gt, intersection, intersection_diffs);
+      d_area_d_pred(pred, gt, union_, union_diffs);
 
-	for (int i = 0; i < 2*n_points_pred; i++) {
-      const double d_intersection = intersection_diffs[i];
-      const double d_union = union_diffs[i];
-	  pred_diff[offset + i] = -1 * d_loss_d_top * (union_area * d_intersection - intersection_area * d_union) /
-	  							(union_area * union_area) / num;
-	  //pred_diff[offset + i] = -1 * d_loss_d_top * d_intersection;
+	  for (int i = 0; i < 2*n_points_pred; i++) {
+        const double d_intersection = intersection_diffs[i];
+        const double d_union = union_diffs[i];
+	    pred_diff[offset + i] = -1 * d_loss_d_top * (union_area * d_intersection - intersection_area * d_union) /
+	    							(union_area * union_area) / num;
+	    //pred_diff[offset + i] = -1 * d_loss_d_top * d_intersection;
+	  }
+	} catch (const std::exception& e) {
+	  LOG(INFO) << "Exception thrown " << e.what();
 	}
   }
 }
