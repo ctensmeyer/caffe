@@ -510,6 +510,15 @@ message LayerParameter {
   optional TukeyBiweightParameter tukey_biweight_param = 215;
   optional WindowDataParameter window_data_param = 129;
   optional WeightedFmeasureLossParameter weighted_fmeasure_loss_param = 210;
+  optional ODSPParameter odsp_param = 300;
+}
+
+message ODSPParameter {
+  optional float temp = 1 [default = 1];
+  optional float min_temp = 2 [default = 1];
+  optional float temp_decay = 3 [default = 1];
+  
+
 }
 
 // Message that stores parameters used to apply transformation
@@ -864,7 +873,22 @@ message CenterOfMassParameter {
   // with a center computed by the center of mass and this
   // given radius - to the grad value given.
   optional int32 radius = 1 [default = 0];
+
+  // when radius is non-zero, we only compute true gradients for
+  // those points with $radius of the CoM.  Optionally, we can
+  // set the gradient of far away points to the following constant
+  // value.  When set to a positive value, the far away activations
+  // should be driven to (-inf), so it is only a good idea to do this
+  // with ReLU activations (drives them to 0).
   optional float grad = 2 [default = 0];
+
+  // Iteratively update the CoM based only on the values within $radius
+  // of the previous CoM
+  optional uint32 num_iters = 3 [default = 1];  
+
+  // how many backward passes must be called before we allow num_iters
+  // to take effect.
+  optional uint32 min_multiple_iters = 4 [default = 1000];
 }
 
 message ConcatParameter {
