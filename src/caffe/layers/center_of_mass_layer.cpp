@@ -68,7 +68,9 @@ void CenterOfMassLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     for (int c = 0; c < channels; ++c) {
 	  Dtype prev_center_h = 0;
 	  Dtype prev_center_w = 0;
-	  Dtype center_h, center_w, total_mass;
+	  Dtype center_h = 0; 
+	  Dtype center_w = 0;
+	  Dtype total_mass = 0;
 	  for (int i = 0; i < num_iters; i++) {
 	    center_h = 0;
 	    center_w = 0;
