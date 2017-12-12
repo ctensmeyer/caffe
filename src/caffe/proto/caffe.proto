@@ -1551,6 +1551,9 @@ message TukeyBiweightParameter  {
   repeated float scale = 2;
   optional uint32 initial_period = 3 [default = 0];
   optional float initial_mult = 4 [default = 1];
+
+  // should be positive
+  optional float outlier_slope = 5 [default = 0];
 }
 
 message WeightedFmeasureLossParameter {

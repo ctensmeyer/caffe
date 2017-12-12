@@ -17,6 +17,7 @@ void TukeyBiweightLossLayer<Dtype>::LayerSetUp(
   initial_period_ = this->layer_param_.tukey_biweight_param().initial_period();
   initial_mult_ = this->layer_param_.tukey_biweight_param().initial_mult();
   num_iters_ = 0;
+  outlier_slope_ = this->layer_param_.tukey_biweight_param().outlier_slope();
 
   int size = this->layer_param_.tukey_biweight_param().scale_size();
   if (size == 0) {
@@ -45,7 +46,7 @@ void TukeyBiweightLossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bott
   const Dtype* data = bottom[0]->cpu_data();
   const Dtype* gt = bottom[1]->cpu_data();
 
-  double thresh = c_ * c_ / 6;
+  double const_val = c_ * c_ / 6;
   double loss = 0;
   for (int i = 0; i < count; i++) {
     Dtype r = std::abs(data[i] - gt[i]);
@@ -53,11 +54,12 @@ void TukeyBiweightLossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bott
 	if (num_iters_ < initial_period_) {
 	  scale *= initial_mult_;
 	}
+	Dtype r_mad = r / scale;
 
-	if (r < thresh) {
-	  loss += thresh * (1 - std::pow(1 - std::pow(r / c_ / scale, 2),3));
+	if (r_mad < c_) {
+	  loss += const_val * (1 - std::pow(1 - std::pow(r_mad / c_, 2),3));
 	} else {
-	  loss += thresh;
+	  loss += const_val + (r_mad - c_) * outlier_slope_ ;
 	}
   }
   loss /= norm;
@@ -70,7 +72,6 @@ void TukeyBiweightLossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top
     const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   int count = bottom[0]->count();
   const Dtype norm = (normalize_) ? count : bottom[0]->num();
-  double thresh = c_ * c_ / 6;
 
   const Dtype loss_diff = top[0]->cpu_diff()[0];
   const Dtype* data = bottom[0]->cpu_data();
@@ -84,12 +85,17 @@ void TukeyBiweightLossLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top
 	  if (num_iters_ < initial_period_) {
 	    scale *= initial_mult_;
 	  }
+	  Dtype r_mad = r / scale;
 
 	  Dtype val = 0;
-	  if (std::abs(r) < thresh) {
+	  if (std::abs(r_mad) < c_) {
 	    val = loss_diff * r / scale / scale * std::pow((1 - std::pow(r / c_ / scale, 2)), 2) / norm;
 	  } else {
-	    val = 0;
+	    if (r_mad >= 0) {
+	      val = loss_diff * outlier_slope_ / scale / norm;
+		} else {
+		  val = -1 * loss_diff * outlier_slope_ / scale / norm;
+		}
 	  }
 	  diff[i] = val;
 	}
