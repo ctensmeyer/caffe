@@ -158,7 +158,7 @@ void GradientChecker<Dtype>::CheckGradientSingle(Layer<Dtype>* layer,
         estimated_gradient = (positive_objective - negative_objective) /
             stepsize_ / 2.;
       }
-      Dtype computed_gradient = computed_gradients[feat_id];
+      Dtype computed__gradient = computed_gradients[feat_id];
       Dtype feature = current_blob->cpu_data()[feat_id];
       // LOG(ERROR) << "debug: " << current_blob->cpu_data()[feat_id] << " "
       //     << current_blob->cpu_diff()[feat_id];
@@ -167,17 +167,17 @@ void GradientChecker<Dtype>::CheckGradientSingle(Layer<Dtype>* layer,
         // We check relative accuracy, but for too small values, we threshold
         // the scale factor by 1.
         Dtype scale = std::max(
-            std::max(fabs(computed_gradient), fabs(estimated_gradient)), 1.);
+            std::max(fabs(computed__gradient), fabs(estimated_gradient)), 1.);
         //LOG(ERROR) << "Checking... " << threshold_ * scale;
-        EXPECT_NEAR(computed_gradient, estimated_gradient, threshold_ * scale)
-          << "\ndebug: (top_id, top_data_id, blob_id, feat_id)="
+        EXPECT_NEAR(computed__gradient, estimated_gradient, threshold_ * scale)
+          << "debug: (top_id, top_data_id, blob_id, feat_id)="
           << top_id << "," << top_data_id << "," << blob_id << "," << feat_id
           << "; feat = " << feature
           << "; objective+ = " << positive_objective
-          << "; objective- = " << negative_objective;
+          << "; objective- = " << negative_objective << "\n";
       }
        //LOG(ERROR) << "Feature " << feat_id << ": " << current_blob->cpu_data()[feat_id];
-       //LOG(ERROR) << "computed gradient: " << computed_gradient
+       //LOG(ERROR) << "computed gradient: " << computed__gradient
        //   << " estimated_gradient: " << estimated_gradient;
     }
   }

@@ -405,7 +405,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 215 (last added: mcl_param)
+// LayerParameter next available layer-specific ID: 216 (last added: tukey_biweight_param)
 // LayerParameter next available layer-specific ID: 138 (last added: multi_stage_meanfield_param)
 // The 2xx numbers are reservered for additional layers added by Chris, while 1xx are
 //   used by the official caffe release.
@@ -507,8 +507,18 @@ message LayerParameter {
   optional TanHParameter tanh_param = 127;
   optional ThresholdParameter threshold_param = 128;
   optional TopKParameter topk_param = 204;
+  optional TukeyBiweightParameter tukey_biweight_param = 215;
   optional WindowDataParameter window_data_param = 129;
   optional WeightedFmeasureLossParameter weighted_fmeasure_loss_param = 210;
+  optional ODSPParameter odsp_param = 300;
+}
+
+message ODSPParameter {
+  optional float temp = 1 [default = 1];
+  optional float min_temp = 2 [default = 1];
+  optional float temp_decay = 3 [default = 1];
+  
+
 }
 
 // Message that stores parameters used to apply transformation
@@ -866,7 +876,22 @@ message CenterOfMassParameter {
   // with a center computed by the center of mass and this
   // given radius - to the grad value given.
   optional int32 radius = 1 [default = 0];
+
+  // when radius is non-zero, we only compute true gradients for
+  // those points with $radius of the CoM.  Optionally, we can
+  // set the gradient of far away points to the following constant
+  // value.  When set to a positive value, the far away activations
+  // should be driven to (-inf), so it is only a good idea to do this
+  // with ReLU activations (drives them to 0).
   optional float grad = 2 [default = 0];
+
+  // Iteratively update the CoM based only on the values within $radius
+  // of the previous CoM
+  optional uint32 num_iters = 3 [default = 1];  
+
+  // how many backward passes must be called before we allow num_iters
+  // to take effect.
+  optional uint32 min_multiple_iters = 4 [default = 1000];
 }
 
 message ConcatParameter {
@@ -1524,6 +1549,16 @@ message WindowDataParameter {
   optional string root_folder = 13 [default = ""];
 }
 
+message TukeyBiweightParameter  {
+  optional float c = 1 [default = 4.6851];
+  repeated float scale = 2;
+  optional uint32 initial_period = 3 [default = 0];
+  optional float initial_mult = 4 [default = 1];
+
+  // should be positive
+  optional float outlier_slope = 5 [default = 0];
+}
+
 message WeightedFmeasureLossParameter {
   // counts foreground pixels as correct if their prob is >= 0.5 + margin
   // counts background pixels as correct if their prob is <= 0.5 - margin
@@ -1792,6 +1827,8 @@ message TopKParameter {
 
   optional Grouping grouping = 4 [default = LATERAL];
 }
+
+
 
 message BinaryEncodeParameter {
   optional uint32 num_bits = 1 [default = 32];
