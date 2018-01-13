@@ -38,6 +38,7 @@ void SoftmaxFullLoss2Layer<Dtype>::Reshape(
 
   vector<int> shape;
   shape.push_back(outer_num_);
+  shape.push_back(1);
   top[0]->Reshape(shape);  // outputs loss of individual softmaxes
   if (top.size() >= 2) {
     // softmax output

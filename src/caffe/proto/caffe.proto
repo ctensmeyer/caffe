@@ -299,13 +299,13 @@ message SolverParameter {
     SGD = 0;
     NESTEROV = 1;
     ADAGRAD = 2;
-	//ADAM = 5;
+	ADAM = 5;
   }
   optional SolverType solver_type = 30 [default = SGD];
   // numerical stability for AdaGrad, Adam
   optional float delta = 31 [default = 1e-8];
 
-  //optional float momentum2 = 37 [default = 0.999];
+  optional float momentum2 = 37 [default = 0.999];
 
   // If true, print information about the state of the net that may help with
   // debugging learning problems.

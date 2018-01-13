@@ -207,7 +207,8 @@ def save_activations(net, args):
 		net.blobs[args.input].data[...] = tmp
 		net.forward()
 		for name, data in net.blobs.items():
-			if name in args.omit_layers:
+			#if name in args.omit_layers:
+			if name not in args.omit_layers:
 				print "Ommitting %s" % name
 				continue
 			try:
@@ -246,13 +247,13 @@ def get_args():
 				help="Optional mean file for input normalization")
 	parser.add_argument("-s", "--size-str", type=str, default="227",
 				help="Resize images to this size before processing")
-	parser.add_argument("--gpu", type=int, default=-1,
+	parser.add_argument("--gpu", type=int, default=0,
 				help="GPU to use for running the network")
 	parser.add_argument('-g', '--gray', default=False, action="store_true",
 						help='Force images to be grayscale.  Force color if ommited')
-	parser.add_argument("-a", "--scale", type=float, default=1.0,
+	parser.add_argument("-a", "--scale", type=float, default=1,
 				help="Optional scale factor")
-	parser.add_argument("-b", "--shift", type=float, default=0.0,
+	parser.add_argument("-b", "--shift", type=float, default=-234,
 				help="Optional shift factor")
 	parser.add_argument("-i", "--input", type=str, default="data",
 				help="Name of input blob")
