@@ -93,6 +93,16 @@ TYPED_TEST(CenterOfMassLayerTest, TestGradient) {
       this->blob_top_vec_, 0);
 }
 
+TYPED_TEST(CenterOfMassLayerTest, TestGradientNorm) {
+  typedef typename TypeParam::Dtype Dtype;
+  LayerParameter layer_param;
+  layer_param.mutable_center_param()->set_normalize(true);
+  CenterOfMassLayer<Dtype> layer(layer_param);
+  GradientChecker<Dtype> checker(1e-2, 1e-3, 1701);
+  checker.CheckGradientExhaustive(&layer, this->blob_bottom_vec_,
+      this->blob_top_vec_, 0);
+}
+
 TYPED_TEST(CenterOfMassLayerTest, TestIterations) {
   typedef typename TypeParam::Dtype Dtype;
   LayerParameter layer_param;

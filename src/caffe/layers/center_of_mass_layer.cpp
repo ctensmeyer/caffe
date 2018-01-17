@@ -51,7 +51,8 @@ void CenterOfMassLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   // those close to the CoM.
   Dtype num_iters = this->layer_param().center_param().num_iters();
   Dtype radius = this->layer_param().center_param().radius();
-  Dtype min_multiple_iters = this->layer_param().center_param().min_multiple_iters();
+  const Dtype min_multiple_iters = this->layer_param().center_param().min_multiple_iters();
+  const bool normalize = this->layer_param().center_param().normalize();
   const Dtype radius_sq = radius * radius;
   // if we don't restrict the radius, the center dosen't change
   // with more iterations
@@ -109,6 +110,11 @@ void CenterOfMassLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 		prev_center_w = center_w;
 	  }
 
+	  if (normalize) {
+	    center_h /= height;
+	    center_w /= width;
+	  }
+
 	  top_data[(n * channels + c) * 2] = center_h;
 	  top_data[(n * channels + c) * 2 + 1] = center_w;
 	  aux_data[(n * channels + c)] = total_mass;  // so it doesn't need to be recomputed in backwards step
@@ -133,7 +139,8 @@ void CenterOfMassLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
   const int height = bottom[0]->height();
   const int width = bottom[0]->width();
   Dtype radius = this->layer_param().center_param().radius();
-  Dtype min_multiple_iters = this->layer_param().center_param().min_multiple_iters();
+  const Dtype min_multiple_iters = this->layer_param().center_param().min_multiple_iters();
+  const bool normalize = this->layer_param().center_param().normalize();
   if (radius <= 0) {
     // make it so big, it won't matter
     radius = height + width + 1;
@@ -143,10 +150,19 @@ void CenterOfMassLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
 
   for (int n = 0; n < num; ++n) {
     for (int c = 0; c < channels; ++c) {
-	  const Dtype center_h_diff = top_diff[(n * channels + c) * 2];
-	  const Dtype center_w_diff = top_diff[(n * channels + c) * 2 + 1];
-	  const Dtype center_h = top_data[(n * channels + c) * 2];
-	  const Dtype center_w = top_data[(n * channels + c) * 2 + 1];
+	  Dtype center_h_diff = top_diff[(n * channels + c) * 2];
+	  Dtype center_w_diff = top_diff[(n * channels + c) * 2 + 1];
+	  Dtype center_h = top_data[(n * channels + c) * 2];
+	  Dtype center_w = top_data[(n * channels + c) * 2 + 1];
+
+	  if (normalize) {
+	    center_h *= height;
+	    center_w *= width;
+
+		center_h_diff /= height;
+		center_w_diff /= width;
+	  }
+
 	  const Dtype total_mass = aux_data[n * channels + c];
       for (int h = 0; h < height; ++h) {
 	    for (int w = 0; w < width; ++w) {

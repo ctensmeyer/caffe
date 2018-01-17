@@ -892,6 +892,9 @@ message CenterOfMassParameter {
   // how many backward passes must be called before we allow num_iters
   // to take effect.
   optional uint32 min_multiple_iters = 4 [default = 1000];
+
+  // whether to normalize the output coordinates to the range [0,1)
+  optional bool normalize = 5 [default = false];
 }
 
 message ConcatParameter {
