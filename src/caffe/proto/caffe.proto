@@ -895,6 +895,8 @@ message CenterOfMassParameter {
 
   // whether to normalize the output coordinates to the range [0,1)
   optional bool normalize = 5 [default = false];
+
+  optional float pow = 6 [default = 0.5];
 }
 
 message ConcatParameter {

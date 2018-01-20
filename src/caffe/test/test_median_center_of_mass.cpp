@@ -80,8 +80,8 @@ class MedianCenterOfMassLayerTest : public MultiDeviceTest<TypeParam> {
 
 };
 
-//TYPED_TEST_CASE(MedianCenterOfMassLayerTest, TestDtypesAndDevices);
-TYPED_TEST_CASE(MedianCenterOfMassLayerTest, ::testing::Types<CPUDevice<float> >);
+TYPED_TEST_CASE(MedianCenterOfMassLayerTest, TestDtypesAndDevices);
+//TYPED_TEST_CASE(MedianCenterOfMassLayerTest, ::testing::Types<CPUDevice<float> >);
 
 
 TYPED_TEST(MedianCenterOfMassLayerTest, TestGradient) {
