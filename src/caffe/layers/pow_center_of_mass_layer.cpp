@@ -63,7 +63,7 @@ double find_center2(const vector<Dtype> vals, const Dtype pow, const double tol,
   }
 
   double residual = eval_residual(cur_estimate, vals, pow);
-  if (residual == 0) {
+  if (std::abs(residual) < tol) {
     return cur_estimate;
   }
 
@@ -72,16 +72,18 @@ double find_center2(const vector<Dtype> vals, const Dtype pow, const double tol,
   if (residual < 0) {
 	do {
 	  lower_bound -= 1;
-	} while(eval_residual(lower_bound, vals, pow) < 0);
+	} while(eval_residual(lower_bound, vals, pow) < 0 && lower_bound > 0);
+	upper_bound = lower_bound + 1;
   } else {
 	do {
 	  upper_bound += 1;
-	} while(eval_residual(upper_bound, vals, pow) > 0);
+	} while(eval_residual(upper_bound, vals, pow) > 0 && upper_bound < vals.size());
+	lower_bound = upper_bound - 1;
   }
 
   // binary search over the interval (lower_bound, upper_bound)
   int i = 0;
-  while ( (upper_bound - lower_bound) > tol) {
+  while ( (upper_bound - lower_bound) > tol && i < 40) {
     mid = (upper_bound + lower_bound) / 2;
     residual = eval_residual(mid, vals, pow);
 	if (residual > 0) {
@@ -154,7 +156,7 @@ void PowCenterOfMassLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom
   const int height = bottom[0]->height();
   const int width = bottom[0]->width();
 
-  const double tol = 1e-8;
+  const double tol = 1e-5;
 
   for (int n = 0; n < num; ++n) {
     for (int c = 0; c < channels; ++c) {
@@ -222,7 +224,7 @@ void PowCenterOfMassLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
   const int width = bottom[0]->width();
   const bool normalize = this->layer_param().center_param().normalize();
   const Dtype pow = this->layer_param().center_param().pow();
-  const double tol = 1e-8;
+  const double tol = 1e-5;
 
   for (int n = 0; n < num; ++n) {
     for (int c = 0; c < channels; ++c) {
@@ -267,44 +269,44 @@ void PowCenterOfMassLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
 
 	  
 	  if (total_mass) {
-	  	double eps = total_mass / non_zero / 100;
-	  	//double eps = 1e-2;
 	    vector<double> col_dervs;
 	    vector<double> row_dervs;
 
 	    double center_h = find_center2(row_sums, pow, tol, (double)-1.);
 	    double center_w = find_center2(col_sums, pow, tol, (double)-1.);
-		LOG(INFO) << center_h << " " << center_w;
 
-        // compute row sum derivatives w/ finite differencing
+        // compute row sum derivatives
+		double h_denum = 0;
 	    for (int h = 0; h < height; h++) {
-		  Dtype original_val = row_sums[h];
+          double sign = std::copysign(1, h - center_h);
+	      double mag = std::pow(std::abs(h - center_h), pow-1);
+		  h_denum += pow * row_sums[h] * sign * mag;
+		}
 
-		  row_sums[h] = original_val + eps;
-	      double upper_center_h = find_center2(row_sums, pow, tol, (double)-1.);//center_h);
+	    for (int h = 0; h < height; h++) {
+          double sign = std::copysign(1, h - center_h);
+	      double mag = std::pow(std::abs(h - center_h), pow-1);
+		  double h_num = sign * mag;
+		  double derv = h_num / h_denum;
 
-		  row_sums[h] = original_val - eps;
-	      double lower_center_h = find_center2(row_sums, pow, tol, (double)-1.);//center_h);
-
-		  double derv = (upper_center_h - lower_center_h) / (2*eps);
-		  //LOG(INFO) << derv;
 		  row_dervs.push_back(derv);
 		}
 
-        // compute col sum derivatives w/ finite differencing
+
+        // compute col sum derivatives
+		double w_denum = 0;
 	    for (int w = 0; w < width; w++) {
-		  Dtype original_val = col_sums[w];
+          double sign = std::copysign(1, w - center_w);
+	      double mag = std::pow(std::abs(w - center_w), pow-1);
+		  w_denum += pow * col_sums[w] * sign * mag;
+		}
 
-		  col_sums[w] = original_val + eps;
-	      double upper_center_w = find_center2(col_sums, pow, tol, (double)-1.);//center_w);
+	    for (int w = 0; w < width; w++) {
+          double sign = std::copysign(1, w - center_w);
+	      double mag = std::pow(std::abs(w - center_w), pow-1);
+		  double w_num = sign * mag;
+		  double derv = w_num / w_denum;
 
-		  col_sums[w] = original_val - eps;
-	      double lower_center_w = find_center2(col_sums, pow, tol, (double)-1.);//center_w);
-		  col_sums[w] = original_val;
-
-		  double derv = (upper_center_w - lower_center_w) / (2*eps);
-		  LOG(INFO) << upper_center_w << " " << eps;
-		  LOG(INFO) << derv;
 		  col_dervs.push_back(derv);
 		}
 
