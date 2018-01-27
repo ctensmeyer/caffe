@@ -278,36 +278,49 @@ void PowCenterOfMassLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
         // compute row sum derivatives
 		double h_denum = 0;
 	    for (int h = 0; h < height; h++) {
-          double sign = std::copysign(1, h - center_h);
-	      double mag = std::pow(std::abs(h - center_h), pow-1);
-		  h_denum += pow * row_sums[h] * sign * mag;
+		  if (center_h != h) {
+            double sign = std::copysign(1, h - center_h);
+	        double mag = std::pow(std::abs(h - center_h), pow-1);
+		    h_denum += pow * row_sums[h] * sign * mag;
+		  }
 		}
 
 	    for (int h = 0; h < height; h++) {
-          double sign = std::copysign(1, h - center_h);
-	      double mag = std::pow(std::abs(h - center_h), pow-1);
-		  double h_num = sign * mag;
-		  double derv = h_num / h_denum;
+		  if (center_h != h) {
+            double sign = std::copysign(1, h - center_h);
+	        double mag = std::pow(std::abs(h - center_h), pow-1);
+		    double h_num = sign * mag;
+		    double derv = h_num / h_denum;
 
-		  row_dervs.push_back(derv);
+		    row_dervs.push_back(derv);
+		  }
+		  else {
+		    row_dervs.push_back((double)0.);
+		  }
 		}
 
 
         // compute col sum derivatives
 		double w_denum = 0;
 	    for (int w = 0; w < width; w++) {
-          double sign = std::copysign(1, w - center_w);
-	      double mag = std::pow(std::abs(w - center_w), pow-1);
-		  w_denum += pow * col_sums[w] * sign * mag;
+		  if (center_w != w) {
+            double sign = std::copysign(1, w - center_w);
+	        double mag = std::pow(std::abs(w - center_w), pow-1);
+		    w_denum += pow * col_sums[w] * sign * mag;
+		  }
 		}
 
 	    for (int w = 0; w < width; w++) {
-          double sign = std::copysign(1, w - center_w);
-	      double mag = std::pow(std::abs(w - center_w), pow-1);
-		  double w_num = sign * mag;
-		  double derv = w_num / w_denum;
+		  if (center_w != w) {
+            double sign = std::copysign(1, w - center_w);
+	        double mag = std::pow(std::abs(w - center_w), pow-1);
+		    double w_num = sign * mag;
+		    double derv = w_num / w_denum;
 
-		  col_dervs.push_back(derv);
+		    col_dervs.push_back(derv);
+		  } else {
+		    col_dervs.push_back((double)0.);
+		  }
 		}
 
 	    for (int h = 0; h < height; h++) {
@@ -315,7 +328,10 @@ void PowCenterOfMassLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
 		    const int idx = ((n * channels + c) * height + h) * width + w;
 			double d_center_h = row_dervs[h];
 			double d_center_w = col_dervs[w];
-		    bottom_diff[idx] = center_h_diff * d_center_h + center_w_diff * d_center_w;
+			double derv = center_h_diff * d_center_h + center_w_diff * d_center_w;
+			if (std::isfinite(derv)) {
+		      bottom_diff[idx] = derv;
+			}
 		  }
 		}
 	  } // end if(total_mass) 
