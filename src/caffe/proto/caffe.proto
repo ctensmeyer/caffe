@@ -405,7 +405,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 216 (last added: tukey_biweight_param)
+// LayerParameter next available layer-specific ID: 217 (last added: shift_param)
 // LayerParameter next available layer-specific ID: 138 (last added: multi_stage_meanfield_param)
 // The 2xx numbers are reservered for additional layers added by Chris, while 1xx are
 //   used by the official caffe release.
@@ -500,6 +500,7 @@ message LayerParameter {
   optional RelativeDarknessParameter relative_darkness_param = 211;
   optional ReshapeParameter reshape_param = 133;
   optional ScaleParameter scale_param = 142;
+  optional ShiftParameter shift_param = 216;
   optional SigmoidParameter sigmoid_param = 124;
   optional SoftmaxParameter softmax_param = 125;
   optional SPPParameter spp_param = 132;
@@ -1480,6 +1481,11 @@ message SigmoidParameter {
     CUDNN = 2;
   }
   optional Engine engine = 1 [default = DEFAULT];
+}
+
+message ShiftParameter {
+  optional int32 h_shift = 1 [default = 0];
+  optional int32 w_shift = 2 [default = 0];
 }
 
 message SliceParameter {
